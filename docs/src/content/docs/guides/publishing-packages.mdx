@@ -159,6 +159,81 @@ bino publish --bump patch
 Versions are immutable and there is no unpublish. `--dry-run` is worth the
 extra minute in a pipeline that publishes automatically.
 
+## Signing a release
+
+From bino v0.116.0, `bino publish --sign` signs the release, so consumers can
+require it with a [`[trust]` policy](/reference/trust-policy/) and see who
+published it. The signature covers the package name, the version and the
+digest of the file manifest.
+
+bino first runs a dry run to learn the version the registry will mint and its
+digest, checks the digest is the one it computed itself, signs both, and then
+publishes with the signature. If another version is published between the two
+steps, the registry refuses the signature; run `bino publish` again.
+
+There are three ways to sign:
+
+| Flags                                     | Signer                                   | Consumers trust it with              |
+| ----------------------------------------- | ---------------------------------------- | ------------------------------------ |
+| `--sign --keyless`                        | the CI workflow, through Sigstore        | `oidc-issuer` + `repository` + `workflow` |
+| `--sign --key k.pem`                      | a long-lived key                         | `key-file` (and `key`)               |
+| `--sign --key k.pem --cert-chain c.pem`   | a certificate from a company CA          | `x509-root` (and `identity`)         |
+
+- `--keyless` gets a short-lived certificate from the public Sigstore and writes
+  the signature to its public transparency log (Rekor). Anyone can read that
+  log, so bino refuses `--keyless` for a package that is not public, and so
+  does the registry. bino needs an OIDC token for it: on GitHub Actions it
+  requests one itself, and elsewhere it reads `SIGSTORE_ID_TOKEN`. There is no
+  browser login.
+- `--key` takes an unencrypted PKCS #8 PEM private key, ed25519 or ECDSA
+  P-256. Generate one with
+  `openssl genpkey -algorithm ed25519 -out acme-signing.pem` and give
+  consumers the public key
+  (`openssl pkey -in acme-signing.pem -pubout -out acme-signing.pub`). Keep
+  the private key out of the package folders.
+- `--cert-chain` adds the certificate for that key, issued by your company CA:
+  the leaf first, then the intermediates.
+
+A scope can require signed releases. An unsigned publish to it fails with
+`signature_required`.
+
+### From GitHub Actions
+
+```yaml
+name: publish
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write # lets bino request the OIDC token for Sigstore
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bino
+        run: /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
+      - name: Publish
+        env:
+          BINO_REGISTRY_TOKEN: ${{ secrets.BINO_REGISTRY_TOKEN }}
+        run: bino publish --bump patch --sign --keyless
+```
+
+The signature records the run: repository, workflow, ref, commit and run URL,
+as the Sigstore certificate states them. Consumers pin the repository and the
+workflow:
+
+```toml
+[[trust.signer]]
+scope = "@acme/*"
+oidc-issuer = "https://token.actions.githubusercontent.com"
+repository = "https://github.com/acme/reports"
+workflow = "https://github.com/acme/reports/.github/workflows/publish.yml"
+```
+
 ## Consuming it
 
 Nothing about consumption is special - see

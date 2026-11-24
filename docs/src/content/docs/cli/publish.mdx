@@ -19,7 +19,13 @@ Flags:
 - `--bump` - how the registry increments the version: `patch`, `minor` or `major`. Required unless `--dry-run` is set.
 - `--dry-run` - run the registry's validation without creating a version.
 - `--visibility` - `public` or `private`. Only used when the package is created; ignored afterwards. Without it (and without `[package].visibility`) a new package is created private, and the first publish prints a note saying so.
-- `--json` - print the result as JSON on stdout (progress goes to stderr).
+- `--json` - print the result as JSON on stdout (progress goes to stderr). A signed publish adds `signer` and `rootKind` (`keyless`, `x509` or `key`).
+- `--sign` - sign the release (bino v0.116.0 and later). Needs one of:
+  - `--keyless` - Sigstore keyless signing through the public Sigstore. Needs an OIDC token: on GitHub Actions bino requests one itself (the job needs `permissions: id-token: write`); elsewhere set `SIGSTORE_ID_TOKEN`. The signature is written to the public Rekor log, so it only works for public packages.
+  - `--key <file>` - sign with a long-lived ed25519 or ECDSA P-256 key, an unencrypted PKCS #8 PEM file (`-----BEGIN PRIVATE KEY-----`). Encrypted keys and KMS keys are not supported.
+  - `--key <file> --cert-chain <file>` - sign with a key and a certificate from a company CA. The chain file holds the certificate for the key first, then the intermediates. A root in the file is dropped.
+
+See [Signing a release](/guides/publishing-packages/#signing-a-release).
 
 ## What is published
 
@@ -54,7 +60,8 @@ Run `--dry-run` first in any pipeline that publishes automatically: versions
 are immutable and there is no unpublish.
 
 An AI agent can publish through the [MCP server](/cli/mcp/#registry) with `registry_publish`
-(same `bump`, `dry_run` and `visibility` inputs), but only when the server was started with
+(same `bump`, `dry_run` and `visibility` inputs, plus `sign_key`, `sign_cert_chain` and
+`sign_keyless` for `--sign`), but only when the server was started with
 `--allow-publish`; see the [security notes](/cli/mcp/#security).
 
 ## Examples
@@ -78,6 +85,12 @@ export BINO_REGISTRY_TOKEN="bino_pat_..."
 bino publish --bump minor --json
 ```
 
+Sign a release with a key:
+
+```bash
+bino publish --bump patch --sign --key ~/.bino/acme-signing.pem
+```
+
 Republishing unchanged content is not an error - the registry recognises the
 identical package and reports the version that already carries it, so a re-run
 of a job is safe.
@@ -86,4 +99,4 @@ of a job is safe.
 
 - `0` - published, or already published as an identical version.
 - `1` - configuration error: no `[package]` table, an invalid one, or a file that cannot be published.
-- `3` - the registry rejected the package, or was unreachable.
+- `3` - the registry rejected the package or its signature, or was unreachable.

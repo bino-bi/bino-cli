@@ -29,6 +29,9 @@ type publishOutcome struct {
 	Unchanged bool                 `json:"unchanged"`
 	DryRun    bool                 `json:"dryRun"`
 	Warnings  []string             `json:"warnings,omitempty"`
+	// Signer and RootKind describe the signature bino sent, when signed.
+	Signer   string `json:"signer,omitempty"`
+	RootKind string `json:"rootKind,omitempty"`
 }
 
 func newPublishCommand() *cobra.Command {
@@ -37,6 +40,7 @@ func newPublishCommand() *cobra.Command {
 		dryRun     bool
 		visibility string
 		jsonOut    bool
+		signing    signOptions
 	)
 	cmd := &cobra.Command{
 		Use:   "publish",
@@ -63,7 +67,16 @@ it in the registry's package settings.
 registry validates it; a publish without one warns.
 
 Republishing an unchanged package is not an error: the registry recognizes the
-identical content and reports the version that already carries it.`,
+identical content and reports the version that already carries it.
+
+--sign signs the release, so consumers can check who published it:
+  --sign --keyless          Sigstore keyless, from CI (GitHub Actions, or
+                            SIGSTORE_ID_TOKEN); public packages only
+  --sign --key k.pem        a long-lived ed25519 or ECDSA P-256 key
+  --sign --key k.pem --cert-chain chain.pem
+                            a key with a certificate from a company CA
+bino first runs a dry run to learn the version and digest, signs them, and
+then publishes with the signature.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !dryRun && bump == "" {
@@ -76,7 +89,7 @@ identical content and reports the version that already carries it.`,
 				return ConfigErrorf("invalid --visibility %q: expected public or private", visibility)
 			}
 			return runPublish(cmd, publishOptions{
-				bump: bump, dryRun: dryRun, visibility: visibility, jsonOut: jsonOut,
+				bump: bump, dryRun: dryRun, visibility: visibility, jsonOut: jsonOut, signing: signing,
 			})
 		},
 	}
@@ -84,6 +97,10 @@ identical content and reports the version that already carries it.`,
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate against the registry without publishing")
 	cmd.Flags().StringVar(&visibility, "visibility", "", "Visibility for a first publish: public or private (default private)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print the result as JSON")
+	cmd.Flags().BoolVar(&signing.sign, "sign", false, "Sign the release (with --keyless or --key)")
+	cmd.Flags().BoolVar(&signing.keyless, "keyless", false, "With --sign: sign keyless through the public Sigstore, from CI")
+	cmd.Flags().StringVar(&signing.key, "key", "", "With --sign: unencrypted PKCS #8 PEM private key to sign with (ed25519 or ECDSA P-256)")
+	cmd.Flags().StringVar(&signing.certChain, "cert-chain", "", "With --sign --key: PEM certificate chain for the key, leaf first")
 	return cmd
 }
 
@@ -92,6 +109,7 @@ type publishOptions struct {
 	dryRun     bool
 	visibility string
 	jsonOut    bool
+	signing    signOptions
 }
 
 func runPublish(cmd *cobra.Command, opts publishOptions) error {
@@ -101,6 +119,10 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 		return err
 	}
 	pkg := p.Cfg.Package
+	signing, err := newPublishSigning(opts.signing)
+	if err != nil {
+		return err
+	}
 
 	files, err := collectPackageFiles(p.Root, pkg)
 	if err != nil {
@@ -136,23 +158,49 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 			return publishError(p, err)
 		}
 		p.Out.StepDone("Validated", 0)
+		if signing != nil {
+			if err := checkSignable(signing, res, digest, manifest.Visibility); err != nil {
+				return err
+			}
+		}
 		return emitPublishOutcome(cmd, publishOutcome{
 			Package: pkg.Name, Version: res.Version, Digest: res.Digest,
 			Files: res.Files, DryRun: true, Warnings: findingLines(res.Warnings),
 		}, opts.jsonOut, p)
 	}
 
+	var attestation []byte
+	var signer *registry.ReleaseSigner
+	if signing != nil {
+		p.Out.Step("Signing...")
+		dry, err := client.PublishDryRun(ctx, manifest, uploads)
+		if err != nil {
+			return publishError(p, err)
+		}
+		if err := checkSignable(signing, dry, digest, manifest.Visibility); err != nil {
+			return err
+		}
+		if attestation, signer, err = signRelease(ctx, signing, pkg.Name, dry.Version, dry.Digest); err != nil {
+			return err
+		}
+		p.Out.StepDone(fmt.Sprintf("Signed %s@%s (%s, %s)", pkg.Name, dry.Version, signing.rootKind(), registry.Printable(signer.Signer)), 0)
+	}
+
 	p.Out.Step("Publishing...")
-	res, err := client.Publish(ctx, manifest, uploads)
+	res, err := client.Publish(ctx, manifest, uploads, attestation)
 	if err != nil {
 		return publishError(p, err)
 	}
 	p.Out.StepDone("Published", 0)
-	return emitPublishOutcome(cmd, publishOutcome{
+	outcome := publishOutcome{
 		Package: res.Package, Version: res.Version, Digest: res.Digest, Tag: res.Tag,
 		Kinds: res.Kinds, Files: res.Files, Unchanged: res.Unchanged,
 		Warnings: findingLines(res.Warnings),
-	}, opts.jsonOut, p)
+	}
+	if signer != nil {
+		outcome.Signer, outcome.RootKind = signer.Signer, signer.RootKind
+	}
+	return emitPublishOutcome(cmd, outcome, opts.jsonOut, p)
 }
 
 // diagnosticsOutput is an Output that writes everything to stderr, for
@@ -300,6 +348,12 @@ func publishError(p registryProject, err error) error {
 	}
 	details := apiErr.GateDetails()
 	if len(details) == 0 {
+		switch apiErr.Code {
+		case "signature_required":
+			return ExternalErrorWithHint(err, "this scope only accepts signed releases: publish with --sign")
+		case "name_taken":
+			return ExternalErrorWithHint(err, "another version was published in the meantime: run 'bino publish' again")
+		}
 		return ExternalError(err)
 	}
 	// One report, one stream: Output splits Error/Warning onto stderr and

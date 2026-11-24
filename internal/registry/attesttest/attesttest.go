@@ -5,7 +5,9 @@
 package attesttest
 
 import (
+	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -14,12 +16,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/bino-bi/bino-plugin-sdk/registryattest"
+	"github.com/secure-systems-lab/go-securesystemslib/dsse"
 	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
 	protocommon "github.com/sigstore/protobuf-specs/gen/pb-go/common/v1"
 	protodsse "github.com/sigstore/protobuf-specs/gen/pb-go/dsse"
@@ -90,22 +94,8 @@ func (k *Keyless) Sign(t testing.TB, identity, issuer string, payload []byte) js
 	env := sc.EnvelopeContent().RawEnvelope()
 	entries, err := ent.TlogEntries()
 	must(t, err)
-	tle := entries[0].TransparencyLogEntry()
-	tle.KindVersion = &protorekor.KindVersion{Kind: "dsse", Version: "0.0.1"}
-	logID, err := k.vs.RekorLogID()
-	if err != nil {
-		t.Fatal(err)
-	}
-	set, err := k.vs.RekorSignPayload(tlog.RekorPayload{
-		Body:           base64.StdEncoding.EncodeToString(tle.CanonicalizedBody),
-		IntegratedTime: tle.IntegratedTime,
-		LogIndex:       tle.LogIndex,
-		LogID:          logID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tle.InclusionPromise = &protorekor.InclusionPromise{SignedEntryTimestamp: set}
+	tle, err := k.withPromise(entries[0])
+	must(t, err)
 	sig, err := base64.StdEncoding.DecodeString(env.Signatures[0].Sig)
 	must(t, err)
 	body, err := base64.StdEncoding.DecodeString(env.Payload)
@@ -122,6 +112,85 @@ func (k *Keyless) Sign(t testing.TB, identity, issuer string, payload []byte) js
 			Signatures:  []*protodsse.Signature{{Sig: sig, Keyid: env.Signatures[0].KeyID}},
 		}},
 	})
+}
+
+// withPromise is the log entry as a bundle carries it, with the signed entry
+// timestamp the virtual Rekor issues.
+func (k *Keyless) withPromise(e *tlog.Entry) (*protorekor.TransparencyLogEntry, error) {
+	tle := e.TransparencyLogEntry()
+	tle.KindVersion = &protorekor.KindVersion{Kind: "dsse", Version: "0.0.1"}
+	logID, err := k.vs.RekorLogID()
+	if err != nil {
+		return nil, err
+	}
+	set, err := k.vs.RekorSignPayload(tlog.RekorPayload{
+		Body:           base64.StdEncoding.EncodeToString(tle.CanonicalizedBody),
+		IntegratedTime: tle.IntegratedTime,
+		LogIndex:       tle.LogIndex,
+		LogID:          logID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	tle.InclusionPromise = &protorekor.InclusionPromise{SignedEntryTimestamp: set}
+	return tle, nil
+}
+
+// InstallSigner makes keyless publishing sign through this virtual Sigstore
+// for the rest of the test, with a certificate for an email identity. Each
+// signature records the ID token Fulcio was asked with in tokens.
+func (k *Keyless) InstallSigner(t testing.TB, identity, issuer string) (tokens *[]string) {
+	t.Helper()
+	tokens = new([]string)
+	t.Cleanup(registry.SetKeylessServicesForTesting(func() (registry.KeylessServices, error) {
+		leaf, key, err := k.vs.GenerateLeafCert(identity, issuer)
+		if err != nil {
+			return registry.KeylessServices{}, err
+		}
+		signer, ok := key.(crypto.Signer)
+		if !ok {
+			return registry.KeylessServices{}, errors.New("virtual Sigstore key is not a signer")
+		}
+		return registry.KeylessServices{
+			Key:   signer,
+			Certs: virtualFulcio{leaf: leaf, tokens: tokens},
+			Log:   virtualRekor{k: k, leaf: leaf},
+		}, nil
+	}))
+	return tokens
+}
+
+type virtualFulcio struct {
+	leaf   *x509.Certificate
+	tokens *[]string
+}
+
+func (f virtualFulcio) GetCertificate(_ context.Context, _ sign.Keypair, opts *sign.CertificateProviderOptions) ([]byte, error) {
+	*f.tokens = append(*f.tokens, opts.IDToken)
+	return f.leaf.Raw, nil
+}
+
+type virtualRekor struct {
+	k    *Keyless
+	leaf *x509.Certificate
+}
+
+func (r virtualRekor) GetTransparencyLogEntry(_ context.Context, _ []byte, b *protobundle.Bundle) error {
+	pe := b.GetDsseEnvelope()
+	env := &dsse.Envelope{PayloadType: pe.GetPayloadType(), Payload: base64.StdEncoding.EncodeToString(pe.GetPayload())}
+	for _, s := range pe.GetSignatures() {
+		env.Signatures = append(env.Signatures, dsse.Signature{KeyID: s.GetKeyid(), Sig: base64.StdEncoding.EncodeToString(s.GetSig())})
+	}
+	e, err := r.k.vs.GenerateTlogEntry(r.leaf, env, pe.GetSignatures()[0].GetSig(), time.Now().Add(time.Minute).Unix(), true)
+	if err != nil {
+		return err
+	}
+	tle, err := r.k.withPromise(e)
+	if err != nil {
+		return err
+	}
+	b.VerificationMaterial.TlogEntries = append(b.VerificationMaterial.TlogEntries, tle)
+	return nil
 }
 
 // Key is a long-lived signing key.
@@ -225,6 +294,43 @@ func (c *CA) SignValid(t testing.TB, identity string, payload []byte, notBefore,
 		t.Fatal(err)
 	}
 	return signDSSE(t, payload, kp, sign.BundleOptions{CertificateProvider: leafProvider{ca: c, identity: identity, notBefore: notBefore, notAfter: notAfter}})
+}
+
+// ChainPEM issues a code signing leaf for pub and an email identity, through
+// an intermediate CA, and returns the PEM chain a publisher holds: leaf,
+// intermediate, then this root.
+func (c *CA) ChainPEM(t testing.TB, identity string, pub crypto.PublicKey) []byte {
+	t.Helper()
+	ikey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	must(t, err)
+	itmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: "Test Company Signing CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	ider, err := x509.CreateCertificate(rand.Reader, itmpl, c.cert, ikey.Public(), c.key)
+	must(t, err)
+	icert, err := x509.ParseCertificate(ider)
+	must(t, err)
+	ltmpl := &x509.Certificate{
+		SerialNumber:   big.NewInt(3),
+		EmailAddresses: []string{identity},
+		NotBefore:      time.Now().Add(-time.Minute),
+		NotAfter:       time.Now().Add(time.Hour),
+		KeyUsage:       x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:    []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
+	}
+	lder, err := x509.CreateCertificate(rand.Reader, ltmpl, icert, pub, ikey)
+	must(t, err)
+	var out bytes.Buffer
+	for _, der := range [][]byte{lder, ider, c.cert.Raw} {
+		must(t, pem.Encode(&out, &pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	}
+	return out.Bytes()
 }
 
 type leafProvider struct {
