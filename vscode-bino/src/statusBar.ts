@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { DaemonClient, DaemonStatus } from './daemonClient';
 import { BinoPreviewManager, PreviewStatus } from './preview';
 import { WorkspaceIndexer } from './indexer';
 import { BinoValidator } from './validation';
+import { ProjectTracker } from './project';
 
 /** What the single Bino status bar item summarizes. */
 export interface StatusState {
@@ -69,7 +71,8 @@ export class BinoStatusBar implements vscode.Disposable {
         private readonly preview: BinoPreviewManager,
         private readonly indexer: WorkspaceIndexer,
         private readonly validator: BinoValidator,
-        private readonly outputChannel: vscode.OutputChannel
+        private readonly outputChannel: vscode.OutputChannel,
+        private readonly project?: ProjectTracker
     ) {
         this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
         this.item.name = 'Bino';
@@ -82,7 +85,8 @@ export class BinoStatusBar implements vscode.Disposable {
             indexer.onDidFinishIndex(update),
             validator.onDidStartValidation(update),
             validator.onDidFinishValidation(update),
-            validator.onDidChangeDiagnostics(update)
+            validator.onDidChangeDiagnostics(update),
+            ...(project ? [project.onDidChange(update)] : [])
         );
         const client = daemon();
         if (client) {
@@ -106,7 +110,8 @@ export class BinoStatusBar implements vscode.Disposable {
             warnings: summary.warnings,
         });
         this.item.text = view.text;
-        this.item.tooltip = view.tooltip;
+        const root = this.project && this.project.all.length > 1 ? this.project.current : undefined;
+        this.item.tooltip = root ? `Project: ${path.basename(root)}\n${view.tooltip}` : view.tooltip;
         this.item.backgroundColor = view.background
             ? new vscode.ThemeColor(`statusBarItem.${view.background}Background`)
             : undefined;
@@ -126,6 +131,11 @@ export class BinoStatusBar implements vscode.Disposable {
                 label: '$(server-process) Restart Daemon',
                 description: client.getStatus(),
                 run: () => vscode.commands.executeCommand('bino.restartDaemon'),
+            }] : []),
+            ...(this.project && this.project.all.length > 1 ? [{
+                label: '$(folder) Switch Project...',
+                description: this.project.current ? path.basename(this.project.current) : undefined,
+                run: () => vscode.commands.executeCommand('bino.selectProject'),
             }] : []),
             { label: '$(refresh) Refresh Index', run: () => vscode.commands.executeCommand('bino.refreshIndex') },
             {

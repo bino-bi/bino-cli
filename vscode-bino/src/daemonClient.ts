@@ -372,6 +372,32 @@ export class DaemonClient {
         return this.connect(projectRoot);
     }
 
+    /**
+     * Connect to the daemon of another project. The current daemon keeps
+     * running: other windows may use it, and it exits once no client is left.
+     */
+    async switchProject(projectRoot: string): Promise<boolean> {
+        if (projectRoot === this.projectRoot && this.status === 'connected') {
+            return true;
+        }
+        this.stopEventStream();
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = undefined;
+        }
+        // The new root's port file brings its own port and token.
+        this.port = undefined;
+        this.token = undefined;
+        this.rejected = false;
+        this.daemonPid = undefined;
+        this.daemonProcess = undefined;
+        this.capabilities = [];
+        this.daemonVersion = undefined;
+        this.portFileVersion = undefined;
+        this.setStatus('disconnected');
+        return this.connect(projectRoot);
+    }
+
     // --- Private methods ---
 
     private setStatus(status: DaemonStatus): void {

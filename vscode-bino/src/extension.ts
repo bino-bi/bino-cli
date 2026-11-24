@@ -29,6 +29,7 @@ import { daemonVersionMismatch, getBinoPath, installedBinoVersion, runBino } fro
 import { BinoStatusBar } from './statusBar';
 import { BINO_INSTALLED_CONTEXT, detectBino, downloadBinoCommand, loadManagedBino } from './binoDownload';
 import { BinoTaskProvider, BUILD_KINDS } from './tasks';
+import { ProjectTracker } from './project';
 
 let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
@@ -283,6 +284,11 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     }
     console.log('Bino project detected, enabling full extension features');
 
+    const project = new ProjectTracker();
+    context.subscriptions.push(project);
+    await project.init();
+    indexer.setCurrentProject(() => project.current);
+
     // Initialize validator
     validator = new BinoValidator(outputChannel);
     context.subscriptions.push({ dispose: () => validator?.dispose() });
@@ -295,6 +301,8 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     // got, so it restarts when this window moves to another daemon.
     let lspStarted = false;
     let lspDaemonPid: number | undefined;
+    // Restarts run one at a time, so a stop never interleaves with a start.
+    let lspQueue: Promise<void> = Promise.resolve();
 
     // Initialize daemon client (if enabled)
     const binoConfig = vscode.workspace.getConfiguration('bino');
@@ -356,7 +364,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         }
     }
 
-    context.subscriptions.push(new BinoStatusBar(() => daemonClient, previewManager, indexer, validator, outputChannel));
+    context.subscriptions.push(new BinoStatusBar(() => daemonClient, previewManager, indexer, validator, outputChannel, project));
 
     // The bino Language Server provides completion, hover, navigation, rename,
     // and diagnostics - server-side over a YAML CST. It is gated on a binary
@@ -370,27 +378,28 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         { language: 'yaml', scheme: 'untitled' }
     ];
 
-    // Root the LSP deterministically at the workspace's bino project - the
-    // active editor at activation instant is arbitrary in multi-folder windows
-    // (terminal commands keep the active-editor preference). Start it after
-    // the daemon connect settles, off the activation path: a language-server
-    // failure must not reject activate() and silently kill every command and
-    // tree view - features degrade with a visible warning instead.
-    const lspProjectRoot = indexer.getWorkspaceProjectRoot();
-    if (lspProjectRoot) {
-        void daemonReady
-            .then(() => {
+    // Root the LSP at the current project. Start it after the daemon connect
+    // settles, off the activation path: a language-server failure must not
+    // reject activate() and silently kill every command and tree view -
+    // features degrade with a visible warning instead.
+    if (project.current) {
+        void daemonReady.then(() => {
+            lspQueue = lspQueue.then(async () => {
+                const lspProjectRoot = indexer?.getWorkspaceProjectRoot();
+                // A project switch may have started it already.
+                if (!lspProjectRoot || lspStarted) {
+                    return;
+                }
                 lspStarted = true;
                 lspDaemonPid = daemonClient?.isConnected ? daemonClient.pid : undefined;
-                return startLanguageClient(context, outputChannel, lspProjectRoot);
-            })
-            .then(languageClientStarted)
-            .catch(err => {
+                languageClientStarted(await startLanguageClient(context, outputChannel, lspProjectRoot));
+            }).catch(err => {
                 outputChannel.appendLine(`[LSP] failed to start: ${err}`);
                 vscode.window.showWarningMessage(
                     'bino language server failed to start - completion and diagnostics are unavailable. See the "Bino Reports" output for details.'
                 );
             });
+        });
     }
 
     // Positions and (without the daemon) the index come from the server, so
@@ -403,20 +412,53 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         }
     }
 
-    async function restartLanguageClient(): Promise<void> {
-        const lspRoot = indexer?.getWorkspaceProjectRoot();
-        if (!lspRoot) {
-            return;
-        }
-        lspStarted = true;
-        lspDaemonPid = daemonClient?.isConnected ? daemonClient.pid : undefined;
-        try {
-            await stopLanguageClient();
-            languageClientStarted(await startLanguageClient(context, outputChannel, lspRoot));
-        } catch (err) {
-            outputChannel.appendLine(`[LSP] failed to restart: ${err}`);
-        }
+    function restartLanguageClient(): Promise<void> {
+        lspQueue = lspQueue.then(async () => {
+            const lspRoot = indexer?.getWorkspaceProjectRoot();
+            if (!lspRoot) {
+                return;
+            }
+            lspStarted = true;
+            lspDaemonPid = daemonClient?.isConnected ? daemonClient.pid : undefined;
+            try {
+                await stopLanguageClient();
+                languageClientStarted(await startLanguageClient(context, outputChannel, lspRoot));
+            } catch (err) {
+                outputChannel.appendLine(`[LSP] failed to restart: ${err}`);
+            }
+        });
+        return lspQueue;
     }
+
+    // Point the language server, the daemon, the index and a running preview at the new project.
+    let projectQueue: Promise<void> = Promise.resolve();
+    const switchProject = (root: string) => {
+        projectQueue = projectQueue.then(async () => {
+            if (root !== project.current) {
+                return; // a later switch replaced this one
+            }
+            outputChannel.appendLine(`[Project] Current project: ${root}`);
+            const preview = previewManager;
+            const previewWasOn = preview?.getStatus() === 'running' || preview?.getStatus() === 'starting';
+            if (previewWasOn) {
+                await preview?.stopPreview();
+            }
+            const pidBefore = lspDaemonPid;
+            const connected = daemonClient ? await daemonClient.switchProject(root) : false;
+            // A new daemon restarts the language server through the status listener.
+            if (!connected || daemonClient?.pid === pidBefore) {
+                await restartLanguageClient();
+            }
+            await indexer?.refreshIndex();
+            if (previewWasOn) {
+                await preview?.startPreview();
+            }
+        }).catch(err => outputChannel.appendLine(`[Project] switch failed: ${err}`));
+    };
+    context.subscriptions.push(
+        project.onDidChange(switchProject),
+        vscode.commands.registerCommand('bino.selectProject', () => project.pick())
+    );
 
     // Register CodeLens provider for DataSource/DataSet previews
     const codeLensProvider = new BinoCodeLensProvider(indexer);
