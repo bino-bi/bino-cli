@@ -437,6 +437,11 @@ func (s *Server) refTargetHover(ctx context.Context, pc reportspec.PositionConte
 		if o.Tag != "" {
 			fmt.Fprintf(&b, " (tag: %s)", o.Tag)
 		}
+		if o.Signer != nil {
+			fmt.Fprintf(&b, " · signed by %s", o.Signer)
+		} else {
+			b.WriteString(" · unsigned")
+		}
 	}
 	if decls, ok := s.paramsForTarget(ctx, def.Kind, name); ok && len(decls) > 0 {
 		b.WriteString("\n\n| Param | Type | Default | Description |\n|---|---|---|---|\n")

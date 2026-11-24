@@ -102,6 +102,9 @@ func registryRemove(p registryProject, args []string) (mcp.RegistryMutationResul
 		if err := registry.RemovePackage(p.Root, e.Name); err != nil {
 			return mcp.RegistryMutationResult{}, RuntimeError(err)
 		}
+		if err := registry.RemoveAttestations(p.Root, e.Name); err != nil {
+			return mcp.RegistryMutationResult{}, RuntimeError(err)
+		}
 		lock.Remove(e.Name)
 		changes = append(changes, mcp.RegistryChange{Name: e.Name, Before: e.Version, Tag: e.Tag, Direct: e.Direct})
 	}

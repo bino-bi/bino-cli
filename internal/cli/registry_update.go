@@ -23,7 +23,7 @@ dependency is held at its locked version.`,
 			if err != nil {
 				return err
 			}
-			res, err := registryUpdate(cmd.Context(), p, args)
+			res, err := registryUpdate(cmd.Context(), p, args, nil)
 			if err != nil {
 				return err
 			}
@@ -62,8 +62,9 @@ dependency is held at its locked version.`,
 // registryUpdate re-resolves the declared dependencies (only args when given,
 // holding every other direct dependency at its locked version) and rewrites
 // the lock. With nothing declared it touches nothing and returns no changes.
-// It never prints: the MCP server calls it too.
-func registryUpdate(ctx context.Context, p registryProject, args []string) (mcp.RegistryMutationResult, error) {
+// It never prints: the MCP server calls it too. accept names packages whose
+// signer pin is waived ('bino registry trust accept'); nil for a plain update.
+func registryUpdate(ctx context.Context, p registryProject, args []string, accept map[string]bool) (mcp.RegistryMutationResult, error) {
 	roots, err := dependencyRoots(p.Cfg)
 	if err != nil {
 		return mcp.RegistryMutationResult{}, err
@@ -107,12 +108,12 @@ func registryUpdate(ctx context.Context, p registryProject, args []string) (mcp.
 	if err != nil {
 		return mcp.RegistryMutationResult{}, registryCommandError(err)
 	}
-	plans, err := registrySync(ctx, p, client, plan)
+	plans, err := registrySync(ctx, p, client, oldLock, plan, accept)
 	if err != nil {
 		return mcp.RegistryMutationResult{}, err
 	}
 	return mcp.RegistryMutationResult{
 		Changes:  lockChanges(oldLock, plan),
-		Warnings: registryCompatWarnings(p, planEntries(plans)),
+		Warnings: append(rollbackWarnings(oldLock, plan), registryWarnings(p, plans)...),
 	}, nil
 }

@@ -11,6 +11,7 @@ type pkgOrigin struct {
 	Name    string
 	Version string
 	Tag     string
+	Signer  *registry.Signer // nil: the lock records no signature
 }
 
 // getLockfile returns the cached bino.lock, loading it on first use. Errors
@@ -47,7 +48,7 @@ func (s *Server) packageOrigins() map[string]pkgOrigin {
 	}
 	out := make(map[string]pkgOrigin, len(lf.Packages))
 	for _, e := range lf.Packages {
-		origin := pkgOrigin{Name: e.Name, Version: e.Version, Tag: e.Tag}
+		origin := pkgOrigin{Name: e.Name, Version: e.Version, Tag: e.Tag, Signer: e.Signer}
 		dirAbs, _, err := registry.PackageDir(s.root, e.Name)
 		if !e.IsTree() || err != nil {
 			// A single-document package is addressed by the path the lock

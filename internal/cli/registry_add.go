@@ -24,7 +24,7 @@ tag; "@1.2.3" pins that exact version.`,
 			if err != nil {
 				return err
 			}
-			res, err := registryAdd(cmd.Context(), p, args)
+			res, err := registryAdd(cmd.Context(), p, args, nil)
 			if err != nil {
 				return err
 			}
@@ -59,7 +59,9 @@ tag; "@1.2.3" pins that exact version.`,
 // registryAdd resolves args on top of the declared dependencies, materializes
 // the closure and records the new declarations in bino.toml. It never prints:
 // the MCP server calls it too, and its stdout may be the JSON-RPC channel.
-func registryAdd(ctx context.Context, p registryProject, args []string) (mcp.RegistryMutationResult, error) {
+// accept names packages whose signer pin is waived ('bino registry trust
+// accept'); nil for a plain add.
+func registryAdd(ctx context.Context, p registryProject, args []string, accept map[string]bool) (mcp.RegistryMutationResult, error) {
 	specs := make([]registry.Spec, 0, len(args))
 	for _, arg := range args {
 		spec, err := registry.ParseSpec(arg)
@@ -101,7 +103,7 @@ func registryAdd(ctx context.Context, p registryProject, args []string) (mcp.Reg
 	if err != nil {
 		return mcp.RegistryMutationResult{}, ConfigError(err)
 	}
-	plans, err := registrySync(ctx, p, client, plan)
+	plans, err := registrySync(ctx, p, client, oldLock, plan, accept)
 	if err != nil {
 		return mcp.RegistryMutationResult{}, err
 	}
@@ -113,7 +115,7 @@ func registryAdd(ctx context.Context, p registryProject, args []string) (mcp.Reg
 	}
 	return mcp.RegistryMutationResult{
 		Changes:  lockChanges(oldLock, plan),
-		Warnings: registryCompatWarnings(p, planEntries(plans)),
+		Warnings: append(rollbackWarnings(oldLock, plan), registryWarnings(p, plans)...),
 	}, nil
 }
 

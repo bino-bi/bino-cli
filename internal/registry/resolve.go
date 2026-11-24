@@ -92,6 +92,18 @@ func ResolveClosure(ctx context.Context, r depResolver, roots []Root) ([]Resolve
 		if err != nil {
 			return fmt.Errorf("resolve %s: %w", name, err)
 		}
+		// The answer is the registry's claim: a pin must get exactly that
+		// version, not an older signed one, and both fields reach the lock
+		// and the terminal, so they must have the shape the grammar allows.
+		if !IsPin(resp.Version) {
+			return fmt.Errorf("resolve %s: the registry answered with version %q, which is not an exact version", name, Printable(resp.Version))
+		}
+		if resp.Tag != "" && !tokenRe.MatchString(resp.Tag) {
+			return fmt.Errorf("resolve %s: the registry answered with tag %q, which is not a tag name", name, Printable(resp.Tag))
+		}
+		if IsPin(ref) && resp.Version != ref {
+			return fmt.Errorf("resolve %s: requested version %s, but the registry answered with %s", name, ref, resp.Version)
+		}
 		deps := make([]string, 0, len(resp.Dependencies))
 		depSpecs := make([]Spec, 0, len(resp.Dependencies))
 		for _, d := range resp.Dependencies {

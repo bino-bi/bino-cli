@@ -200,6 +200,25 @@ The `[dependencies]` table is normally maintained by `bino registry add` and
 `bino.toml`. See the [Registry and dependencies guide](/guides/registry-and-dependencies/)
 and the [bino registry](/cli/registry/) command reference.
 
+## Trust policy
+
+The `[trust]` table says which registry packages must be signed, and by whom:
+
+```toml
+[trust]
+require = "signed"   # off (default) | warn | signed
+
+[[trust.signer]]
+scope = "@acme/*"
+x509-root = "trust/acme-ca.pem"
+```
+
+It can also be set in `~/.bino/config.toml` and in a file named by
+`BINO_TRUST_POLICY`; those layers can only make the policy stricter. Every
+field and the layering rule are described in the
+[trust policy reference](/reference/trust-policy/). bino versions before
+v0.116.0 ignore the table.
+
 ## Predef packages
 
 A `[package]` table turns an ordinary project into a **predef project**: a project

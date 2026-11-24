@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -226,5 +227,25 @@ func TestResolveClosureMixesTreeAndDocumentPackages(t *testing.T) {
 	}
 	if style.Files[0].Digest != style.Digest {
 		t.Errorf("a document package's file must carry the version digest: %+v", style)
+	}
+}
+
+// The resolve answer is the registry's claim: a pinned ref must get exactly
+// that version, and the version and tag must have the grammar's shape.
+func TestResolveClosureChecksTheAnswer(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ref  string
+		resp ResolveResult
+		want string
+	}{
+		"older version for a pin": {"1.2.0", res("@acme/kit", "", "1.0.0", "Text"), "requested version 1.2.0"},
+		"version not semver":      {"", res("@acme/kit", "latest", "1.0\x1b[2J", "Text"), "not an exact version"},
+		"tag not a token":         {"", res("@acme/kit", "Latest\n", "1.0.0", "Text"), "not a tag name"},
+	} {
+		f := &fakeResolver{trees: map[string]ResolveV2Result{"acme/kit@" + tc.ref: legacyTreeOf(tc.resp, "kit")}}
+		_, err := ResolveClosure(context.Background(), f, []Root{{Name: "@acme/kit", Ref: tc.ref}})
+		if err == nil || !strings.Contains(err.Error(), tc.want) || strings.ContainsAny(err.Error(), "\x1b\n") {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
 	}
 }

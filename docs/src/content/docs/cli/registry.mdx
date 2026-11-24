@@ -17,7 +17,14 @@ described there as well.
 
 The same operations are available to AI agents through the [MCP server](/cli/mcp/#registry) -
 `registry_search`, `registry_info`, `registry_packages`, `registry_add`, `registry_update`,
-`registry_remove` and `registry_install` mirror the commands below.
+`registry_remove` and `registry_install` mirror the commands below. Accepting a
+new package signer is left to a human: there is no MCP tool for
+`bino registry trust accept`.
+
+`add`, `update` and `install` verify the signatures the registry serves for a
+package and apply the [trust policy](/reference/trust-policy/) and the signer
+pinned in `bino.lock`. A package whose signer changed, or that the policy
+rejects, fails the command and nothing is written.
 
 ## bino registry add
 
@@ -71,6 +78,8 @@ bino registry remove <package>...
 Removes packages from `bino.toml`'s `[dependencies]` table, then deletes every
 locked package no longer reachable from the remaining declarations. Works
 offline. A transitive dependency still required by another package is kept.
+The signer pins of removed packages stay in `bino.lock`; see
+[`trust accept`](#bino-registry-trust-accept).
 
 ## bino registry list
 
@@ -103,7 +112,10 @@ bino registry info <package[@version|@tag]>
 ```
 
 Shows a package's resolved metadata: version, tag, kinds, digest, compat
-ranges, dependencies, and the files the version ships. Requires network access.
+ranges, dependencies, the signatures the registry reports for the version,
+and the files the version ships. Requires network access. The signature lines
+are the registry's own claim; `add`, `update` and `install` verify the
+signatures themselves.
 
 ## bino registry verify
 
@@ -116,7 +128,40 @@ digest pinned in `bino.lock`. Works offline; intended as a CI gate. Manifest
 digests are computed over the canonical document form, so cosmetic reformatting
 of a file does not fail verification; resources are hashed over their raw bytes.
 A file inside a package directory that `bino.lock` does not record is reported
-as `EXTRA`. Exits non-zero on any failure.
+as `EXTRA`.
+
+It also re-checks, offline, the signatures stored at install time under
+`.bino/registry/.attestations/` against the signer pinned in `bino.lock` and the
+[trust policy](/reference/trust-policy/). The statuses are `SIGNER MISMATCH`
+(the stored signature is by another signer), `SIGNATURE MISSING` (the lock pins
+a signer but no signature is stored), `INVALID SIGNATURE` and `UNTRUSTED` (the
+policy rejects the package). Exits non-zero on any failure.
+
+## bino registry trust accept
+
+```bash
+bino registry trust accept <package[@version|@tag]>
+```
+
+Once `bino.lock` pins who signed a package, a version signed by someone
+else, or not signed at all, fails at every `[trust]` require level. The pin
+stays when the package leaves `bino.lock`, so a package that comes back is held
+to it too. If the change is expected, this command resolves the package,
+verifies its signature, and pins the new signer in `bino.lock`. It prints the
+old and the new signer. The trust policy still applies; only the pin is waived.
+
+Without a version, a declared dependency is re-resolved like
+`bino registry update <package>`, and a transitive one through the declared
+dependencies that pull it in. With a version or tag, a declared dependency
+moves to it like `bino registry add`. A package that is pinned but neither
+declared nor locked cannot be resolved on its own: its pin is removed, and the
+next `add` or `update` that brings it back pins the signer it verifies.
+
+```bash
+bino registry update
+# Error: package signer changed: @acme/kit was signed by ..., but 2.0.0 is signed by ...
+bino registry trust accept @acme/kit
+```
 
 To publish a package rather than consume one, see [bino publish](/cli/publish/).
 

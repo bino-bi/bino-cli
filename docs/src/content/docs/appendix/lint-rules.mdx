@@ -83,6 +83,8 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `predef-forbidden-kind`           | Predef Forbidden Kind                       | Error    | Artefact kinds and credential kinds must not be inside the package include set.                                             |
 | `predef-asset-absolute-path`      | Predef Asset Absolute Path                  | Error    | A packaged Asset's `spec.source.localPath` must be relative to its manifest.                                                |
 | `predef-external-ref`             | Predef External Reference                   | Error    | Structural and presentational references must resolve inside the package or a declared dependency.                          |
+| `registry-unsigned-dependency`    | Registry Unsigned Dependency                | Error    | Under `[trust] require = "signed"`, every package in `bino.lock` must record a verified signer.                             |
+| `registry-signer-mismatch`        | Registry Signer Mismatch                    | Error    | The signers of a package in `bino.lock` must satisfy every `[trust]` signer rule that covers it.                            |
 
 ## Rule details
 
@@ -1375,6 +1377,34 @@ compat-engine = ">=1.0.0"
 ```
 
 When this rule fires, the four content rules below do not run: the include set and the name prefix both derive from the table, so their findings would be meaningless.
+
+### registry-unsigned-dependency
+
+With `require = "signed"` in the [trust policy](/reference/trust-policy/), every
+package must be signed by a signer a rule accepts. This rule reads `bino.lock`
+offline and reports each package that records no signer, for example one locked
+before the policy was tightened, or one published as a single document, which
+cannot be signed. The finding points at the package in `bino.lock`.
+
+**Fix:** Run `bino registry update` once the package is signed, or remove the
+dependency. `bino registry install` refuses the package under this policy too.
+
+### registry-signer-mismatch
+
+The signers of a locked package do not satisfy every `[trust]` signer rule
+that covers it, usually because the policy changed after the lock was written.
+As in `bino registry install`, each layer of the policy that has a rule for the
+package must be met. The rule reads the signatures stored under
+`.bino/registry/.attestations/`, offline; when none are stored, it checks the
+signer `bino.lock` records for the version. A stored signature that does not
+verify is reported. Under `require = "signed"`, a signer that no rule covers is
+reported too, since `bino registry install` refuses it.
+
+A `[trust]` policy that cannot be loaded, for example one with a misspelled
+key, is reported by this rule too, on `bino.toml`.
+
+**Fix:** Correct the `[[trust.signer]]` rule, or, if the package is now released
+by the signer the rule names, run `bino registry trust accept <package>`.
 
 ### predef-name-namespace
 

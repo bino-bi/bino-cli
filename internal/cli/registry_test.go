@@ -53,6 +53,15 @@ type fakePackage struct {
 	compatEngine string
 	compatCLI    string
 
+	// attestations are served by the v2 attestations route. noAttestRoute
+	// makes that route answer like a registry that predates it.
+	attestations  []registry.Attestation
+	noAttestRoute bool
+
+	// claimedDigest, when set, is the version digest the v2 resolve route
+	// reports instead of the tree's real one.
+	claimedDigest string
+
 	// fileDownloads counts every served file of this package, so a test can
 	// assert that a warm store costs no bandwidth.
 	fileDownloads atomic.Int64
@@ -218,6 +227,9 @@ func registerFakeV2Routes(t *testing.T, mux *http.ServeMux, packages map[string]
 		}}
 		if len(pkg.tree) > 0 {
 			digest = pkg.manifestDigest(t)
+			if pkg.claimedDigest != "" {
+				digest = pkg.claimedDigest
+			}
 			files = files[:0]
 			for i, e := range pkg.treeEntries(t) {
 				files = append(files, map[string]any{
@@ -234,6 +246,24 @@ func registerFakeV2Routes(t *testing.T, mux *http.ServeMux, packages map[string]
 			"compatEngine": pkg.compatEngine, "compatCli": pkg.compatCLI,
 			"files": files,
 		})
+	})
+	mux.HandleFunc("GET /api/registry/v2/attestations/{scope}/{name}/{version}", func(w http.ResponseWriter, r *http.Request) {
+		name := "@" + r.PathValue("scope") + "/" + r.PathValue("name")
+		pkg, ok := packages[name]
+		if ok && pkg.noAttestRoute {
+			http.NotFound(w, r)
+			return
+		}
+		if !ok || pkg.version != r.PathValue("version") {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"code":"version_not_found","message":"not found"}`)
+			return
+		}
+		atts := pkg.attestations
+		if atts == nil {
+			atts = []registry.Attestation{}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"attestations": atts}) //nolint:errcheck // test handler
 	})
 	mux.HandleFunc("GET /api/registry/v2/files/{scope}/{name}/{version}/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		base := r.PathValue("name")
@@ -1166,10 +1196,10 @@ func TestRegistryNewerLockInstallsButRefusesWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newer := strings.Replace(string(data), "lockfile_version = 2", "lockfile_version = 3", 1)
+	newer := strings.Replace(string(data), "lockfile_version = 3", "lockfile_version = 4", 1)
 	newer = strings.Replace(newer, "direct = true", "direct = true\nfuture_field = 'kept'", 1)
 	if newer == string(data) || !strings.Contains(newer, "future_field") {
-		t.Fatalf("could not turn the lock into a v3 lock:\n%s", data)
+		t.Fatalf("could not turn the lock into a v4 lock:\n%s", data)
 	}
 	if err := os.WriteFile(lockPath, []byte(newer), 0o644); err != nil {
 		t.Fatal(err)
@@ -1182,7 +1212,7 @@ func TestRegistryNewerLockInstallsButRefusesWrites(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(got) != newer {
-			t.Errorf("%s rewrote the v3 lock:\n%s", step, got)
+			t.Errorf("%s rewrote the v4 lock:\n%s", step, got)
 		}
 	}
 
@@ -1190,7 +1220,7 @@ func TestRegistryNewerLockInstallsButRefusesWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := runRegistry(t, "install"); err != nil {
-		t.Fatalf("install from a v3 lock: %v", err)
+		t.Fatalf("install from a v4 lock: %v", err)
 	}
 	if got, err := os.ReadFile(filepath.Join(dir, ".bino", "registry", "acme", "x", "x.yml")); err != nil || string(got) != string(xBody) {
 		t.Errorf("install did not materialize @acme/x: %v", err)
