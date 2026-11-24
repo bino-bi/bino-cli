@@ -29,7 +29,8 @@ func isBinoBuffer(text string) bool {
 	// endDoc judges the document collected so far and resets for the next one.
 	endDoc := func() bool {
 		bino := config.IsBinoHeader(apiVersion, kind, nil)
-		typingAPIVersion := strings.HasPrefix("bino.bi/", apiVersion)
+		// A half-typed apiVersion is a prefix of "bino.bi/", so the order is intended.
+		typingAPIVersion := strings.HasPrefix("bino.bi/", apiVersion) //nolint:gocritic
 		if !bino && (!typingAPIVersion || otherKeys) {
 			foreign = true
 		}
