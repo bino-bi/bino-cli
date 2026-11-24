@@ -22,8 +22,9 @@ const maxHintValue = 40
 // InlayHint shows what each ${NAME} in range resolves to: the default of a
 // param the document declares, else the variable from the environment or
 // bino.toml [build.env], in the order the build looks them up. Unset
-// names get no hint (the missing-env-var diagnostic covers them), and values
-// of secret-looking names are masked.
+// names get no hint (the missing-env-var diagnostic covers them). Values from
+// the environment are never shown, as any of them may hold a credential; only
+// their source is. Values of secret-looking names are masked.
 func (s *Server) InlayHint(_ context.Context, params *protocol.InlayHintParams) ([]protocol.InlayHint, error) {
 	doc, ok := s.docs.Get(params.TextDocument.URI)
 	if !ok || !isBinoBuffer(doc.Text) {
@@ -50,18 +51,25 @@ func (s *Server) InlayHint(_ context.Context, params *protocol.InlayHintParams) 
 		if !ok {
 			continue
 		}
-		if secretName(name) {
-			value = "****"
+		label := "= " + shortValue(value)
+		switch {
+		case source == envSource:
+			label = "from environment"
+		case secretName(name):
+			label = "= ****"
 		}
 		hints = append(hints, protocol.InlayHint{
 			Position:    end,
-			Label:       protocol.String("= " + shortValue(value)),
+			Label:       protocol.String(label),
 			Tooltip:     protocol.String(name + " from " + source),
 			PaddingLeft: boolPtr(true),
 		})
 	}
 	return hints, nil
 }
+
+// envSource names the process environment as a variable source.
+const envSource = "the environment"
 
 // varSource is one place a ${NAME} can resolve from.
 type varSource struct {
@@ -73,7 +81,7 @@ type varSource struct {
 // environment, then bino.toml [build.env] (environment wins, see
 // CommandEnv.Apply). The environment is the language server's own.
 func (s *Server) varLookup() []varSource {
-	out := []varSource{{"the environment", config.EnvLookup()}}
+	out := []varSource{{envSource, config.EnvLookup()}}
 	if s.root == "" {
 		return out
 	}

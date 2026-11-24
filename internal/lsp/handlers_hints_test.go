@@ -36,12 +36,13 @@ func hintsFor(t *testing.T, s *Server, u uri.URI) map[string]string {
 
 func TestInlayHint_EnvVarsAndMasking(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("report-id = \"x\"\n[build.env]\nFROM_TOML = \"toml-value\"\n[build.env.values]\nREGION = \"from-toml\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("report-id = \"x\"\n[build.env]\nFROM_TOML = \"toml-value\"\nTOML_KEY = \"k\"\n[build.env.values]\nREGION = \"from-toml\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("REGION", "EU")
 	t.Setenv("DB_PASSWORD", "hunter2")
 	t.Setenv("API_KEY", "abc")
+	t.Setenv("PG_DSN", "postgres://user:s3cret@host/db")
 
 	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
 	s := NewServer(&fakeBackend{}, log, true, dir)
@@ -52,15 +53,18 @@ metadata:
   name: src
 spec:
   type: postgres_query
-  query: SELECT '${REGION}', '${FROM_TOML}', '${DB_PASSWORD}', '${API_KEY}', '${UNSET_VAR}', '\${REGION}'
+  query: SELECT '${REGION}', '${FROM_TOML}', '${DB_PASSWORD}', '${API_KEY}', '${PG_DSN}', '${TOML_KEY}', '${UNSET_VAR}', '\${REGION}'
 `, 1)
 
 	got := hintsFor(t, s, u)
 	want := map[string]string{
-		"${REGION}":      "= EU", // the environment wins over bino.toml
+		// Environment values are never shown; the environment wins over bino.toml.
+		"${REGION}":      "from environment",
 		"${FROM_TOML}":   "= toml-value",
-		"${DB_PASSWORD}": "= ****",
-		"${API_KEY}":     "= ****",
+		"${TOML_KEY}":    "= ****",
+		"${DB_PASSWORD}": "from environment",
+		"${API_KEY}":     "from environment",
+		"${PG_DSN}":      "from environment",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("hints = %v, want %v", got, want)
@@ -106,8 +110,8 @@ spec:
 		t.Errorf("param doc hints = %v, want [= US]", got)
 	}
 	// The second document declares no params, so the environment applies.
-	if got := labels[16]; len(got) != 1 || got[0] != "= from-env" {
-		t.Errorf("second doc hints = %v, want [= from-env]", got)
+	if got := labels[16]; len(got) != 1 || got[0] != "from environment" {
+		t.Errorf("second doc hints = %v, want [from environment]", got)
 	}
 }
 
