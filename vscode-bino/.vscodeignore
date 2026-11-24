@@ -8,3 +8,5 @@ node_modules/**
 tsconfig.json
 **/*.md
 eslint.config.mjs
+out/**
+.vscode-test.mjs
