@@ -413,7 +413,7 @@ All settings live under the **Bino Reports** section in VS Code Settings.
 
 Changes to `bino.binPath` and `bino.previewPort` apply at once: the language server and a running preview restart. A change to `bino.daemon.enabled` needs a window reload.
 
-In an untrusted workspace, a `bino.binPath` from the workspace settings is ignored. The extension then uses `bino.binPath` from your user settings, or `bino` from `PATH`.
+In an untrusted workspace the extension does not run bino: the daemon, language server, preview and builds start once you trust the workspace. A `bino.binPath` from the workspace settings also counts only in a trusted workspace.
 
 Example configuration:
 

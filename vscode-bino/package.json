@@ -32,7 +32,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "In an untrusted workspace, bino.binPath from the workspace settings is ignored and bino from your user settings or PATH is used.",
+      "description": "Bino runs the SQL and YAML in the workspace, so the daemon, language server, preview and builds start only once the workspace is trusted.",
       "restrictedConfigurations": [
         "bino.binPath"
       ]
@@ -106,7 +106,13 @@
     "viewsWelcome": [
       {
         "view": "binoGettingStarted",
-        "contents": "No Bino project detected.\n[Initialize Project](command:bino.initProject)\n[Check Setup](command:bino.checkSetup)\n[Open Folder](command:vscode.openFolder)"
+        "contents": "No Bino project detected.\n[Initialize Project](command:bino.initProject)\n[Check Setup](command:bino.checkSetup)\n[Open Folder](command:vscode.openFolder)",
+        "when": "isWorkspaceTrusted"
+      },
+      {
+        "view": "binoGettingStarted",
+        "contents": "Bino features need a trusted workspace.\n[Manage Workspace Trust](command:workbench.trust.manage)",
+        "when": "!isWorkspaceTrusted"
       }
     ],
     "commands": [

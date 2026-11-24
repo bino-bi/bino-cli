@@ -164,20 +164,55 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize workspace indexer
     indexer = new WorkspaceIndexer(context, outputChannel);
 
+    // bino runs the workspace's YAML and SQL, so nothing starts before the workspace is trusted.
+    const trusted = vscode.workspace.isTrusted;
+
     // Check if this is a bino project and set context for UI visibility
     const hasBinoProject = await indexer.hasProjectInWorkspace();
-    await vscode.commands.executeCommand('setContext', 'bino.projectDetected', hasBinoProject);
+    await vscode.commands.executeCommand('setContext', 'bino.projectDetected', hasBinoProject && trusted);
 
     // Onboarding commands must work without a project, so they are registered before the early return.
     context.subscriptions.push(
-        vscode.commands.registerCommand('bino.initProject', () => runInTerminal('init')),
+        vscode.commands.registerCommand('bino.initProject', () => {
+            if (requireTrust()) {
+                runInTerminal('init');
+            }
+        }),
         vscode.commands.registerCommand('bino.checkSetup', async () => {
-            await showSetupCheckResults();
+            if (requireTrust()) {
+                await showSetupCheckResults();
+            }
         }),
         vscode.commands.registerCommand('bino.openSettings', () => {
             vscode.commands.executeCommand('workbench.action.openSettings', 'bino');
         })
     );
+
+    if (hasBinoProject && !trusted) {
+        outputChannel.appendLine('Workspace is not trusted. Bino features start once you trust it.');
+        context.subscriptions.push(
+            vscode.window.registerTreeDataProvider('binoGettingStarted', {
+                getTreeItem: (item: vscode.TreeItem) => item,
+                getChildren: () => [],
+            })
+        );
+        // Commands contributed for a project would otherwise fail with "command not found".
+        const own = new Set(['bino.initProject', 'bino.checkSetup', 'bino.openSettings']);
+        const contributed: { command: string }[] = context.extension.packageJSON?.contributes?.commands ?? [];
+        const stubs = contributed
+            .filter(c => !own.has(c.command))
+            .map(c => vscode.commands.registerCommand(c.command, () => requireTrust()));
+        void requireTrust();
+        context.subscriptions.push(
+            ...stubs,
+            vscode.workspace.onDidGrantWorkspaceTrust(async () => {
+                stubs.forEach(d => d.dispose());
+                await vscode.commands.executeCommand('setContext', 'bino.projectDetected', true);
+                await activateProject(context, outputChannel);
+            })
+        );
+        return;
+    }
 
     if (!hasBinoProject) {
         console.log('No bino.toml found in workspace, extension features disabled');
@@ -207,6 +242,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
     }
 
+    await activateProject(context, outputChannel);
+}
+
+/** Show the trust message when the workspace is untrusted. Returns whether bino may run. */
+function requireTrust(): boolean {
+    if (vscode.workspace.isTrusted) {
+        return true;
+    }
+    void vscode.window.showWarningMessage(
+        'Bino features need a trusted workspace.',
+        'Manage Workspace Trust'
+    ).then(choice => {
+        if (choice === 'Manage Workspace Trust') {
+            void vscode.commands.executeCommand('workbench.trust.manage');
+        }
+    });
+    return false;
+}
+
+/** Wire up every feature for a trusted workspace with a bino project. */
+async function activateProject(context: vscode.ExtensionContext, outputChannel: vscode.LogOutputChannel): Promise<void> {
+    if (!indexer) {
+        return;
+    }
     console.log('Bino project detected, enabling full extension features');
 
     // Initialize validator
@@ -857,13 +916,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const previewPortChanged = e.affectsConfiguration('bino.previewPort');
             if (binPathChanged || previewPortChanged) {
                 void applySettingsChange(binPathChanged, previewPortChanged);
-            }
-        }),
-        // A workspace bino.binPath only counts once the workspace is trusted.
-        vscode.workspace.onDidGrantWorkspaceTrust(() => {
-            const setting = vscode.workspace.getConfiguration('bino').inspect<string>('binPath');
-            if (setting?.workspaceValue || setting?.workspaceFolderValue) {
-                void applySettingsChange(true, false);
             }
         })
     );
