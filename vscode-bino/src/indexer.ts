@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DaemonClient } from './daemonClient';
 import { setRenderEmbeddableKinds } from './embeddable';
+import { getBinoPath } from './bino';
 
 /** The project configuration filename that marks a bino project root */
 const PROJECT_CONFIG_FILE = 'bino.toml';
@@ -157,10 +158,9 @@ export class WorkspaceIndexer {
         return this._isIndexing;
     }
 
-    constructor(context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
         this.context = context;
-        this.outputChannel = vscode.window.createOutputChannel('Bino Indexer');
-        context.subscriptions.push(this.outputChannel);
+        this.outputChannel = outputChannel;
         context.subscriptions.push(this._onDidUpdateIndex);
         context.subscriptions.push(this._onDidStartIndex);
         context.subscriptions.push(this._onDidFinishIndex);
@@ -173,9 +173,7 @@ export class WorkspaceIndexer {
 
     /** Get the configured bino CLI path */
     private getBinoPath(): string {
-        const config = vscode.workspace.getConfiguration('bino');
-        const binPath = config.get<string>('binPath');
-        return binPath && binPath.trim() ? binPath : 'bino';
+        return getBinoPath();
     }
 
     /** Get the column cache TTL from settings */
@@ -313,17 +311,16 @@ export class WorkspaceIndexer {
         const workDir = this.getWorkspaceRoot();
 
         return new Promise((resolve, reject) => {
-            const options: cp.ExecOptionsWithStringEncoding = {
+            const options: cp.ExecFileOptionsWithStringEncoding = {
                 cwd: workDir,
                 maxBuffer: 10 * 1024 * 1024, // 10MB
                 timeout: 30000, // 30 seconds
                 encoding: 'utf8'
             };
 
-            const cmd = [binPath, ...args].join(' ');
-            this.outputChannel.appendLine(`Executing: ${cmd}`);
+            this.outputChannel.appendLine(`Executing: ${[binPath, ...args].join(' ')}`);
 
-            cp.exec(cmd, options, (error, stdout, stderr) => {
+            cp.execFile(binPath, args, options, (error, stdout, stderr) => {
                 if (error) {
                     this.outputChannel.appendLine(`Error: ${error.message}`);
                     if (stderr) {

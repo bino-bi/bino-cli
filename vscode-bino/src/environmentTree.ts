@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import * as cp from 'child_process';
 import * as path from 'path';
 import { WorkspaceIndexer } from './indexer';
 import { BinoValidator } from './validation';
+import { installedBinoVersion } from './bino';
 
 type EnvTreeItem = InfoItem | SettingsGroupItem | SettingItem;
 
@@ -54,11 +54,11 @@ export class EnvironmentTreeProvider implements vscode.TreeDataProvider<EnvTreeI
         validator.onDidChangeDiagnostics(() => this._onDidChangeTreeData.fire());
 
         // Detect CLI version on construction
-        this.detectCliVersion();
+        void this.detectCliVersion();
     }
 
     refresh(): void {
-        this.detectCliVersion();
+        void this.detectCliVersion();
         this._onDidChangeTreeData.fire();
     }
 
@@ -123,22 +123,9 @@ export class EnvironmentTreeProvider implements vscode.TreeDataProvider<EnvTreeI
         ];
     }
 
-    private detectCliVersion(): void {
-        const config = vscode.workspace.getConfiguration('bino');
-        const binPath = config.get<string>('binPath');
-        const bino = binPath && binPath.trim() ? binPath : 'bino';
-
-        try {
-            const result = cp.execSync(`${bino} version`, {
-                timeout: 5000,
-                encoding: 'utf8',
-                stdio: ['pipe', 'pipe', 'pipe'],
-            });
-            // Parse version from output like "bino version 0.25.0"
-            const match = result.trim().match(/(\d+\.\d+\.\d+\S*)/);
-            this.cliVersion = match ? `v${match[1]}` : result.trim();
-        } catch {
-            this.cliVersion = undefined;
-        }
+    private async detectCliVersion(): Promise<void> {
+        const version = await installedBinoVersion();
+        this.cliVersion = version ? `v${version}` : undefined;
+        this._onDidChangeTreeData.fire();
     }
 }

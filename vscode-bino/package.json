@@ -29,6 +29,15 @@
     "onView:binoGettingStarted"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In an untrusted workspace, bino.binPath from the workspace settings is ignored and bino from your user settings or PATH is used.",
+      "restrictedConfigurations": [
+        "bino.binPath"
+      ]
+    }
+  },
   "contributes": {
     "customEditors": [
       {

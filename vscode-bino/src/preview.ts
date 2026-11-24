@@ -5,6 +5,7 @@ import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { DaemonClient } from './daemonClient';
 import { getEmbeddableKinds } from './embeddable';
 import { getNonce } from './webviewNonce';
+import { getBinoPath } from './bino';
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -27,7 +28,6 @@ export class BinoPreviewManager {
     private outputChannel: vscode.OutputChannel;
     private previewProcess: cp.ChildProcess | undefined;
     private previewStatus: PreviewStatus = 'stopped';
-    private statusBarItem: vscode.StatusBarItem;
     private previewPanel: vscode.WebviewPanel | undefined;
     private indexer: WorkspaceIndexer | undefined;
     private daemonClient: DaemonClient | undefined;
@@ -52,12 +52,6 @@ export class BinoPreviewManager {
     constructor(outputChannel: vscode.OutputChannel, indexer?: WorkspaceIndexer) {
         this.outputChannel = outputChannel;
         this.indexer = indexer;
-        this.statusBarItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Left,
-            100
-        );
-        this.statusBarItem.command = 'bino.previewMenu';
-        this.updateStatusBar();
     }
 
     /** Set the workspace indexer for source navigation */
@@ -72,9 +66,7 @@ export class BinoPreviewManager {
 
     /** Get the configured bino CLI path */
     private getBinoPath(): string {
-        const config = vscode.workspace.getConfiguration('bino');
-        const binPath = config.get<string>('binPath');
-        return binPath && binPath.trim() ? binPath : 'bino';
+        return getBinoPath();
     }
 
     /** Get workspace root directory (bino project root containing bino.toml) */
@@ -100,37 +92,9 @@ export class BinoPreviewManager {
         return config.get<number>('previewPort') ?? DEFAULT_PREVIEW_PORT;
     }
 
-    /** Update status bar display */
-    private updateStatusBar(): void {
-        switch (this.previewStatus) {
-            case 'stopped':
-                this.statusBarItem.text = '$(play) Bino Preview';
-                this.statusBarItem.tooltip = 'Click to start Bino preview';
-                this.statusBarItem.backgroundColor = undefined;
-                break;
-            case 'starting':
-                this.statusBarItem.text = '$(sync~spin) Bino Preview';
-                this.statusBarItem.tooltip = 'Starting preview...';
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-                break;
-            case 'running':
-                this.statusBarItem.text = '$(check) Bino Preview';
-                this.statusBarItem.tooltip = 'Preview running - click to open or stop';
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
-                break;
-            case 'error':
-                this.statusBarItem.text = '$(error) Bino Preview';
-                this.statusBarItem.tooltip = 'Preview error - click to retry';
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-                break;
-        }
-        this.statusBarItem.show();
-    }
-
     /** Set preview status and emit event */
     private setStatus(status: PreviewStatus): void {
         this.previewStatus = status;
-        this.updateStatusBar();
         this._onStatusChange.fire(status);
     }
 
@@ -948,6 +912,16 @@ export class BinoPreviewManager {
         return this.previewStatus;
     }
 
+    /** Whether the preview runs as this window's own `bino preview` process, not in the daemon. */
+    get runsOwnProcess(): boolean {
+        return this.previewProcess !== undefined;
+    }
+
+    /** The port of the running preview, if one runs. */
+    get port(): number | undefined {
+        return this.activePort;
+    }
+
     /** Run build command, optionally for a single named artefact */
     async runBuild(artefact?: string): Promise<boolean> {
         // Try daemon first
@@ -988,15 +962,15 @@ export class BinoPreviewManager {
         this.outputChannel.show(true);
 
         return new Promise((resolve) => {
-            const options: cp.ExecOptionsWithStringEncoding = {
+            const options: cp.ExecFileOptionsWithStringEncoding = {
                 cwd: workDir,
                 maxBuffer: 50 * 1024 * 1024, // 50MB for build output
                 timeout: 300000, // 5 minutes
                 encoding: 'utf8'
             };
 
-            const buildCmd = artefact ? `${binPath} build --artifact ${artefact}` : `${binPath} build`;
-            cp.exec(buildCmd, options, (error, stdout, stderr) => {
+            const buildArgs = artefact ? ['build', '--artifact', artefact] : ['build'];
+            cp.execFile(binPath, buildArgs, options, (error, stdout, stderr) => {
                 if (stdout) {
                     this.outputChannel.append(stdout);
                 }
@@ -1100,7 +1074,6 @@ export class BinoPreviewManager {
         this.previewPanel?.dispose();
         this.artefactPanel?.dispose();
         this.disposeArtefactFollow();
-        this.statusBarItem.dispose();
         this._onStatusChange.dispose();
     }
 }

@@ -23,6 +23,8 @@ import { DependenciesTreeProvider } from './dependenciesTree';
 import { registerRegistryCommands } from './registryCommands';
 import { DaemonClient } from './daemonClient';
 import { loadBackendSchema, SchemaSource } from './schemaResolver';
+import { daemonVersionMismatch, getBinoPath, installedBinoVersion, runBino } from './bino';
+import { BinoStatusBar } from './statusBar';
 
 let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
@@ -31,10 +33,7 @@ let rowsPreviewManager: RowsPreviewManager | undefined;
 let wizardManager: DataSourceWizardManager | undefined;
 let treeTableEditorManager: TreeEditorProvider | undefined;
 let designerPanel: DesignerEditorProvider | undefined;
-let indexerStatusBarItem: vscode.StatusBarItem | undefined;
-let validationStatusBarItem: vscode.StatusBarItem | undefined;
 let daemonClient: DaemonClient | undefined;
-let daemonStatusBarItem: vscode.StatusBarItem | undefined;
 
 /**
  * Find the line number where the Nth document starts in a multi-doc YAML file.
@@ -90,8 +89,7 @@ let binoTerminalCwd: string | undefined;
 
 /** The configured bino binary, or `bino` from PATH. */
 function binoPath(): string {
-    const binPath = vscode.workspace.getConfiguration('bino').get<string>('binPath');
-    return binPath && binPath.trim() ? binPath.trim() : 'bino';
+    return getBinoPath();
 }
 
 /** Quote a program path for the user's default terminal shell. */
@@ -164,7 +162,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(outputChannel);
 
     // Initialize workspace indexer
-    indexer = new WorkspaceIndexer(context);
+    indexer = new WorkspaceIndexer(context, outputChannel);
 
     // Check if this is a bino project and set context for UI visibility
     const hasBinoProject = await indexer.hasProjectInWorkspace();
@@ -219,6 +217,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     previewManager = new BinoPreviewManager(outputChannel, indexer);
     context.subscriptions.push({ dispose: () => previewManager?.dispose() });
 
+    // `bino lsp` attaches to the daemon once, at startup. Track which daemon it
+    // got, so it restarts when this window moves to another daemon.
+    let lspStarted = false;
+    let lspDaemonPid: number | undefined;
+
     // Initialize daemon client (if enabled)
     const binoConfig = vscode.workspace.getConfiguration('bino');
     const daemonEnabled = binoConfig.get<boolean>('daemon.enabled', true);
@@ -245,18 +248,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             })
         );
 
-        // Create daemon status bar item
-        daemonStatusBarItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Left,
-            97
-        );
-        daemonStatusBarItem.tooltip = 'Bino Daemon status';
-        updateDaemonStatusBar();
-        daemonStatusBarItem.show();
-        context.subscriptions.push(daemonStatusBarItem);
-
         context.subscriptions.push(
-            daemonClient.onStatusChange(() => updateDaemonStatusBar())
+            daemonClient.onStatusChange(status => {
+                if (status === 'connected') {
+                    void checkDaemonVersion();
+                    if (lspStarted && daemonClient?.pid !== lspDaemonPid) {
+                        void restartLanguageClient();
+                    }
+                }
+            })
         );
 
         // Connect to daemon in the background, but keep the promise: the LSP
@@ -281,6 +281,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }
 
+    context.subscriptions.push(new BinoStatusBar(() => daemonClient, previewManager, indexer, validator, outputChannel));
+
     // The bino Language Server provides completion, hover, navigation, rename,
     // and diagnostics - server-side over a YAML CST. It is gated on a binary
     // capability: when `bino lsp` is missing (an old binary) the user is prompted
@@ -302,13 +304,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const lspProjectRoot = indexer.getWorkspaceProjectRoot();
     if (lspProjectRoot) {
         void daemonReady
-            .then(() => startLanguageClient(context, outputChannel, lspProjectRoot))
+            .then(() => {
+                lspStarted = true;
+                lspDaemonPid = daemonClient?.isConnected ? daemonClient.pid : undefined;
+                return startLanguageClient(context, outputChannel, lspProjectRoot);
+            })
             .catch(err => {
                 outputChannel.appendLine(`[LSP] failed to start: ${err}`);
                 vscode.window.showWarningMessage(
                     'bino language server failed to start - completion and diagnostics are unavailable. See the "Bino Reports" output for details.'
                 );
             });
+    }
+
+    async function restartLanguageClient(): Promise<void> {
+        const lspRoot = indexer?.getWorkspaceProjectRoot();
+        if (!lspRoot) {
+            return;
+        }
+        lspStarted = true;
+        lspDaemonPid = daemonClient?.isConnected ? daemonClient.pid : undefined;
+        try {
+            await stopLanguageClient();
+            await startLanguageClient(context, outputChannel, lspRoot);
+        } catch (err) {
+            outputChannel.appendLine(`[LSP] failed to restart: ${err}`);
+        }
     }
 
     // Register CodeLens provider for DataSource/DataSet previews
@@ -682,16 +703,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 return;
             }
             const ok = await daemonClient.restart(root);
-            // `bino lsp` binds to the daemon's port once at startup; the new
-            // daemon listens elsewhere, so the language server must restart too.
-            const lspRoot = indexer?.getWorkspaceProjectRoot();
-            if (lspRoot) {
-                try {
-                    await stopLanguageClient();
-                    await startLanguageClient(context, outputChannel, lspRoot);
-                } catch (err) {
-                    outputChannel.appendLine(`[LSP] failed to restart: ${err}`);
-                }
+            // On success the status listener restarts the language server for
+            // the new daemon; without a daemon it must run standalone.
+            if (!ok) {
+                await restartLanguageClient();
             }
             vscode.window.showInformationMessage(ok ? 'Bino daemon restarted.' : 'Bino daemon failed to restart - check the output channel.');
         })
@@ -719,12 +734,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Cache clean commands (run via child_process, not terminal)
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.cacheClean', async () => {
-            const config = vscode.workspace.getConfiguration('bino');
-            const binPath = config.get<string>('binPath');
-            const bino = binPath && binPath.trim() ? binPath : 'bino';
             try {
-                const { execSync } = await import('child_process');
-                execSync(`${bino} cache clean`, { cwd: indexer?.getProjectRootForUri(), timeout: 10000 });
+                await runBino(['cache', 'clean'], { cwd: indexer?.getProjectRootForUri() });
                 vscode.window.showInformationMessage('Bino cache cleaned');
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to clean cache: ${err}`);
@@ -734,12 +745,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.cacheCleanGlobal', async () => {
-            const config = vscode.workspace.getConfiguration('bino');
-            const binPath = config.get<string>('binPath');
-            const bino = binPath && binPath.trim() ? binPath : 'bino';
             try {
-                const { execSync } = await import('child_process');
-                execSync(`${bino} cache clean --global`, { cwd: indexer?.getProjectRootForUri(), timeout: 10000 });
+                await runBino(['cache', 'clean', '--global'], { cwd: indexer?.getProjectRootForUri() });
                 vscode.window.showInformationMessage('Bino global cache cleaned');
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to clean global cache: ${err}`);
@@ -813,78 +820,78 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initial index on activation
     await indexer.refreshIndex();
 
-    // --- Indexer status bar item ---
-    indexerStatusBarItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Left,
-        99
-    );
-    indexerStatusBarItem.command = 'bino.refreshIndex';
-    indexerStatusBarItem.tooltip = 'Bino Indexer - click to refresh';
-    updateIndexerStatusBar();
-    indexerStatusBarItem.show();
-    context.subscriptions.push(indexerStatusBarItem);
-
-    // Subscribe to indexer events
+    // Restart what holds on to these settings; everything else reads them per call.
+    const applySettingsChange = async (binPathChanged: boolean, previewPortChanged: boolean) => {
+        if (binPathChanged) {
+            outputChannel.appendLine('[Settings] bino.binPath changed');
+            versionPromptedPid = undefined;
+            environmentTreeProvider.refresh();
+            const root = indexer?.getProjectRootForUri();
+            // A new connection restarts the language server through the status listener.
+            const connected = daemonClient && root && !daemonClient.isConnected && await daemonClient.connect(root);
+            if (!connected) {
+                void checkDaemonVersion();
+                await restartLanguageClient();
+            }
+        }
+        const preview = previewManager;
+        if (preview?.getStatus() === 'running' && (previewPortChanged || (binPathChanged && preview.runsOwnProcess))) {
+            outputChannel.appendLine('[Settings] Restarting preview for the new settings');
+            await preview.restartPreview();
+        }
+    };
     context.subscriptions.push(
-        indexer.onDidStartIndex(() => updateIndexerStatusBar()),
-        indexer.onDidFinishIndex(() => updateIndexerStatusBar())
-    );
-
-    // --- Validation status bar item ---
-    validationStatusBarItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Left,
-        98
-    );
-    validationStatusBarItem.command = 'workbench.actions.view.problems';
-    validationStatusBarItem.tooltip = 'Bino diagnostics - click to open the Problems panel';
-    updateValidationStatusBar();
-    validationStatusBarItem.show();
-    context.subscriptions.push(validationStatusBarItem);
-
-    // Subscribe to validator events
-    context.subscriptions.push(
-        validator.onDidStartValidation(() => updateValidationStatusBar()),
-        validator.onDidFinishValidation(() => updateValidationStatusBar()),
-        validator.onDidChangeDiagnostics(() => updateValidationStatusBar())
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('bino.daemon.enabled')) {
+                // The daemon is wired into every feature at activation.
+                void vscode.window.showInformationMessage(
+                    'Reload the window to apply the "bino.daemon.enabled" setting.',
+                    'Reload Window'
+                ).then(choice => {
+                    if (choice === 'Reload Window') {
+                        void vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                });
+            }
+            const binPathChanged = e.affectsConfiguration('bino.binPath');
+            const previewPortChanged = e.affectsConfiguration('bino.previewPort');
+            if (binPathChanged || previewPortChanged) {
+                void applySettingsChange(binPathChanged, previewPortChanged);
+            }
+        }),
+        // A workspace bino.binPath only counts once the workspace is trusted.
+        vscode.workspace.onDidGrantWorkspaceTrust(() => {
+            const setting = vscode.workspace.getConfiguration('bino').inspect<string>('binPath');
+            if (setting?.workspaceValue || setting?.workspaceFolderValue) {
+                void applySettingsChange(true, false);
+            }
+        })
     );
 
     console.log('Bino Reports extension activated');
 }
 
-/** Update the indexer status bar item based on current state */
-function updateIndexerStatusBar(): void {
-    if (!indexerStatusBarItem || !indexer) {
-        return;
-    }
-    if (indexer.isIndexing) {
-        indexerStatusBarItem.text = '$(sync~spin) Bino: Indexing';
-        indexerStatusBarItem.backgroundColor = undefined;
-    } else {
-        indexerStatusBarItem.text = '$(check) Bino: Indexed';
-        indexerStatusBarItem.backgroundColor = undefined;
-    }
-}
+// The daemon pid we last warned about, so each daemon gets one message.
+let versionPromptedPid: number | undefined;
 
-/** Update the validation status bar item based on current state */
-function updateValidationStatusBar(): void {
-    if (!validationStatusBarItem || !validator) {
+/** Warn once when the connected daemon was started by another bino version than the installed one. */
+async function checkDaemonVersion(): Promise<void> {
+    const client = daemonClient;
+    if (!client?.isConnected || client.pid === undefined || client.pid === versionPromptedPid) {
         return;
     }
-    if (validator.isValidating) {
-        validationStatusBarItem.text = '$(sync~spin) Bino: Validating';
-        validationStatusBarItem.backgroundColor = undefined;
+    const installed = await installedBinoVersion();
+    if (!daemonVersionMismatch(client.version, installed) || client.pid === versionPromptedPid) {
         return;
     }
-    const summary = validator.getWorkspaceSummary();
-    if (summary.errors > 0) {
-        validationStatusBarItem.text = `$(error) Bino: ${summary.errors} error${summary.errors !== 1 ? 's' : ''}`;
-        validationStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-    } else if (summary.warnings > 0) {
-        validationStatusBarItem.text = `$(warning) Bino: ${summary.warnings} warning${summary.warnings !== 1 ? 's' : ''}`;
-        validationStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    } else {
-        validationStatusBarItem.text = '$(pass) Bino: 0 errors';
-        validationStatusBarItem.backgroundColor = undefined;
+    versionPromptedPid = client.pid;
+    const running = client.version ? `bino ${client.version}` : 'an older bino';
+    const choice = await vscode.window.showWarningMessage(
+        `A daemon from ${running} is running, but bino ${installed} is installed. Restart Daemon?`,
+        'Restart Daemon'
+    );
+    if (choice === 'Restart Daemon') {
+        await vscode.commands.executeCommand('bino.restartDaemon');
     }
 }
 
@@ -1179,30 +1186,6 @@ async function showColumnsForCurrentDataset(indexer: WorkspaceIndexer | undefine
 }
 
 /** Update the daemon status bar item */
-function updateDaemonStatusBar(): void {
-    if (!daemonStatusBarItem || !daemonClient) {
-        return;
-    }
-    switch (daemonClient.getStatus()) {
-        case 'connected':
-            daemonStatusBarItem.text = '$(zap) Bino Daemon';
-            daemonStatusBarItem.backgroundColor = undefined;
-            break;
-        case 'connecting':
-            daemonStatusBarItem.text = '$(sync~spin) Bino Daemon';
-            daemonStatusBarItem.backgroundColor = undefined;
-            break;
-        case 'error':
-            daemonStatusBarItem.text = '$(warning) Bino Daemon';
-            daemonStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-            break;
-        case 'disconnected':
-            daemonStatusBarItem.text = '$(circle-slash) Bino Daemon';
-            daemonStatusBarItem.backgroundColor = undefined;
-            break;
-    }
-}
-
 export function deactivate(): void {
     // Disconnect only: other windows and MCP clients may share the daemon, and
     // it exits by itself once no client is connected.
@@ -1211,16 +1194,10 @@ export function deactivate(): void {
     treeTableEditorManager?.dispose();
     previewManager?.dispose();
     validator?.dispose();
-    indexerStatusBarItem?.dispose();
-    validationStatusBarItem?.dispose();
-    daemonStatusBarItem?.dispose();
     daemonClient = undefined;
     indexer = undefined;
     validator = undefined;
     designerPanel = undefined;
     treeTableEditorManager = undefined;
     previewManager = undefined;
-    indexerStatusBarItem = undefined;
-    validationStatusBarItem = undefined;
-    daemonStatusBarItem = undefined;
 }
