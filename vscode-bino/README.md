@@ -23,7 +23,7 @@ extension falls back to discrete `bino lsp-helper` CLI calls.
 
 ## Requirements
 
-- [RedHat YAML Extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) (automatically installed as dependency; provides generic YAML folding/formatting)
+- [RedHat YAML Extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) (optional; adds a YAML formatter)
 - `bino` CLI must be installed and available in PATH (or configured via `bino.binPath`)
 - [PRQL Extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode) (optional, for enhanced PRQL editing)
 

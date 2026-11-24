@@ -810,24 +810,26 @@
       }
     }
   },
-  "extensionDependencies": [
-    "redhat.vscode-yaml"
-  ],
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "npm run compile -- --watch",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node ./out/test/runTest.js"
+    "pretest": "tsc -p . --outDir out",
+    "test": "vscode-test"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^26.6.6",
     "@types/vscode": "1.91.0",
     "@typescript-eslint/eslint-plugin": "^8.72.2",
     "@typescript-eslint/parser": "^8.61.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.14.0",
+    "mocha": "^12.0.3",
     "typescript": "^6.0.3"
   },
   "dependencies": {

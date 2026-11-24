@@ -206,6 +206,10 @@ jobs:
         working-directory: vscode-bino
         run: npm run compile
 
+      - name: Extension tests
+        working-directory: vscode-bino
+        run: xvfb-run -a npm test
+
   docs:
     name: Docs Build
     runs-on: ubuntu-24.04
