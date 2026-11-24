@@ -58,14 +58,34 @@ func TestLayoutStateCaptureHandle(t *testing.T) {
 
 	capture.Handle([]byte(emptyChartCapture))
 
-	// The raw snapshot is written verbatim, so it stays byte-stable and can be
-	// committed as a golden file.
 	written, err := os.ReadFile(capture.SnapshotPath)
 	if err != nil {
 		t.Fatalf("read snapshot: %v", err)
 	}
-	if string(written) != emptyChartCapture {
-		t.Error("snapshot was not written verbatim")
+	var file struct {
+		State    json.RawMessage       `json:"state"`
+		Sources  map[string]any        `json:"sources"`
+		Findings []layoutstate.Finding `json:"findings"`
+	}
+	if err := json.Unmarshal(written, &file); err != nil {
+		t.Fatalf("written file is not valid JSON: %v", err)
+	}
+	if file.Sources["bn-chart-time[0]"] == nil {
+		t.Error("sources were not kept")
+	}
+	if len(file.Findings) != 1 || file.Findings[0].Rule != layoutstate.RuleEmptyComponent || file.Findings[0].Name != "revenueTrend" {
+		t.Errorf("file findings = %+v, want the one empty-component finding", file.Findings)
+	}
+
+	// No timestamp and stable field order: an unchanged bundle writes the same
+	// bytes, so the file can be committed as a golden file.
+	capture.Handle([]byte(emptyChartCapture))
+	again, err := os.ReadFile(capture.SnapshotPath)
+	if err != nil {
+		t.Fatalf("read snapshot: %v", err)
+	}
+	if string(again) != string(written) {
+		t.Error("two captures of the same snapshot wrote different bytes")
 	}
 
 	if len(capture.Findings) != 1 {
@@ -83,6 +103,22 @@ func TestLayoutStateCaptureHandle(t *testing.T) {
 	// build log.
 	if !strings.HasPrefix(warnings[0], "monthly: ") {
 		t.Errorf("warning = %q, want it prefixed with the artefact name", warnings[0])
+	}
+}
+
+func TestLayoutStateFileHasEmptyFindings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.layout.json")
+	capture := &layoutStateCapture{SnapshotPath: path, Logger: logx.Nop()}
+	capture.Handle([]byte(`{"state":{"version":1,"components":[]},"sources":{},"settled":true}`))
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read snapshot: %v", err)
+	}
+	// An empty array, not an absent field: absent means a CLI that wrote no findings.
+	want := `{"state":{"version":1,"components":[]},"sources":{},"settled":true,"findings":[]}`
+	if string(written) != want {
+		t.Errorf("file = %s, want %s", written, want)
 	}
 }
 

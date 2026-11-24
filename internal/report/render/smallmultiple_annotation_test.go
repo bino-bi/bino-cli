@@ -52,7 +52,7 @@ func TestSmallMultiple_AnnotationOnPanel(t *testing.T) {
 func TestSmallMultiple_AnnotationOnPanelWithCard(t *testing.T) {
 	html, _ := renderSpan(t, `{`+spanHead+`, "card": {}, "panels": {"by": "rowGroup"}}`,
 		panelAnnotation("munich", "Munich", ""))
-	want := regexp.MustCompile(`<div slot='1-0'><bn-layout-card[^>]*>\s*<div slot='card-slot-0'[^>]* data-bino-annotation-target='t1'>\s*<bn-chart-time`)
+	want := regexp.MustCompile(`<div slot='1-0' data-bino-panel='Munich'><bn-layout-card[^>]*>\s*<div slot='card-slot-0'[^>]* data-bino-annotation-target='t1'>\s*<bn-chart-time`)
 	if !want.MatchString(html) {
 		t.Errorf("the target must be on the element in the card that holds the chart:\n%s", html)
 	}
@@ -154,5 +154,24 @@ func TestCheckEnd_SumRowFromDatasetDefault(t *testing.T) {
 	// a row of the data is a point with and without the default
 	if ok, _ := check(plain, "Spain", false); !ok {
 		t.Error("Spain is a row of the dataset")
+	}
+}
+
+func TestSmallMultiple_EveryPanelCarriesItsLabel(t *testing.T) {
+	// A custom caption: the label cannot be read from the visible text.
+	html, _ := renderSpan(t, `{`+spanHead+`, "caption": "Region ${panel.index}", "panels": {"by": "rowGroup"}}`)
+	cells := spanCells(html)
+	labels := make([]string, 0, len(cells))
+	for _, c := range cells {
+		labels = append(labels, c.cell["data-bino-panel"])
+	}
+	if got := strings.Join(labels, "|"); got != "Berlin|Cologne|Munich|O'Hare" {
+		t.Errorf("panel labels = %s", got)
+	}
+	if !strings.Contains(html, "data-bino-panel='O&#39;Hare'") {
+		t.Errorf("the label must be escaped:\n%s", html)
+	}
+	if strings.Contains(html, "data-bino-target-") {
+		t.Errorf("a panel is no Grid child:\n%s", html)
 	}
 }

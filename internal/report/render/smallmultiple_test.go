@@ -30,7 +30,7 @@ type renderedSM struct {
 
 var (
 	smAttrPattern = regexp.MustCompile(`([a-z-]+)='([^']*)'`)
-	cellPattern   = regexp.MustCompile(`<div slot='([^']*)'><bn-chart-time([^>]*)>`)
+	cellPattern   = regexp.MustCompile(`<div slot='([^']*)'(?: data-bino-panel='[^']*')?><bn-chart-time([^>]*)>`)
 )
 
 func attrsOf(tag string) map[string]string {
@@ -363,7 +363,7 @@ func TestSmallMultiple_WarnsThatFiltersDoNotChooseThePanels(t *testing.T) {
 	}
 }
 
-var cardCellPattern = regexp.MustCompile(`(?s)<div slot='([^']*)'><bn-layout-card([^>]*)>.*?<bn-chart-time([^>]*)>`)
+var cardCellPattern = regexp.MustCompile(`(?s)<div slot='([^']*)'(?: data-bino-panel='[^']*')?><bn-layout-card([^>]*)>.*?<bn-chart-time([^>]*)>`)
 
 type cardCell struct {
 	slot        string
@@ -480,7 +480,7 @@ func TestSmallMultiple_PanelCardHasNoSourceAttributes(t *testing.T) {
 	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`, "card": {},
 		"panels": {"by": "rowGroup", "limit": 1}}`)
 	grid := out.html[strings.Index(out.html, "<bn-grid"):strings.Index(out.html, "</bn-grid>")]
-	if strings.Contains(grid, "data-bino-") || strings.Contains(grid, "id='bino-") {
+	if strings.Contains(grid, "data-bino-kind") || strings.Contains(grid, "data-bino-name") || strings.Contains(grid, "data-bino-ref") || strings.Contains(grid, "id='bino-") {
 		t.Errorf("a generated panel names no document:\n%s", grid)
 	}
 }
