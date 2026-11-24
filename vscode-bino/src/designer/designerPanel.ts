@@ -255,7 +255,7 @@ export class DesignerPanel {
         return `<div class="binding-row">
             <span class="binding-label">Data</span>
             ${value}
-            <button class="link-btn" onclick="pickDataset(${ds ? JSON.stringify(JSON.stringify(ds)) : 'undefined'})">${action}</button>
+            <button class="link-btn" data-designer-pick-dataset data-current="${escapeHtml(ds ?? '')}">${action}</button>
         </div>`;
     }
 
@@ -263,7 +263,11 @@ export class DesignerPanel {
     private async handleMessage(msg: { type?: string;[k: string]: unknown }): Promise<void> {
         switch (msg.type) {
             case 'editField':
-                await this.handleEditField(msg.path as string[], msg.value);
+                if (msg.remove === true) {
+                    await this.handleRemoveField(msg.path as string[]);
+                } else {
+                    await this.handleEditField(msg.path as string[], msg.value);
+                }
                 break;
             case 'pickDataset':
                 await this.handlePickDataset();
@@ -289,6 +293,19 @@ export class DesignerPanel {
             }
             this.reloadCanvas();
         }
+    }
+
+    /** Delete a field's key (an emptied control), then reload the canvas. */
+    private async handleRemoveField(path: string[]): Promise<void> {
+        if (!this.target || !Array.isArray(path) || path.length === 0) { return; }
+        const ok = await this.applyEdit(
+            this.authoring.remove({
+                file: this.target.file,
+                position: this.target.docIndex,
+                paths: [path.join('.')],
+            })
+        );
+        if (ok) { this.reloadCanvas(); }
     }
 
     /** Prompt for a dataset and bind it (writes spec.dataset, refreshes columns). */

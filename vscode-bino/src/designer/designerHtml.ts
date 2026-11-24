@@ -48,6 +48,8 @@ export interface EditFieldMessage {
     docIndex: number;
     path: string[];
     value: unknown;
+    /** True when the control was emptied: delete the key instead of writing a value. */
+    remove?: boolean;
 }
 
 /** webview → host: the user wants to (re)bind the dataset. */
@@ -353,6 +355,11 @@ function getScript(): string {
         let raw;
         if (control.type === 'checkbox') { raw = control.checked; }
         else { raw = control.value; }
+        // An emptied field means "unset", not 0 or "".
+        if (raw === '') {
+            vscode.postMessage({ type: 'editField', docIndex: currentDocIndex, path: path, remove: true });
+            return;
+        }
         vscode.postMessage({ type: 'editField', docIndex: currentDocIndex, path: path, value: coerce(raw, type) });
     }
 
@@ -480,7 +487,7 @@ function getScript(): string {
         const parts = rest.replace(/^_/, '').split('_');
         if (parts.length !== 3) { return ''; }
         const kind = prefix === 'dr' ? 'relative (%)' : 'absolute';
-        const phrase = { pos: 'positive sentiment - more is better', neg: 'negative sentiment - more is worse', neu: 'neutral sentiment' }[parts[2]] || '';
+        const phrase = { pos: 'positive sentiment - more is better', neg: 'negative sentiment - more is worse', neu: 'neutral sentiment', op: 'operation sentiment - follows the row operation', opinv: 'inverse operation sentiment - the inverse of op' }[parts[2]] || '';
         return kind + ' variance of ' + parts[1] + ' vs ' + parts[0] + (phrase ? '; ' + phrase : '');
     }
 
@@ -490,8 +497,11 @@ function getScript(): string {
         const slots = JSON.parse(rowsEl.getAttribute('data-slots') || '[]');
         const sentiments = JSON.parse(rowsEl.getAttribute('data-sentiments') || '[]');
 
+        // A row the user has not touched keeps its original token verbatim.
         function tokenOf(row) {
-            return q(row, 'prefix').value + '_' + q(row, 'base').value + '_' + q(row, 'compare').value + '_' + q(row, 'sentiment').value;
+            const original = row.getAttribute('data-token');
+            if (original !== null) { return original; }
+            return q(row, 'prefix').value + q(row, 'base').value + '_' + q(row, 'compare').value + '_' + q(row, 'sentiment').value;
         }
         function emit() { postEdit(dw, ownRows(rowsEl).map(tokenOf)); }
         function refresh(row) {
@@ -501,7 +511,7 @@ function getScript(): string {
         function wireRow(row) {
             qa(row, 'prefix').concat(qa(row, 'base'), qa(row, 'compare'), qa(row, 'sentiment')).forEach((sel) => {
                 if (sel.closest('[data-dw-role="row"]') !== row) { return; }
-                sel.addEventListener('change', () => { refresh(row); emit(); });
+                sel.addEventListener('change', () => { row.removeAttribute('data-token'); refresh(row); emit(); });
             });
             const del = q(row, 'del-row');
             if (del) { del.addEventListener('click', () => { row.remove(); emit(); }); }
@@ -684,8 +694,12 @@ function getScript(): string {
     }
 
     function renderBinding(html) {
-        document.getElementById('binding').innerHTML = html || '';
-        wireControls(document.getElementById('binding'));
+        const binding = document.getElementById('binding');
+        binding.innerHTML = html || '';
+        wireControls(binding);
+        binding.querySelectorAll('[data-designer-pick-dataset]').forEach((btn) => {
+            btn.addEventListener('click', () => pickDataset(btn.getAttribute('data-current')));
+        });
     }
 
     function renderRow(r, depth) {
