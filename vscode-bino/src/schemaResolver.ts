@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import type { KindInfo } from './indexer';
 
 /** Describes a single field in a kind's spec */
 export interface FieldDef {
@@ -25,8 +26,69 @@ interface KindSpecMapping {
     metadataExtras?: Record<string, unknown>;
 }
 
+/** Where the merged (built-in + plugin) schema and kind list come from. */
+export interface SchemaSource {
+    /** The merged JSON schema text, or undefined when the backend can't serve it. */
+    getSchema(): Promise<string | undefined>;
+    /** Every manifest kind with its capability category, or undefined. */
+    getKinds(): Promise<KindInfo[] | undefined>;
+}
+
+// Shared by every SchemaResolver instance, so resolvers created before the
+// backend answered pick up plugin kinds on their next read.
+let backendSchema: Record<string, unknown> | undefined;
+let backendKinds: KindInfo[] = [];
+let backendGeneration = 0;
+
 /**
- * Resolves the Bino document.schema.json and provides per-kind field definitions.
+ * Fetch the merged schema and kind list from the backend. Returns false and
+ * keeps the bundled schema when the backend serves neither (an older bino, or
+ * no bino at all).
+ */
+export async function loadBackendSchema(source: SchemaSource): Promise<boolean> {
+    const [raw, kinds] = await Promise.all([
+        source.getSchema().catch(() => undefined),
+        source.getKinds().catch(() => undefined),
+    ]);
+    let parsed: Record<string, unknown> | undefined;
+    try {
+        parsed = raw ? JSON.parse(raw) : undefined;
+    } catch {
+        parsed = undefined;
+    }
+    if (parsed && typeof (parsed as any).$defs !== 'object') {
+        parsed = undefined;
+    }
+    const hasKinds = Array.isArray(kinds) && kinds.length > 0;
+    if (!parsed && !hasKinds) {
+        return false;
+    }
+    if (parsed) {
+        backendSchema = parsed;
+    }
+    if (hasKinds) {
+        backendKinds = kinds;
+    }
+    backendGeneration++;
+    return true;
+}
+
+/** Forget the backend schema (tests). */
+export function resetBackendSchema(): void {
+    backendSchema = undefined;
+    backendKinds = [];
+    backendGeneration++;
+}
+
+/** The backend's capability category for a kind, if it served one. */
+export function getKindCategory(kind: string): string | undefined {
+    return backendKinds.find(k => k.name === kind)?.category;
+}
+
+/**
+ * Resolves the Bino document schema and provides per-kind field definitions.
+ * Uses the backend's merged schema (with plugin kinds) once loadBackendSchema
+ * succeeded, else the bundled schema/document.schema.json.
  */
 export class SchemaResolver {
     private schema: Record<string, unknown> | undefined;
@@ -34,17 +96,21 @@ export class SchemaResolver {
     private kindMappings: KindSpecMapping[] = [];
     private kindFieldsCache: Map<string, FieldDef[]> = new Map();
     private recursionGuard: Set<string> = new Set();
+    private loadedGeneration = -1;
 
     constructor(private extensionPath: string) { }
 
     /** Load and parse the schema. Call once at startup. */
     load(): boolean {
+        this.loadedGeneration = backendGeneration;
+        if (backendSchema) {
+            this.apply(backendSchema);
+            return true;
+        }
         const schemaPath = path.join(this.extensionPath, 'schema', 'document.schema.json');
         try {
             const content = fs.readFileSync(schemaPath, 'utf8');
-            this.schema = JSON.parse(content);
-            this.defs = (this.schema as any).$defs || {};
-            this.buildKindMappings();
+            this.apply(JSON.parse(content));
             return true;
         } catch (err) {
             console.warn(`bino: failed to load ${schemaPath}:`, err);
@@ -52,8 +118,54 @@ export class SchemaResolver {
         }
     }
 
+    private apply(schema: Record<string, unknown>): void {
+        this.schema = schema;
+        this.defs = (schema as any).$defs || {};
+        this.kindMappings = [];
+        this.kindFieldsCache.clear();
+        this.buildKindMappings();
+    }
+
+    /** Reload when the backend schema changed since the last load. */
+    private sync(): void {
+        if (this.loadedGeneration !== backendGeneration && backendSchema) {
+            this.load();
+        }
+    }
+
+    /**
+     * Every manifest kind with a category: the backend's kind list, then
+     * `fallback` (e.g. an older kind source), then kinds only the schema knows.
+     * Those get "embeddable" when they are layout children, else "config".
+     */
+    getKindInfos(fallback: KindInfo[] = []): KindInfo[] {
+        this.sync();
+        const out: KindInfo[] = [];
+        const known = new Set<string>();
+        for (const k of [...backendKinds, ...fallback]) {
+            if (!known.has(k.name)) {
+                known.add(k.name);
+                out.push(k);
+            }
+        }
+        const children = new Set(this.getLayoutChildKinds());
+        for (const name of this.getKindEnum()) {
+            if (!known.has(name)) {
+                out.push({ name, category: children.has(name) ? 'embeddable' : 'config', embeddable: false });
+            }
+        }
+        return out;
+    }
+
+    /** The document apiVersion the schema requires. */
+    getApiVersion(): string | undefined {
+        this.sync();
+        return (this.schema as any)?.properties?.apiVersion?.const;
+    }
+
     /** Get the kinds a LayoutPage/LayoutCard child may reference (layoutChild kind enum) */
     getLayoutChildKinds(): string[] {
+        this.sync();
         const layoutChild = this.defs['layoutChild'] as Record<string, unknown> | undefined;
         const kindProp = (layoutChild as any)?.properties?.kind;
         return kindProp?.enum || [];
@@ -61,11 +173,13 @@ export class SchemaResolver {
 
     /** Get the list of all known kind values */
     getKinds(): string[] {
+        this.sync();
         return this.kindMappings.map(m => m.kind);
     }
 
     /** Get the kind enum from the schema */
     getKindEnum(): string[] {
+        this.sync();
         if (!this.schema) { return []; }
         const kindProp = (this.schema as any).properties?.kind;
         return kindProp?.enum || [];
@@ -73,6 +187,7 @@ export class SchemaResolver {
 
     /** Get field definitions for a specific kind's spec */
     getFieldsForKind(kind: string): FieldDef[] {
+        this.sync();
         const cached = this.kindFieldsCache.get(kind);
         if (cached) { return cached; }
 
@@ -90,6 +205,7 @@ export class SchemaResolver {
 
     /** Get the full document-level fields (apiVersion, kind, metadata, spec) */
     getDocumentFields(): FieldDef[] {
+        this.sync();
         if (!this.schema) { return []; }
         const props = (this.schema as any).properties || {};
         const required = (this.schema as any).required || [];
@@ -98,6 +214,7 @@ export class SchemaResolver {
 
     /** Get metadata field definitions */
     getMetadataFields(kind?: string): FieldDef[] {
+        this.sync();
         const metaDef = this.defs['metadata'] as Record<string, unknown> | undefined;
         if (!metaDef) { return []; }
 

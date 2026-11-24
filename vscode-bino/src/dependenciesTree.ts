@@ -7,7 +7,7 @@ type DepsTreeItem = PackageItem | DetailItem | InfoItem;
 export class PackageItem extends vscode.TreeItem {
     constructor(readonly pkg: RegistryPackage) {
         super(pkg.name, vscode.TreeItemCollapsibleState.Collapsed);
-        this.contextValue = 'binoPackage';
+        this.contextValue = pkg.installed ? 'binoPackage' : 'binoPackageNotInstalled';
         if (!pkg.installed) {
             this.description = `${pkg.version || pkg.declaredRef || ''} (not installed)`.trim();
             this.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));

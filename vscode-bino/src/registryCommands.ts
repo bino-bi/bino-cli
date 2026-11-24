@@ -21,7 +21,6 @@ export function registerRegistryCommands(context: vscode.ExtensionContext, deps:
 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.registrySearch', () => searchAndAdd(deps)),
-        vscode.commands.registerCommand('bino.registryAddDependency', () => searchAndAdd(deps)),
         vscode.commands.registerCommand('bino.registryRefresh', () => depsTree.refresh()),
         vscode.commands.registerCommand('bino.registryInstall', () => runInTerminal('registry install')),
         vscode.commands.registerCommand('bino.registryUpdateAll', () => runInTerminal('registry update')),
@@ -184,13 +183,13 @@ async function insertComponentRef(deps: RegistryCommandDeps, item?: PackageItem)
     if (!pkg) {
         const client = deps.daemonClient();
         const result = client?.isConnected ? await client.getRegistryPackages() : undefined;
-        const installed = (result?.packages ?? []).filter((p) => p.installed && p.kind);
+        const installed = (result?.packages ?? []).filter((p) => p.installed && (p.kind || p.kinds?.length));
         if (installed.length === 0) {
             vscode.window.showInformationMessage('No installed registry packages to reference.');
             return;
         }
         const picked = await vscode.window.showQuickPick(
-            installed.map((p) => ({ label: p.name, description: `${p.kind} · ${p.version}`, pkg: p })),
+            installed.map((p) => ({ label: p.name, description: `${p.kind ?? p.kinds?.join(', ')} · ${p.version}`, pkg: p })),
             { placeHolder: 'Insert a reference to which package?' }
         );
         pkg = picked?.pkg;
@@ -201,9 +200,14 @@ async function insertComponentRef(deps: RegistryCommandDeps, item?: PackageItem)
     await editor.insertSnippet(buildRefSnippet(pkg));
 }
 
+/** The kind a ref to this package names: its primary kind, else the only kind it ships. */
+function packageKind(pkg: RegistryPackage): string | undefined {
+    return pkg.kind ?? (pkg.kinds?.length === 1 ? pkg.kinds[0] : undefined);
+}
+
 /** Plain-text form of a ref child (for the clipboard). */
 function refSnippetText(pkg: RegistryPackage): string {
-    return `- kind: ${pkg.kind ?? 'Table'}\n  ref: "${pkg.name}"\n`;
+    return `- kind: ${packageKind(pkg) ?? '<kind>'}\n  ref: "${pkg.name}"\n`;
 }
 
 /**
@@ -212,7 +216,16 @@ function refSnippetText(pkg: RegistryPackage): string {
  */
 function buildRefSnippet(pkg: RegistryPackage): vscode.SnippetString {
     const snippet = new vscode.SnippetString();
-    snippet.appendText(`- kind: ${pkg.kind ?? 'Table'}\n`);
+    const kind = packageKind(pkg);
+    snippet.appendText('- kind: ');
+    if (kind) {
+        snippet.appendText(kind);
+    } else if (pkg.kinds?.length) {
+        snippet.appendChoice(pkg.kinds);
+    } else {
+        snippet.appendPlaceholder('kind');
+    }
+    snippet.appendText('\n');
     snippet.appendText(`  ref: "${pkg.name}"\n`);
     const required = (pkg.params ?? []).filter((p) => p.required && p.default === undefined);
     if (required.length > 0) {

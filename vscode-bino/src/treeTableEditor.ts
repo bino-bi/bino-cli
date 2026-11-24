@@ -376,9 +376,7 @@ export class TreeTableEditorManager {
                 items = this.indexer.getAssetCompletions();
                 break;
             case 'ref': {
-                // Get all referenceable kinds
-                const refKinds = ['Text', 'Table', 'ChartStructure', 'ChartTime', 'ChartScatter', 'ChartBubble', 'ChartBullet', 'Tree', 'Grid', 'SmallMultiple', 'LayoutCard', 'Image', 'AnnotationList'];
-                items = this.indexer.getDocumentNames(refKinds);
+                items = this.indexer.getDocumentNames(this.schema.getLayoutChildKinds());
                 break;
             }
             case 'layoutPage':
