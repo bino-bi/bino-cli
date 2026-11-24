@@ -23,6 +23,10 @@ const CurrentLockfileVersion = 2
 // ErrMalformedLockfile reports a bino.lock that exists but cannot be parsed.
 var ErrMalformedLockfile = errors.New("malformed " + LockfileName)
 
+// ErrNewerLockfile reports a bino.lock whose lockfile_version is newer than
+// this CLI writes.
+var ErrNewerLockfile = errors.New(LockfileName + " was written by a newer bino")
+
 // Entry records one resolved package in the lock file.
 //
 // Format decides how the entry is read, and therefore which digest rule
@@ -98,7 +102,7 @@ type Lockfile struct {
 
 // LoadLockfile reads <projectRoot>/bino.lock. A missing file yields an empty,
 // current-version lockfile. An unknown future lockfile_version loads what is
-// understood and round-trips the version on save.
+// understood; SaveLockfile refuses to write it back.
 func LoadLockfile(projectRoot string) (*Lockfile, error) {
 	lockPath := filepath.Join(projectRoot, LockfileName)
 	data, err := os.ReadFile(lockPath)
@@ -129,9 +133,23 @@ func LoadLockfile(projectRoot string) (*Lockfile, error) {
 	return lf, nil
 }
 
+// CheckWritable reports ErrNewerLockfile when lf has a lockfile_version this
+// CLI does not write. Fields it does not know were dropped on load, so writing
+// the lock back would silently delete what a newer bino recorded.
+func (lf *Lockfile) CheckWritable() error {
+	if lf.LockfileVersion > CurrentLockfileVersion {
+		return fmt.Errorf("%w (lockfile_version %d, this bino writes %d): upgrade bino to change it", ErrNewerLockfile, lf.LockfileVersion, CurrentLockfileVersion)
+	}
+	return nil
+}
+
 // SaveLockfile writes <projectRoot>/bino.lock atomically with deterministic
-// ordering: packages sorted by name, each dependencies slice sorted.
+// ordering: packages sorted by name, each dependencies slice sorted. It
+// refuses a lock with a newer lockfile_version, see CheckWritable.
 func SaveLockfile(projectRoot string, lf *Lockfile) error {
+	if err := lf.CheckWritable(); err != nil {
+		return err
+	}
 	sort.Slice(lf.Packages, func(i, j int) bool { return lf.Packages[i].Name < lf.Packages[j].Name })
 	for i := range lf.Packages {
 		sort.Strings(lf.Packages[i].Dependencies)

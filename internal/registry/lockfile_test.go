@@ -103,25 +103,48 @@ func TestLockfileMalformed(t *testing.T) {
 	}
 }
 
-func TestLockfileFutureVersionRoundTrips(t *testing.T) {
+func TestLockfileFutureVersionLoadsButRefusesSave(t *testing.T) {
 	dir := t.TempDir()
-	content := "lockfile_version = 99\n\n[[package]]\nname = \"@acme/x\"\nversion = \"1.0.0\"\ndigest = \"sha256:cc\"\nkind = \"Text\"\npath = \".bino/registry/acme/x.yml\"\ndirect = true\ndependencies = []\nfuture_field = \"ignored\"\n"
-	if err := os.WriteFile(filepath.Join(dir, LockfileName), []byte(content), 0o644); err != nil {
+	content := "lockfile_version = 3\n\n[[package]]\nname = \"@acme/x\"\nversion = \"1.0.0\"\ndigest = \"sha256:cc\"\nformat = \"document\"\nkind = \"Text\"\npath = \".bino/registry/acme/x.yml\"\ndirect = true\ndependencies = []\nfuture_field = \"kept\"\n"
+	lockPath := filepath.Join(dir, LockfileName)
+	if err := os.WriteFile(lockPath, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	lf, err := LoadLockfile(dir)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if lf.LockfileVersion != 99 {
-		t.Errorf("LockfileVersion = %d, want 99 round-tripped", lf.LockfileVersion)
+	if lf.LockfileVersion != 3 || lf.Get("@acme/x") == nil {
+		t.Fatalf("future lock not loaded: %+v", lf)
 	}
-	if err := SaveLockfile(dir, lf); err != nil {
+	err = SaveLockfile(dir, lf)
+	if !errors.Is(err, ErrNewerLockfile) || !strings.Contains(err.Error(), "upgrade bino") {
+		t.Fatalf("save err = %v, want ErrNewerLockfile with an upgrade hint", err)
+	}
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
 		t.Fatal(err)
 	}
-	data, _ := os.ReadFile(filepath.Join(dir, LockfileName))
-	if !strings.Contains(string(data), "lockfile_version = 99") {
-		t.Errorf("future version not round-tripped:\n%s", data)
+	if string(data) != content {
+		t.Errorf("refused save changed the file:\n%s", data)
+	}
+}
+
+func TestLockfileSaveKnownVersions(t *testing.T) {
+	for _, v := range []int{1, 2} {
+		dir := t.TempDir()
+		lf := sampleLock()
+		lf.LockfileVersion = v
+		if err := SaveLockfile(dir, lf); err != nil {
+			t.Fatalf("save v%d: %v", v, err)
+		}
+		got, err := LoadLockfile(dir)
+		if err != nil {
+			t.Fatalf("load v%d: %v", v, err)
+		}
+		if got.LockfileVersion != v || len(got.Packages) != 2 {
+			t.Errorf("v%d round-trip mismatch: %+v", v, got)
+		}
 	}
 }
 

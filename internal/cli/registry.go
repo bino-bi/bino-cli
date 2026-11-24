@@ -376,6 +376,13 @@ func materialize(p registryProject, plans []packagePlan, writeLock bool) error {
 	if err != nil {
 		return ConfigError(err)
 	}
+	// Fail before touching any file, not only at SaveLockfile, so a refused
+	// lock leaves the store matching it.
+	if writeLock {
+		if err := lock.CheckWritable(); err != nil {
+			return ConfigError(err)
+		}
+	}
 	inPlan := make(map[string]bool, len(plans))
 	for _, pl := range plans {
 		inPlan[pl.entry.Name] = true
