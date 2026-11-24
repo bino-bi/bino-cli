@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,7 +16,8 @@ import (
 // TestMain lets this test binary stand in for `bino preview`: PreviewProcess
 // runs os.Executable(), which under `go test` is this binary.
 // BINO_FAKE_PREVIEW picks the behavior: "serve" prints the ready line and
-// runs until interrupted, "fail" prints an error and exits 1.
+// runs until interrupted, "args" does the same after printing its arguments,
+// "fail" prints an error and exits 1.
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == "preview" {
 		os.Exit(fakePreviewMain(os.Getenv("BINO_FAKE_PREVIEW")))
@@ -26,6 +29,14 @@ func fakePreviewMain(mode string) int {
 	if mode == "fail" {
 		fmt.Println("listen tcp 127.0.0.1:45678: bind: address already in use")
 		return 1
+	}
+	if mode == "args" {
+		fmt.Println("args:", strings.Join(os.Args[1:], " "))
+		fmt.Println("Serving preview at http://127.0.0.1:45678")
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		<-ctx.Done()
+		return 0
 	}
 	// A line longer than the scanner limit must not stall the watcher.
 	fmt.Println(strings.Repeat("x", 70_000))
@@ -133,4 +144,30 @@ func TestPreviewProcessExitKeepsOutput(t *testing.T) {
 	}
 	waitStatus(t, p, "running")
 	p.Shutdown(5 * time.Second)
+}
+
+// TestPreviewStartHandlerPassesNoOpen guards against the daemon's preview
+// opening a browser tab: /preview/start must run `bino preview --no-open`.
+func TestPreviewStartHandlerPassesNoOpen(t *testing.T) {
+	t.Setenv("BINO_FAKE_PREVIEW", "args")
+	srv := newTestServer(t)
+	t.Cleanup(func() { srv.preview.Shutdown(5 * time.Second) })
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/preview/start", strings.NewReader(`{"port":45998}`))
+	w := httptest.NewRecorder()
+	srv.handlePreviewStart(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", w.Code, w.Body.String())
+	}
+	waitStatus(t, srv.preview, "running")
+
+	var args string
+	for _, line := range strings.Split(srv.preview.Output(), "\n") {
+		if strings.HasPrefix(line, "args:") {
+			args = line
+		}
+	}
+	if !strings.Contains(args, " --no-open") || !strings.Contains(args, "--port 45998") {
+		t.Errorf("preview args = %q, want --no-open and --port 45998", args)
+	}
 }
