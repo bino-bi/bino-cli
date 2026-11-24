@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os/signal"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -34,6 +36,29 @@ func (c *connCounter) active() int64 { return c.n.Load() }
 
 const defaultInactivityTimeout = 5 * time.Minute
 
+// watchIdle calls onIdle once active has reported zero on every check for
+// longer than timeout. It returns after onIdle or when ctx is done.
+func watchIdle(ctx context.Context, interval, timeout time.Duration, active func() int, onIdle func()) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	lastActive := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if active() > 0 {
+				lastActive = time.Now()
+				continue
+			}
+			if time.Since(lastActive) > timeout {
+				onIdle()
+				return
+			}
+		}
+	}
+}
+
 func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		port            int
@@ -51,6 +76,9 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("daemon")
+			// The editor that spawned the daemon may exit while other clients
+			// still use it; a log write to its closed pipe must not kill us.
+			signal.Ignore(syscall.SIGPIPE)
 
 			env, err := initEditorCommandEnv(ctx, cmd, workdir, "preview", logger)
 			if err != nil {
@@ -178,36 +206,21 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				return RuntimeError(err)
 			}
 
-			// Inactivity timeout goroutine
-			go func() {
-				ticker := time.NewTicker(30 * time.Second)
-				defer ticker.Stop()
-				lastActive := time.Now()
-
-				for {
-					select {
-					case <-serverCtx.Done():
-						return
-					case <-ticker.C:
-						active := server.ClientCount()
-						if mcpActive != nil {
-							active += int(mcpActive())
-						}
-						if active > 0 {
-							lastActive = time.Now()
-							continue
-						}
-						if time.Since(lastActive) > defaultInactivityTimeout {
-							logger.Infof("No active clients for %v, shutting down", defaultInactivityTimeout)
-							server.BroadcastEvent("shutdown", map[string]string{
-								"reason": "inactivity timeout",
-							})
-							server.RequestShutdown()
-							return
-						}
-					}
+			// Exit once no SSE client and no MCP session has been attached for
+			// defaultInactivityTimeout, so a daemon nobody uses does not linger.
+			go watchIdle(serverCtx, 30*time.Second, defaultInactivityTimeout, func() int {
+				active := server.ClientCount()
+				if mcpActive != nil {
+					active += int(mcpActive())
 				}
-			}()
+				return active
+			}, func() {
+				logger.Infof("No active clients for %v, shutting down", defaultInactivityTimeout)
+				server.BroadcastEvent("shutdown", map[string]string{
+					"reason": "inactivity timeout",
+				})
+				server.RequestShutdown()
+			})
 
 			// Start HTTP server in background
 			serverErrCh := make(chan error, 1)

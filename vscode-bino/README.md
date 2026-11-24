@@ -31,7 +31,7 @@ extension falls back to discrete `bino lsp-helper` CLI calls.
 
 - `bino.binPath`: Path to the bino CLI executable. If not set, uses 'bino' from PATH.
 - `bino.columnCacheTTL`: Time in milliseconds to cache column introspection results (default: 60 seconds).
-- `bino.previewPort`: Port number for the `bino preview` server (default: 3000).
+- `bino.previewPort`: Port number for the `bino preview` server (default: 45678).
 - `bino.daemon.enabled`: Enable the persistent background daemon for faster indexing, validation, and data introspection (default: enabled).
 - `bino.wizard.sampleRowLimit`: Max sample rows the DataSource wizard fetches when introspecting a source (default: 100).
 

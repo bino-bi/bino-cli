@@ -83,8 +83,7 @@ func (p *PreviewProcess) Start(port int, args ...string) (PreviewInfo, error) {
 		port = DefaultPreviewPort
 	}
 
-	cmdArgs := append([]string{"preview", "--port", strconv.Itoa(port), "--work-dir", p.root}, args...)
-	cmd := exec.CommandContext(context.Background(), exe, cmdArgs...) //nolint:gosec // G204: exe is our own binary
+	cmd := exec.CommandContext(context.Background(), exe, previewArgs(port, p.root, args)...) //nolint:gosec // G204: exe is our own binary
 	cmd.Env = append(os.Environ(), "BINO_DISABLE_UPDATE_CHECK=1", "NO_COLOR=1")
 
 	stdout, err := cmd.StdoutPipe()
@@ -106,6 +105,14 @@ func (p *PreviewProcess) Start(port int, args ...string) (PreviewInfo, error) {
 
 	go p.watch(cmd, stdout, p.done)
 	return p.infoLocked(), nil
+}
+
+// previewArgs builds the `bino preview` arguments. --no-open is always set:
+// the daemon serves editors and agents, and a browser tab per start is noise.
+func previewArgs(port int, root string, extra []string) []string {
+	args := make([]string, 0, 6+len(extra))
+	args = append(args, "preview", "--port", strconv.Itoa(port), "--work-dir", root, "--no-open")
+	return append(args, extra...)
 }
 
 // watch follows the subprocess output for the ready line and resets the state
