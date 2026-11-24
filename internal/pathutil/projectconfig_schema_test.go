@@ -151,6 +151,7 @@ func checkHooks(t *testing.T, root, s *schemaNode, path string) {
 func TestProjectConfigSchemaCopies(t *testing.T) {
 	for _, p := range []string{
 		"../../vscode-bino/schema/bino-toml.schema.json",
+		"../../docs/public/schemas/bino-toml.schema.json",
 	} {
 		b, err := os.ReadFile(p)
 		if err != nil {

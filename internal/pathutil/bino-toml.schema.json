@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/bino-bi/bino-cli/main/internal/pathutil/bino-toml.schema.json",
+  "$id": "https://cli.bino.bi/schemas/bino-toml.schema.json",
   "title": "bino.toml",
   "description": "Project configuration of a bino report project.",
   "type": "object",
