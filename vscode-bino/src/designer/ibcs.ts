@@ -14,7 +14,7 @@ export const SCENARIO_SLOTS: readonly string[] = [
 ];
 
 /** Variance sentiment suffixes (engine `Sentiments`). */
-export const SENTIMENTS: readonly string[] = ['pos', 'neg', 'neu'];
+export const SENTIMENTS: readonly string[] = ['pos', 'neg', 'neu', 'op', 'opinv'];
 
 /** `stack.by` choices (engine `StackBy`). */
 export const STACK_BY: readonly string[] = ['scenarios', 'dimensions'];
@@ -61,13 +61,13 @@ export interface VarianceToken {
     base: string;
     /** Compare scenario slot (the `A`). */
     compare: string;
-    /** Sentiment: pos | neg | neu. */
+    /** Sentiment: pos | neg | neu | op | opinv. */
     sentiment: string;
 }
 
-/** Build the canonical variance literal `d|dr_B_A_sent` from its parts. */
+/** Build the canonical variance literal `d|drB_A_sent` (no `_` after the prefix) from its parts. */
 export function formatVarianceToken(t: VarianceToken): string {
-    return `${t.prefix}_${t.base}_${t.compare}_${t.sentiment}`;
+    return `${t.prefix}${t.base}_${t.compare}_${t.sentiment}`;
 }
 
 /**
@@ -101,6 +101,8 @@ const SENTIMENT_PHRASE: Record<string, string> = {
     pos: 'positive sentiment - more is better',
     neg: 'negative sentiment - more is worse',
     neu: 'neutral sentiment',
+    op: 'operation sentiment - follows the row operation',
+    opinv: 'inverse operation sentiment - the inverse of op',
 };
 
 /**

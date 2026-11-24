@@ -43,21 +43,28 @@ export const varianceWidget: DesignerWidget<VarianceValue> = {
     },
 };
 
-/** Render one variance row from a token string (defaults when it doesn't parse). */
+/**
+ * Render one variance row from a token string. The original token rides along in
+ * `data-token` so the webview writes it back unchanged until the user edits this
+ * row; a token that does not parse shows defaults in the selects but is kept.
+ */
 function renderRow(token: string, slots: readonly string[]): string {
     const t = parseVarianceToken(token);
     const prefix = t?.prefix ?? 'd';
     const base = t?.base ?? slots[0] ?? '';
     const compare = t?.compare ?? slots[1] ?? slots[0] ?? '';
     const sentiment = t?.sentiment ?? 'pos';
-    const meaning = varianceMeaning(token) || varianceMeaning(`${prefix}_${base}_${compare}_${sentiment}`);
+    const meaning = t ? varianceMeaning(token) : `unrecognized token "${token}", kept as is`;
 
+    // Keep the current value selectable even when it is not in the offered list.
+    const withCurrent = (list: readonly string[], sel: string) =>
+        sel && !list.includes(sel) ? [...list, sel] : list;
     const slotOpts = (sel: string) =>
-        slots.map(s => `<option value="${esc(s)}"${s === sel ? ' selected' : ''}>${esc(s)}</option>`).join('') ||
+        withCurrent(slots, sel).map(s => `<option value="${esc(s)}"${s === sel ? ' selected' : ''}>${esc(s)}</option>`).join('') ||
         `<option value="${esc(sel)}" selected>${esc(sel || '-')}</option>`;
-    const sentOpts = SENTIMENTS.map(s => `<option value="${esc(s)}"${s === sentiment ? ' selected' : ''}>${esc(s)}</option>`).join('');
+    const sentOpts = withCurrent(SENTIMENTS, sentiment).map(s => `<option value="${esc(s)}"${s === sentiment ? ' selected' : ''}>${esc(s)}</option>`).join('');
 
-    return `<div class="dw-row" data-dw-role="row">
+    return `<div class="dw-row" data-dw-role="row" data-token="${esc(token)}">
         <select class="dw-select dw-sm" data-dw-role="prefix">
             <option value="d"${prefix === 'd' ? ' selected' : ''}>d</option>
             <option value="dr"${prefix === 'dr' ? ' selected' : ''}>dr</option>
