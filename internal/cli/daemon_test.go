@@ -31,9 +31,18 @@ func TestDaemonListenAddrFlag(t *testing.T) {
 func TestWatchIdleExitsAfterTimeout(t *testing.T) {
 	var active atomic.Int64
 	active.Store(1)
+	// lastSeen is the last time watchIdle saw a client. Its idle clock starts
+	// no earlier than this, however late the ticks arrive.
+	var lastSeen atomic.Int64
+	countActive := func() int {
+		n := int(active.Load())
+		if n > 0 {
+			lastSeen.Store(time.Now().UnixNano())
+		}
+		return n
+	}
 	idle := make(chan struct{})
-	start := time.Now()
-	go watchIdle(context.Background(), 5*time.Millisecond, 50*time.Millisecond, func() int { return int(active.Load()) }, func() { close(idle) })
+	go watchIdle(context.Background(), 5*time.Millisecond, 50*time.Millisecond, countActive, func() { close(idle) })
 
 	// An attached client keeps the daemon alive past the timeout.
 	time.Sleep(120 * time.Millisecond)
@@ -44,16 +53,13 @@ func TestWatchIdleExitsAfterTimeout(t *testing.T) {
 	}
 
 	active.Store(0)
-	detached := time.Now()
 	select {
 	case <-idle:
 	case <-time.After(5 * time.Second):
 		t.Fatal("watchIdle did not fire after the client left")
 	}
-	// The idle clock starts at the last tick that saw a client, up to one
-	// interval before the test's own timestamp.
-	if waited := time.Since(detached); waited < 45*time.Millisecond {
-		t.Errorf("fired %v after the client left, before the 50ms timeout (started %v ago)", waited, time.Since(start))
+	if waited := time.Since(time.Unix(0, lastSeen.Load())); waited < 50*time.Millisecond {
+		t.Errorf("fired %v after a client was last seen, before the 50ms timeout", waited)
 	}
 }
 
