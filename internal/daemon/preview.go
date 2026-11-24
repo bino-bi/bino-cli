@@ -110,7 +110,8 @@ func (p *PreviewProcess) Start(port int, args ...string) (PreviewInfo, error) {
 // previewArgs builds the `bino preview` arguments. --no-open is always set:
 // the daemon serves editors and agents, and a browser tab per start is noise.
 func previewArgs(port int, root string, extra []string) []string {
-	args := []string{"preview", "--port", strconv.Itoa(port), "--work-dir", root, "--no-open"}
+	args := make([]string, 0, 6+len(extra))
+	args = append(args, "preview", "--port", strconv.Itoa(port), "--work-dir", root, "--no-open")
 	return append(args, extra...)
 }
 
