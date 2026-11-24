@@ -278,11 +278,6 @@ export class DaemonClient {
         return this.fetchJSON('/preview/status');
     }
 
-    /** POST /build */
-    async build(artefact?: string): Promise<{ status: string; exitCode: number; output: string; error?: string } | undefined> {
-        return this.fetchJSON('/build', 'POST', artefact ? { artefact } : undefined);
-    }
-
     /** POST /introspect-draft - introspect a not-yet-registered data source */
     async introspectDraft(req: { spec: any; baseDir?: string; sheet?: string; limit?: number }): Promise<any | undefined> {
         return this.fetchJSON('/introspect-draft', 'POST', req);

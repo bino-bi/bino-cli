@@ -276,6 +276,12 @@
         "icon": "$(info)"
       },
       {
+        "command": "bino.downloadBino",
+        "title": "Download bino",
+        "category": "Bino",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "bino.showColumnsForCurrentDataset",
         "title": "Show Columns for Current Dataset/DataSource",
         "category": "Bino",
@@ -627,13 +633,88 @@
         }
       ]
     },
+    "taskDefinitions": [
+      {
+        "type": "bino",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "build"
+            ],
+            "description": "The bino command to run."
+          },
+          "artefact": {
+            "type": "string",
+            "description": "metadata.name of the artefact to build. Builds all artefacts when not set."
+          }
+        }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "binoGettingStarted",
+        "title": "Get Started with Bino",
+        "description": "Install bino, create a project, add data and preview your first report.",
+        "steps": [
+          {
+            "id": "installBino",
+            "title": "Install bino",
+            "description": "The extension needs the bino command line tool.\n[Check for bino](command:bino.checkSetup)\n[Download bino](command:bino.downloadBino)",
+            "media": {
+              "markdown": "media/walkthrough/install.md"
+            },
+            "completionEvents": [
+              "onContext:bino.binoInstalled"
+            ]
+          },
+          {
+            "id": "initProject",
+            "title": "Create a project",
+            "description": "Run bino init to create bino.toml and a first report.\n[Initialize Project](command:bino.initProject)",
+            "media": {
+              "markdown": "media/walkthrough/init.md"
+            },
+            "completionEvents": [
+              "onCommand:bino.initProject"
+            ]
+          },
+          {
+            "id": "addDataSource",
+            "title": "Add a DataSource",
+            "description": "Point bino at a file or a database with the DataSource wizard.\n[Open the DataSource wizard](command:bino.newDataSourceFromDatabase)",
+            "media": {
+              "markdown": "media/walkthrough/datasource.md"
+            },
+            "completionEvents": [
+              "onCommand:bino.newDataSourceFromDatabase",
+              "onCommand:bino.newDataSourceFromFile"
+            ]
+          },
+          {
+            "id": "startPreview",
+            "title": "Preview the report",
+            "description": "Start the live preview. It reloads when you save.\n[Start Preview](command:bino.startPreview)",
+            "media": {
+              "markdown": "media/walkthrough/preview.md"
+            },
+            "completionEvents": [
+              "onCommand:bino.startPreview"
+            ]
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "Bino Reports",
       "properties": {
         "bino.binPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the bino CLI executable. If not set, uses 'bino' from PATH."
+          "description": "Path to the bino CLI executable. If not set, uses 'bino' from PATH, then a bino downloaded by the extension."
         },
         "bino.columnCacheTTL": {
           "type": "number",

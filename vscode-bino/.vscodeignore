@@ -10,3 +10,4 @@ tsconfig.json
 eslint.config.mjs
 out/**
 .vscode-test.mjs
+!media/walkthrough/*.md
