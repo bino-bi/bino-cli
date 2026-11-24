@@ -62,7 +62,7 @@ func TestCodeAction_InsertMissingField(t *testing.T) {
 	diag := protocol.Diagnostic{
 		Range:   protocol.Range{Start: protocol.Position{Line: 3, Character: 0}, End: protocol.Position{Line: 3, Character: 4}},
 		Message: protocol.String("missing property 'title'"),
-		Code:    protocol.String("schema-validation"),
+		Code:    protocol.String(codeMissingProperty),
 		Data:    protocol.LSPAny(data),
 	}
 	actions, _ := s.CodeAction(context.Background(), &protocol.CodeActionParams{
