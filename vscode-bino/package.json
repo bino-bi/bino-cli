@@ -5,6 +5,7 @@
   "version": "0.25.0",
   "license": "AGPL-3.0-or-later",
   "publisher": "BinoBI",
+  "icon": "resources/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/bino-bi/bino-cli-releases"
