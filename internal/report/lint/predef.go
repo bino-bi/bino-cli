@@ -10,8 +10,9 @@ import (
 	"bino.bi/bino/internal/pathutil"
 )
 
-// NewProjectRunner creates a Runner with the default rules plus, when the
-// project's bino.toml declares a [package] table, the predef package rules.
+// NewProjectRunner creates a Runner with the default rules, the registry trust
+// rules, and, when the project's bino.toml declares a [package] table, the
+// predef package rules.
 // A project without [package] - or without a readable bino.toml - gets exactly
 // the default rule set, so nothing changes for an ordinary report project.
 // The runner also carries the project's [lint] table, which callers enforce on
@@ -19,7 +20,8 @@ import (
 func NewProjectRunner(projectRoot string) *Runner {
 	// One parse serves both the [package] rules and the [lint] table.
 	cfg := projectConfigOrNil(projectRoot)
-	r := NewRunner(append(DefaultRules(), predefRules(projectRoot, cfg)...))
+	rules := append(DefaultRules(), predefRules(projectRoot, cfg)...)
+	r := NewRunner(append(rules, registryTrustRules(projectRoot, cfg)...))
 	r.loadLintConfig(cfg)
 	return r
 }

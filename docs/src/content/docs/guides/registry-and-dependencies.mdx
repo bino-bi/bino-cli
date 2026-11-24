@@ -19,7 +19,7 @@ The full command reference lives at [bino registry](/cli/registry/).
 | File / directory             | Role                                                  | In git?           |
 | ---------------------------- | ----------------------------------------------------- | ----------------- |
 | `bino.toml` `[dependencies]` | What you depend on (name → version or tag)            | yes               |
-| `bino.lock`                  | Exact resolved versions and digests                   | yes - commit it   |
+| `bino.lock`                  | Exact resolved versions, digests and signers          | yes - commit it   |
 | `.bino/registry/`            | Materialized package files, one directory per package | no - gitignore it |
 
 The build, preview, serve, and LSP all include `.bino/registry/` in the
@@ -85,7 +85,7 @@ raw bytes.
 
 - `bino registry install` - re-creates `.bino/registry/` exactly as pinned, without re-resolving. Use it after a fresh clone and in CI. It refuses to run when the lockfile drifted from `[dependencies]` (or is missing) and points you to `update`.
 - `bino registry update` - re-resolves tag-following entries to their newest versions and rewrites the lockfile; exact pins are held. Pass package names to update selectively.
-- `bino registry verify` - re-hashes every installed file against the locked digests. Digests cover the canonical document form, so reformatting a manifest does not fail verification - content changes do. A file inside a package directory that `bino.lock` does not record is reported too, since the build would otherwise load it.
+- `bino registry verify` - re-hashes every installed file against the locked digests. Digests cover the canonical document form, so reformatting a manifest does not fail verification - content changes do. A file inside a package directory that `bino.lock` does not record is reported too, since the build would otherwise load it. It also re-checks the stored signatures against the signer `bino.lock` pins and the [trust policy](/reference/trust-policy/).
 
 A typical CI job:
 
@@ -94,6 +94,46 @@ bino registry install   # reproduce the locked state
 bino registry verify    # fail on any tampered/modified package
 bino build
 ```
+
+`add` and `update` warn when a package resolves to a version older than the
+one locked before, so a registry that serves an old release does not go
+unnoticed.
+
+## Signed packages
+
+The digest in `bino.lock` proves that a package did not change since you
+locked it. It does not prove who released it: `add` and `update` accept what
+the registry serves the first time. A registry can therefore also serve
+Sigstore signatures per version, and from bino v0.116.0 on bino verifies them.
+
+- Every signature the registry serves is verified offline, at every level. A
+  broken signature, or one for another package, version or digest, fails the
+  command.
+- The first signed version you lock pins its signer in `bino.lock`. A later
+  version signed by someone else, or not signed at all, fails until you run
+  `bino registry trust accept <package>`. This holds even without any policy.
+- A `[trust]` table in `bino.toml` says which packages must be signed, and by
+  whom. Nothing the registry says about keys or signers is trusted.
+
+```toml
+[trust]
+require = "signed"   # off (default) | warn | signed
+
+[[trust.signer]]
+scope = "@acme/*"
+oidc-issuer = "https://token.actions.githubusercontent.com"
+repository = "https://github.com/acme/reports"
+workflow = "https://github.com/acme/reports/.github/workflows/publish.yml"
+```
+
+The same table can be set for every project in `~/.bino/config.toml`, and by
+CI in a file named by `BINO_TRUST_POLICY`. Those layers can only make the
+policy stricter. The [trust policy reference](/reference/trust-policy/)
+describes every field, the layering rule, and what `bino.lock` records.
+
+A registry without signature support serves no signatures, so its packages
+count as unsigned, and `require = "signed"` fails against it. Packages
+published as a single document cannot be signed.
 
 ## Referencing installed components
 

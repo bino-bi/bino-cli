@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -147,6 +148,10 @@ the files the version ships. A single-document package lists exactly one.`,
 			if len(res.Dependencies) > 0 {
 				fmt.Printf("Dependencies: %s\n", strings.Join(res.Dependencies, ", "))
 			}
+			for _, a := range res.Attestations {
+				// The registry's own summary; add, update and install verify the bundles.
+				fmt.Printf("Signed:       %s by %s (%s, as reported by the registry)\n", a.Kind, a.Signer, a.RootKind)
+			}
 			fmt.Printf("Files:        %d\n", len(res.Files))
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			for _, f := range res.Files {
@@ -165,7 +170,10 @@ func newRegistryVerifyCommand() *cobra.Command {
 		Long: `Re-hashes every package file under .bino/registry/ and compares it with the
 digest pinned in bino.lock. Works offline; intended as a CI gate. The digest
 is computed over the canonical document form, so cosmetic reformatting of a
-file does not fail verification.`,
+file does not fail verification.
+
+It also re-checks the signatures stored at install time against the signer
+bino.lock pins and the [trust] policy.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := registryProjectSetup()
@@ -180,17 +188,32 @@ file does not fail verification.`,
 				p.Out.Info("Nothing to verify")
 				return nil
 			}
+			policy, err := p.trustPolicy()
+			if err != nil {
+				return err
+			}
 			bad := 0
+			var warnings []string
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "PACKAGE\tVERSION\tSTATUS")
 			for _, e := range lock.Packages {
 				status := verifyPackage(p.Root, e)
+				if status == "OK" {
+					var warning string
+					status, warning = verifyPackageSignature(p.Root, policy, e)
+					if warning != "" {
+						warnings = append(warnings, warning)
+					}
+				}
 				if status != "OK" {
 					bad++
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\n", e.Name, e.Version, status)
 			}
 			w.Flush()
+			for _, warning := range warnings {
+				p.Out.Warning(warning)
+			}
 			if bad > 0 {
 				return RuntimeErrorf("%d of %d package(s) failed verification - run 'bino registry install' to re-materialize from %s", bad, len(lock.Packages), registry.LockfileName)
 			}
@@ -253,6 +276,40 @@ func verifyPackage(projectRoot string, e registry.Entry) string {
 		}
 	}
 	return "OK"
+}
+
+// verifyPackageSignature re-checks the attestations stored for a locked
+// package, offline, against the signer the lock pins and the trust policy.
+// It returns a status for the table and, under require = "warn", a warning.
+func verifyPackageSignature(projectRoot string, policy *registry.TrustPolicy, e registry.Entry) (status, warning string) {
+	version, atts, err := registry.ReadAttestations(projectRoot, e.Name)
+	if err != nil {
+		return "INVALID SIGNATURE", ""
+	}
+	if version != e.Version {
+		atts = nil // stored for another version: as good as none
+	}
+	if e.Signer != nil && len(atts) == 0 {
+		return "SIGNATURE MISSING", ""
+	}
+	var check registry.SignatureCheck
+	if e.IsTree() && len(atts) > 0 {
+		digest, _, err := registry.ManifestDigest(e.Files)
+		if err != nil {
+			return "INVALID LOCK", ""
+		}
+		if check, err = registry.VerifyAttestations(e.Name, e.Version, digest, atts, policy); err != nil {
+			return "INVALID SIGNATURE", ""
+		}
+	}
+	d, err := policy.Judge(e.Name, e.Version, check, e.Signer, false)
+	switch {
+	case errors.Is(err, registry.ErrSignerChanged):
+		return "SIGNER MISMATCH", ""
+	case err != nil:
+		return "UNTRUSTED", ""
+	}
+	return "OK", d.Warning
 }
 
 // isWriteResidue reports whether a store file is a leftover of an interrupted

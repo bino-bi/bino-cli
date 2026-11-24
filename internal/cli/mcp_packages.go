@@ -97,7 +97,7 @@ func (p *cliPackages) mutate(ctx context.Context, op func(registryProject) (mcp.
 
 func (p *cliPackages) Add(ctx context.Context, specs []string) (mcp.RegistryMutationResult, error) {
 	res, err := p.mutate(ctx, func(proj registryProject) (mcp.RegistryMutationResult, error) {
-		return registryAdd(ctx, proj, specs)
+		return registryAdd(ctx, proj, specs, nil)
 	})
 	if err != nil {
 		return res, err
@@ -110,7 +110,7 @@ func (p *cliPackages) Add(ctx context.Context, specs []string) (mcp.RegistryMuta
 
 func (p *cliPackages) Update(ctx context.Context, packages []string) (mcp.RegistryMutationResult, error) {
 	return p.mutate(ctx, func(proj registryProject) (mcp.RegistryMutationResult, error) {
-		return registryUpdate(ctx, proj, packages)
+		return registryUpdate(ctx, proj, packages, nil)
 	})
 }
 

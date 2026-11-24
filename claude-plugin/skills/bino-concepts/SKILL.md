@@ -138,7 +138,9 @@ tool - materializes the files under `.bino/registry/` (generated, gitignored). I
 the project load exactly like local ones: reference them by `metadata.name`, and a package document
 that shares kind and name with a local document fails the build's duplicate-name check - rename the
 local document. `registry_packages` lists what the project depends on; `registry_search` and `registry_info` look
-in the registry.
+in the registry. Package signatures are checked against the signer `bino.lock` pins and the `[trust]` policy; when
+a registry tool fails because a signer changed or the policy rejects a package, stop and tell the human:
+accepting a new signer (`bino registry trust accept <package>`) is their decision.
 Docs: https://cli.bino.bi/guides/registry-and-dependencies/
 
 ## Three levels of checking

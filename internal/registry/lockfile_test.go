@@ -105,7 +105,7 @@ func TestLockfileMalformed(t *testing.T) {
 
 func TestLockfileFutureVersionLoadsButRefusesSave(t *testing.T) {
 	dir := t.TempDir()
-	content := "lockfile_version = 3\n\n[[package]]\nname = \"@acme/x\"\nversion = \"1.0.0\"\ndigest = \"sha256:cc\"\nformat = \"document\"\nkind = \"Text\"\npath = \".bino/registry/acme/x.yml\"\ndirect = true\ndependencies = []\nfuture_field = \"kept\"\n"
+	content := "lockfile_version = 4\n\n[[package]]\nname = \"@acme/x\"\nversion = \"1.0.0\"\ndigest = \"sha256:cc\"\nformat = \"document\"\nkind = \"Text\"\npath = \".bino/registry/acme/x.yml\"\ndirect = true\ndependencies = []\nfuture_field = \"kept\"\n"
 	lockPath := filepath.Join(dir, LockfileName)
 	if err := os.WriteFile(lockPath, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestLockfileFutureVersionLoadsButRefusesSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if lf.LockfileVersion != 3 || lf.Get("@acme/x") == nil {
+	if lf.LockfileVersion != 4 || lf.Get("@acme/x") == nil {
 		t.Fatalf("future lock not loaded: %+v", lf)
 	}
 	err = SaveLockfile(dir, lf)
@@ -269,7 +269,7 @@ func TestLockfileV1UpgradeRoundTripsKeepsResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(filepath.Join(dir, LockfileName))
-	for _, want := range []string{"lockfile_version = 2", `format = 'document'`, "[[package.resources]]"} {
+	for _, want := range []string{"lockfile_version = 3", `format = 'document'`, "[[package.resources]]"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("missing %q in:\n%s", want, data)
 		}

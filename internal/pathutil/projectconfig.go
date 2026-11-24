@@ -73,6 +73,9 @@ type ProjectConfig struct {
 	// Package, when non-nil, marks this project as a predef project.
 	Package *PackageConfig `toml:"package,omitempty"`
 
+	// Trust says which registry packages must be signed, and by whom.
+	Trust TrustConfig `toml:"trust,omitempty"`
+
 	// Lint configures linting behavior.
 	Lint LintConfig `toml:"lint,omitempty"`
 
@@ -98,6 +101,28 @@ type RegistryConfig struct {
 	// single "${VAR}" environment reference. Falls back to the
 	// BINO_REGISTRY_TOKEN environment variable; empty means anonymous.
 	Token string `toml:"token,omitempty"`
+}
+
+// TrustConfig is a [trust] table. The same shape is read from bino.toml,
+// ~/.bino/config.toml and the file named by BINO_TRUST_POLICY; the registry
+// package compiles and layers them.
+type TrustConfig struct {
+	Require string              `toml:"require,omitempty"` // "off" | "warn" | "signed"
+	Signers []TrustSignerConfig `toml:"signer,omitempty"`
+}
+
+// TrustSignerConfig is one [[trust.signer]] rule. Exactly one signer kind is
+// set: OIDCIssuer (keyless), X509Root or KeyFile. File paths are relative to
+// the file that declares the rule.
+type TrustSignerConfig struct {
+	Scope      string `toml:"scope"`
+	OIDCIssuer string `toml:"oidc-issuer,omitempty"`
+	Identity   string `toml:"identity,omitempty"`
+	Repository string `toml:"repository,omitempty"`
+	Workflow   string `toml:"workflow,omitempty"`
+	X509Root   string `toml:"x509-root,omitempty"`
+	KeyFile    string `toml:"key-file,omitempty"`
+	Key        string `toml:"key,omitempty"`
 }
 
 // PackageConfig is the [package] table in bino.toml. Its presence marks the

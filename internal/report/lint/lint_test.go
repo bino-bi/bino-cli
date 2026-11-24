@@ -99,9 +99,9 @@ func TestRunnerSkipsNilCheck(t *testing.T) {
 
 func TestNewProjectRunnerWithoutPackage(t *testing.T) {
 	// A project with no bino.toml is not a predef project, so the runner must
-	// carry exactly the default rules.
+	// carry exactly the default rules and the two registry trust rules.
 	runner := NewProjectRunner(t.TempDir())
-	if got, want := len(runner.Rules()), len(NewDefaultRunner().Rules()); got != want {
+	if got, want := len(runner.Rules()), len(NewDefaultRunner().Rules())+2; got != want {
 		t.Fatalf("got %d rules, want %d", got, want)
 	}
 }

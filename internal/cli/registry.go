@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/mcp"
@@ -46,6 +47,7 @@ the build's duplicate-name validation; rename the local document.`,
 	cmd.AddCommand(newRegistrySearchCommand())
 	cmd.AddCommand(newRegistryInfoCommand())
 	cmd.AddCommand(newRegistryVerifyCommand())
+	cmd.AddCommand(newRegistryTrustCommand())
 	cmd.AddCommand(newRegistryLoginCommand())
 	cmd.AddCommand(newRegistryLogoutCommand())
 
@@ -82,6 +84,15 @@ func registryProjectFor(dir string) (registryProject, error) {
 		return registryProject{}, ConfigErrorf("loading bino.toml: %w", err)
 	}
 	return registryProject{Root: root, Cfg: cfg, Out: NewOutput(OutputConfig{})}, nil
+}
+
+// trustPolicy loads the project's effective [trust] policy.
+func (p registryProject) trustPolicy() (*registry.TrustPolicy, error) {
+	pol, err := registry.LoadTrustPolicy(p.Root, p.Cfg.Trust)
+	if err != nil {
+		return nil, ConfigError(err)
+	}
+	return pol, nil
 }
 
 func (p registryProject) client() (*registry.Client, error) {
@@ -185,10 +196,61 @@ func downloadVerifiedTreeFile(ctx context.Context, client *registry.Client, name
 // packagePlan is one package's fully verified contents, ready to be written.
 // Bodies are keyed by the file's path inside the package directory; a file
 // already on disk with a matching digest is absent from the map and left
-// alone.
+// alone. attestations are the verified signature bundles, kept so
+// 'bino registry verify' can re-check them offline.
 type packagePlan struct {
-	entry  registry.Entry
-	bodies map[string][]byte
+	entry        registry.Entry
+	bodies       map[string][]byte
+	attestations []registry.Attestation
+	warning      string // a signature warning under require = "warn"
+}
+
+// signatureCheck carries what judging a package's signatures needs: the
+// policy, the lock that holds the signer pins, and the packages whose pin
+// 'bino registry trust accept' waives.
+type signatureCheck struct {
+	policy *registry.TrustPolicy
+	lock   *registry.Lockfile
+	accept map[string]bool
+}
+
+// checkSignatures verifies the attestations of the package version in plan
+// and records the verified signer in its entry. It runs after every file was
+// verified, so the manifest digest the signature must cover is computed from
+// content this CLI checked itself. A single-document package cannot be
+// signed and is judged as unsigned.
+func checkSignatures(ctx context.Context, client *registry.Client, sc signatureCheck, plan *packagePlan) error {
+	e := &plan.entry
+	var check registry.SignatureCheck
+	if e.IsTree() {
+		scope, base, err := registry.ParseName(e.Name)
+		if err != nil {
+			return err
+		}
+		atts, err := client.Attestations(ctx, scope, base, e.Version)
+		if err != nil {
+			return fmt.Errorf("fetch attestations of %s@%s: %w", e.Name, e.Version, err)
+		}
+		digest, _, err := registry.ManifestDigest(e.Files)
+		if err != nil {
+			return err
+		}
+		if check, err = registry.VerifyAttestations(e.Name, e.Version, digest, atts, sc.policy); err != nil {
+			return err
+		}
+		plan.attestations = atts
+	}
+	var pinned *registry.Signer
+	if old := sc.lock.Get(e.Name); old != nil {
+		pinned = old.Signer
+	}
+	d, err := sc.policy.Judge(e.Name, e.Version, check, pinned, sc.accept[e.Name])
+	if err != nil {
+		return err
+	}
+	e.Signer = d.Signer
+	plan.warning = d.Warning
+	return nil
 }
 
 // maxTreeMemoryBytes caps how much of one package the CLI holds in memory
@@ -201,7 +263,7 @@ const maxTreeMemoryBytes = 128 << 20
 // fetchPackage downloads and verifies everything one resolved package needs,
 // returning the plan to write. Nothing is written here - a failure anywhere in
 // the closure must leave the store untouched.
-func fetchPackage(ctx context.Context, p registryProject, client *registry.Client, r registry.Resolved) (packagePlan, error) {
+func fetchPackage(ctx context.Context, p registryProject, client *registry.Client, sc signatureCheck, r registry.Resolved) (packagePlan, error) {
 	entry := registry.Entry{
 		Name:         r.Name,
 		Version:      r.Version,
@@ -235,6 +297,9 @@ func fetchPackage(ctx context.Context, p registryProject, client *registry.Clien
 			plan.bodies[f.Path] = body
 		}
 		plan.entry.Path = treeRootDocument(p.Root, r.Name, entry.Files)
+		if err := checkSignatures(ctx, client, sc, &plan); err != nil {
+			return packagePlan{}, err
+		}
 		return plan, nil
 	}
 
@@ -262,6 +327,9 @@ func fetchPackage(ctx context.Context, p registryProject, client *registry.Clien
 		return packagePlan{}, err
 	}
 	plan.entry.Path = rel
+	if err := checkSignatures(ctx, client, sc, &plan); err != nil {
+		return packagePlan{}, err
+	}
 	return plan, nil
 }
 
@@ -392,6 +460,9 @@ func materialize(p registryProject, plans []packagePlan, writeLock bool) error {
 			if err := registry.RemovePackage(p.Root, e.Name); err != nil {
 				return RuntimeError(err)
 			}
+			if err := registry.RemoveAttestations(p.Root, e.Name); err != nil {
+				return RuntimeError(err)
+			}
 			lock.Remove(e.Name)
 		}
 	}
@@ -408,6 +479,9 @@ func materialize(p registryProject, plans []packagePlan, writeLock bool) error {
 			if _, err := registry.WriteTreeFile(p.Root, pl.entry.Name, f.Path, body); err != nil {
 				return RuntimeError(err)
 			}
+		}
+		if err := registry.WriteAttestations(p.Root, pl.entry.Name, pl.entry.Version, pl.attestations); err != nil {
+			return RuntimeError(err)
 		}
 		lock.Upsert(pl.entry)
 	}
@@ -446,11 +520,17 @@ func pruneDepartedFiles(projectRoot string, old *registry.Entry, next registry.E
 
 // registrySync materializes a resolved closure: it verifies every package into
 // memory first (a failure writes nothing), then writes files, rewrites
-// bino.lock to exactly the closure, and sweeps packages that left it.
-func registrySync(ctx context.Context, p registryProject, client *registry.Client, plan []registry.Resolved) ([]packagePlan, error) {
+// bino.lock to exactly the closure, and sweeps packages that left it. Signer
+// pins are read from oldLock; accept names the packages whose pin is waived.
+func registrySync(ctx context.Context, p registryProject, client *registry.Client, oldLock *registry.Lockfile, plan []registry.Resolved, accept map[string]bool) ([]packagePlan, error) {
+	policy, err := p.trustPolicy()
+	if err != nil {
+		return nil, err
+	}
+	sc := signatureCheck{policy: policy, lock: oldLock, accept: accept}
 	plans := make([]packagePlan, 0, len(plan))
 	for _, r := range plan {
-		pp, err := fetchPackage(ctx, p, client, r)
+		pp, err := fetchPackage(ctx, p, client, sc, r)
 		if err != nil {
 			return nil, ExternalError(err)
 		}
@@ -470,6 +550,37 @@ func registryCompatWarnings(p registryProject, entries []registry.Entry) []strin
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, registry.CompatWarnings(e.Name, e.Version, e.CompatEngine, e.CompatCLI, version.Version, engineVersion)...)
+	}
+	return out
+}
+
+// registryWarnings collects the non-blocking warnings of a materialized
+// closure: signature warnings under require = "warn", then compat warnings.
+func registryWarnings(p registryProject, plans []packagePlan) []string {
+	var out []string
+	for _, pl := range plans {
+		if pl.warning != "" {
+			out = append(out, pl.warning)
+		}
+	}
+	return append(out, registryCompatWarnings(p, planEntries(plans))...)
+}
+
+// rollbackWarnings reports packages that resolved to a version older than
+// the one locked before: a registry serving an old, maybe vulnerable, release
+// is a downgrade the user should see, even when bino.toml allows it.
+func rollbackWarnings(old *registry.Lockfile, plan []registry.Resolved) []string {
+	var out []string
+	for _, r := range plan {
+		e := old.Get(r.Name)
+		if e == nil {
+			continue
+		}
+		before, err1 := semver.NewVersion(e.Version)
+		after, err2 := semver.NewVersion(r.Version)
+		if err1 == nil && err2 == nil && after.LessThan(before) {
+			out = append(out, fmt.Sprintf("%s resolved to %s, which is older than the locked %s", r.Name, r.Version, e.Version))
+		}
 	}
 	return out
 }

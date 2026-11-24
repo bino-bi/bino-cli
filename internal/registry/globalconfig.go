@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"bino.bi/bino/internal/pathutil"
 )
 
 // globalConfigFileName is the per-user config under ~/.bino. Unlike
@@ -15,7 +17,8 @@ const globalConfigFileName = "config.toml"
 
 // GlobalConfig is the per-user configuration stored at ~/.bino/config.toml.
 type GlobalConfig struct {
-	Registry GlobalRegistry `toml:"registry,omitempty"`
+	Registry GlobalRegistry       `toml:"registry,omitempty"`
+	Trust    pathutil.TrustConfig `toml:"trust,omitempty"`
 }
 
 // GlobalRegistry is the [registry] table of the global config. It holds only

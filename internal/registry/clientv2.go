@@ -38,6 +38,10 @@ type ResolveV2Result struct {
 	CompatCli    string     `json:"compatCli"`
 	Files        []FileMeta `json:"files"`
 
+	// Attestations is the registry's own summary of who signed the version.
+	// It is informative only; signatures are verified from the bundles.
+	Attestations []Attestation `json:"attestations,omitempty"`
+
 	// Format is derived from the response, not carried by it.
 	Format string `json:"-"`
 }

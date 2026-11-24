@@ -17,8 +17,9 @@ const LockfileName = "bino.lock"
 // CurrentLockfileVersion is the lockfile format version this CLI writes.
 // Version 2 records a package as a file tree: a kinds set and a per-file list
 // replace the singular kind, and the entry digest is the tree's manifest
-// digest. Version 1 entries are read and upgraded in memory on load.
-const CurrentLockfileVersion = 2
+// digest. Version 3 adds the signer a package's signature was verified
+// against. Older locks are read and upgraded in memory on load.
+const CurrentLockfileVersion = 3
 
 // ErrMalformedLockfile reports a bino.lock that exists but cannot be parsed.
 var ErrMalformedLockfile = errors.New("malformed " + LockfileName)
@@ -39,10 +40,16 @@ type Entry struct {
 	Version string `toml:"version"`       // resolved immutable version
 	Tag     string `toml:"tag,omitempty"` // followed tag; omitted when pinned
 	Digest  string `toml:"digest"`        // "sha256:<hex>": the document digest, or a tree's manifest digest
-	Format  string `toml:"format"`        // "document" | "tree"
-	Kind    string `toml:"kind"`          // the primary kind; also the only kind of a v1 package
-	Path    string `toml:"path"`          // the primary document, project-relative, slash-form
-	Direct  bool   `toml:"direct"`
+
+	// Signer is who signed the locked version, as verified when it was
+	// locked. Once set, a version without this signer is refused until
+	// 'bino registry trust accept' records the new one. Nil: unsigned.
+	Signer *Signer `toml:"signer,omitempty,inline"`
+
+	Format string `toml:"format"` // "document" | "tree"
+	Kind   string `toml:"kind"`   // the primary kind; also the only kind of a v1 package
+	Path   string `toml:"path"`   // the primary document, project-relative, slash-form
+	Direct bool   `toml:"direct"`
 
 	Dependencies []string `toml:"dependencies"` // direct edges, bare "@scope/name"
 

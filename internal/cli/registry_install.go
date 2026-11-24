@@ -66,6 +66,11 @@ func registryInstall(ctx context.Context, p registryProject) (mcp.RegistryMutati
 	if err != nil {
 		return mcp.RegistryMutationResult{}, err
 	}
+	policy, err := p.trustPolicy()
+	if err != nil {
+		return mcp.RegistryMutationResult{}, err
+	}
+	sc := signatureCheck{policy: policy, lock: lock}
 
 	entries := append([]registry.Entry(nil), lock.Packages...)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
@@ -74,6 +79,9 @@ func registryInstall(ctx context.Context, p registryProject) (mcp.RegistryMutati
 		pp, err := fetchLockedPackage(ctx, p, client, e)
 		if err != nil {
 			return mcp.RegistryMutationResult{}, err
+		}
+		if err := checkSignatures(ctx, client, sc, &pp); err != nil {
+			return mcp.RegistryMutationResult{}, ExternalError(err)
 		}
 		plans = append(plans, pp)
 	}
@@ -89,7 +97,7 @@ func registryInstall(ctx context.Context, p registryProject) (mcp.RegistryMutati
 	}
 	return mcp.RegistryMutationResult{
 		Changes:  changes,
-		Warnings: registryCompatWarnings(p, entries),
+		Warnings: registryWarnings(p, plans),
 	}, nil
 }
 
