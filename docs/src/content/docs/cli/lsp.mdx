@@ -58,6 +58,20 @@ outline and workspace symbol search, and quick-fixes: add a missing `${VAR}` to 
 missing required field, add a DataSource the query reads to `spec.dependencies`, or scaffold the
 manifest a dangling reference points to.
 
+## Custom requests
+
+Besides the standard methods, the server answers two requests that editor integrations can use.
+Clients that do not call them see no difference.
+
+- `bino/documents` with `{ "textDocument": { "uri": "..." } }` - the bino manifests of an open
+  buffer, read from its current (unsaved) text: `isBino`, and per manifest its `kind`, `name`,
+  `position` (1-based document number in the file), `range`, and the `range` and `language` of an
+  inline DataSet `query:` or `prql:` block.
+- `bino/index` - the project index (`kind`, `name`, `file`, `position` of every manifest).
+
+A client that passes `{ "indexChanged": true }` as `initializationOptions` also gets a
+`bino/indexChanged` notification whenever the project index changes on disk.
+
 ## Generic editor setup
 
 Any LSP client can launch `bino lsp` over stdio for `yaml` documents. For Neovim
