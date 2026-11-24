@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -84,5 +85,23 @@ func TestReadPortFile_StalePID(t *testing.T) {
 	// Verify the stale file was cleaned up
 	if _, err := os.Stat(PortFilePath(dir)); !os.IsNotExist(err) {
 		t.Error("stale port file should be removed")
+	}
+}
+
+func TestProcessAlive(t *testing.T) {
+	if !processAlive(os.Getpid()) {
+		t.Error("processAlive(own pid) = false, want true")
+	}
+	if processAlive(0) || processAlive(-1) {
+		t.Error("processAlive must be false for pid <= 0")
+	}
+
+	// A child that has exited and been reaped is gone.
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^$")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("run child: %v", err)
+	}
+	if processAlive(cmd.Process.Pid) {
+		t.Errorf("processAlive(%d) = true for an exited process", cmd.Process.Pid)
 	}
 }
