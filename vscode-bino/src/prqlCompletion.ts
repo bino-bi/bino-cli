@@ -201,14 +201,14 @@ const PRQL_SNIPPETS: PrqlSnippet[] = [
  * Completion provider for PRQL inside YAML spec.prql blocks.
  */
 class PrqlCompletionProvider implements vscode.CompletionItemProvider {
-    provideCompletionItems(
+    async provideCompletionItems(
         document: vscode.TextDocument,
         position: vscode.Position,
         _token: vscode.CancellationToken,
         _context: vscode.CompletionContext
-    ): vscode.CompletionItem[] | undefined {
+    ): Promise<vscode.CompletionItem[] | undefined> {
         // Only provide completions inside spec.prql blocks
-        const prqlBlock = findPrqlBlockAtCursor(document, position);
+        const prqlBlock = await findPrqlBlockAtCursor(document, position);
         if (!prqlBlock) {
             return undefined;
         }

@@ -5,6 +5,12 @@ import * as fs from 'fs';
 import { DaemonClient } from './daemonClient';
 import { setRenderEmbeddableKinds } from './embeddable';
 import { getBinoPath } from './bino';
+import { getLanguageClient } from './languageClient';
+import { getBinoDocuments, METHOD_NOT_FOUND, warnOutdatedBino } from './binoDocuments';
+
+/** Language server request and push for the project index. */
+const INDEX_REQUEST = 'bino/index';
+const INDEX_CHANGED_NOTIFICATION = 'bino/indexChanged';
 
 /** The project configuration filename that marks a bino project root */
 const PROJECT_CONFIG_FILE = 'bino.toml';
@@ -15,12 +21,6 @@ export interface LSPDocument {
     name: string;
     file: string;
     position: number;
-}
-
-/** Result from bino lsp-helper index */
-interface LSPIndexResult {
-    documents: LSPDocument[];
-    error?: string;
 }
 
 /** Result from bino lsp-helper columns */
@@ -150,6 +150,7 @@ export class WorkspaceIndexer {
 
     private _isIndexing = false;
     private daemonClient: DaemonClient | undefined;
+    private indexChangedListener: vscode.Disposable | undefined;
     // A bino.toml found below a workspace folder root, used when the upward walk finds none.
     private subfolderProjectRoot: string | undefined;
 
@@ -364,28 +365,39 @@ export class WorkspaceIndexer {
         await this.ensureRenderEmbeddableKinds();
 
         try {
-            // Try daemon first for faster indexing
+            // One index: the daemon's when connected (the language server proxies
+            // the same daemon then), else the language server's own.
+            let documents: LSPDocument[] | undefined;
+            let source = '';
             if (this.daemonClient?.isConnected) {
                 const result = await this.daemonClient.getIndex();
                 if (result && !result.error) {
-                    this.documents = result.documents;
-                    this.outputChannel.appendLine(`Indexed ${this.documents.length} documents (daemon)`);
-                    this._onDidUpdateIndex.fire();
-                    return;
+                    documents = result.documents;
+                    source = 'daemon';
                 }
             }
-
-            // Fallback to subprocess
-            const output = await this.execBino(['lsp-helper', 'index', workDir]);
-            const result: LSPIndexResult = JSON.parse(output);
-
-            if (result.error) {
-                this.outputChannel.appendLine(`Index error: ${result.error}`);
+            const client = getLanguageClient();
+            if (!documents && client) {
+                try {
+                    const result = await client.sendRequest<{ documents: LSPDocument[] }>(INDEX_REQUEST, null);
+                    documents = result.documents;
+                    source = 'language server';
+                } catch (err) {
+                    if ((err as { code?: number }).code === METHOD_NOT_FOUND) {
+                        warnOutdatedBino('The project index without the daemon');
+                    }
+                    this.outputChannel.appendLine(`Index request failed: ${err}`);
+                }
+            }
+            if (!documents) {
+                this.outputChannel.appendLine('No index source available yet (daemon not connected, language server not running)');
                 return;
             }
 
-            this.documents = result.documents;
-            this.outputChannel.appendLine(`Indexed ${this.documents.length} documents`);
+            this.documents = documents;
+            // Columns may have changed with the manifests.
+            this.columnsCache.clear();
+            this.outputChannel.appendLine(`Indexed ${this.documents.length} documents (${source})`);
 
             // Fire event to notify listeners (e.g., tree view)
             this._onDidUpdateIndex.fire();
@@ -397,24 +409,25 @@ export class WorkspaceIndexer {
         }
     }
 
-    /** Invalidate the entire index (e.g., on file create/delete) */
-    invalidateIndex(): void {
-        this.documents = [];
-        this.columnsCache.clear();
-        // Trigger re-index in background
-        this.refreshIndex();
-    }
-
-    /** Invalidate cache for a specific file */
-    invalidateFile(filePath: string): void {
-        // Find documents from this file and invalidate their column cache
-        const affectedDocs = this.documents.filter(doc => doc.file === filePath);
-        for (const doc of affectedDocs) {
-            this.columnsCache.delete(doc.name);
-            this.columnsCache.delete(`$${doc.name}`);
+    /**
+     * Follow the language server's index-changed push. The daemon pushes its
+     * own over SSE, so this one is ignored while the daemon is connected.
+     */
+    attachLanguageClient(): void {
+        const client = getLanguageClient();
+        if (!client) {
+            return;
         }
-        // Trigger re-index in background
-        this.refreshIndex();
+        // A restarted client replaces the previous one.
+        this.indexChangedListener?.dispose();
+        this.indexChangedListener = client.onNotification(INDEX_CHANGED_NOTIFICATION, () => {
+            if (!this.daemonClient?.isConnected) {
+                void this.refreshIndex();
+            }
+        });
+        if (!this.daemonClient?.isConnected) {
+            void this.refreshIndex();
+        }
     }
 
     /** Get all documents of specified kinds */
@@ -814,12 +827,9 @@ export class WorkspaceIndexer {
         return JSON.parse(output);
     }
 
-    /** Check if a document is a Bino manifest (has apiVersion: bino.bi) */
+    /** Whether the language server treats the buffer as a Bino manifest. */
     async isBinoDocument(document: vscode.TextDocument): Promise<boolean> {
-        const text = document.getText();
-        return text.includes('apiVersion: bino.bi') ||
-            text.includes('apiVersion: "bino.bi') ||
-            text.includes("apiVersion: 'bino.bi");
+        return (await getBinoDocuments(document))?.isBino ?? false;
     }
 
     /**

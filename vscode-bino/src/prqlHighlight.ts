@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { PrqlBlockInfo } from './prql';
+import { PrqlBlockInfo, prqlBlocksOf } from './prql';
+import { getBinoDocuments } from './binoDocuments';
 
 /**
  * PRQL keywords based on https://prql-lang.org
@@ -83,119 +84,6 @@ function createDecorationTypes(): DecorationTypes {
             color: new vscode.ThemeColor('terminal.ansiMagenta'),
         }),
     };
-}
-
-/**
- * Find all PRQL blocks in a YAML document.
- * Mirrors the logic in prql.ts but returns all blocks, not just the one at cursor.
- */
-export function findAllPrqlBlocks(document: vscode.TextDocument): PrqlBlockInfo[] {
-    const blocks: PrqlBlockInfo[] = [];
-    const text = document.getText();
-    const lines = text.split('\n');
-
-    let currentDocKind = '';
-    let currentDocName = '';
-    let inPrqlBlock = false;
-    let prqlStartLine = -1;
-    let prqlIndent = 0;
-    let prqlLines: string[] = [];
-
-    const pushBlock = (endLine: number) => {
-        if (currentDocKind === 'DataSet' && prqlLines.length > 0) {
-            blocks.push({
-                datasetName: currentDocName,
-                prqlText: prqlLines.join('\n'),
-                startLine: prqlStartLine,
-                startChar: prqlIndent,
-                endLine: endLine,
-                filePath: document.uri.fsPath,
-            });
-        }
-    };
-
-    for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-        const line = lines[lineNum];
-        const trimmed = line.trim();
-
-        // Document separator
-        if (trimmed === '---') {
-            if (inPrqlBlock) {
-                pushBlock(lineNum - 1);
-            }
-            currentDocKind = '';
-            currentDocName = '';
-            inPrqlBlock = false;
-            prqlLines = [];
-            continue;
-        }
-
-        // Track kind
-        const kindMatch = trimmed.match(/^kind:\s*(\w+)/);
-        if (kindMatch) {
-            currentDocKind = kindMatch[1];
-        }
-
-        // Track name (first occurrence after metadata:)
-        const nameMatch = trimmed.match(/^name:\s*(\w+)/);
-        if (nameMatch && currentDocName === '') {
-            currentDocName = nameMatch[1];
-        }
-
-        // Look for prql: field start (block style with |)
-        const prqlBlockMatch = line.match(/^(\s*)prql:\s*\|?\s*$/);
-        if (prqlBlockMatch && currentDocKind === 'DataSet') {
-            // End any previous block first
-            if (inPrqlBlock) {
-                pushBlock(lineNum - 1);
-            }
-            inPrqlBlock = true;
-            prqlStartLine = lineNum + 1;
-            prqlIndent = prqlBlockMatch[1].length + 2;
-            prqlLines = [];
-            continue;
-        }
-
-        // Check for inline prql: <code> (single line)
-        const prqlInlineMatch = line.match(/^(\s*)prql:\s+(.+)$/);
-        if (prqlInlineMatch && currentDocKind === 'DataSet' && !prqlInlineMatch[2].startsWith('|')) {
-            const inlineContent = prqlInlineMatch[2].trim();
-            if (inlineContent) {
-                blocks.push({
-                    datasetName: currentDocName,
-                    prqlText: inlineContent,
-                    startLine: lineNum,
-                    startChar: prqlInlineMatch[1].length + 'prql: '.length,
-                    endLine: lineNum,
-                    filePath: document.uri.fsPath,
-                });
-            }
-            continue;
-        }
-
-        // Collect PRQL block lines
-        if (inPrqlBlock) {
-            const lineIndent = line.length - line.trimStart().length;
-
-            if (trimmed === '' || lineIndent >= prqlIndent) {
-                // Still in the block
-                const content = lineIndent >= prqlIndent ? line.substring(prqlIndent) : '';
-                prqlLines.push(content);
-            } else {
-                // Block ended due to dedent
-                pushBlock(lineNum - 1);
-                inPrqlBlock = false;
-                prqlLines = [];
-            }
-        }
-    }
-
-    // Handle final block at end of file
-    if (inPrqlBlock) {
-        pushBlock(lines.length - 1);
-    }
-
-    return blocks;
 }
 
 /**
@@ -384,7 +272,7 @@ class PrqlHighlighter implements vscode.Disposable {
         // Schedule new update
         const timer = setTimeout(() => {
             this.pendingUpdates.delete(uri);
-            this.updateDecorations(editor);
+            void this.updateDecorations(editor);
         }, this.debounceMs);
 
         this.pendingUpdates.set(uri, timer);
@@ -393,15 +281,20 @@ class PrqlHighlighter implements vscode.Disposable {
     /**
      * Update decorations for a single editor.
      */
-    private updateDecorations(editor: vscode.TextEditor): void {
+    private async updateDecorations(editor: vscode.TextEditor): Promise<void> {
         // Only process YAML files
         if (editor.document.languageId !== 'yaml') {
             this.clearDecorations(editor);
             return;
         }
 
-        // Find all PRQL blocks
-        const blocks = findAllPrqlBlocks(editor.document);
+        // PRQL blocks as the language server located them in the live buffer
+        const version = editor.document.version;
+        const outline = await getBinoDocuments(editor.document);
+        if (editor.document.version !== version) {
+            return; // a newer update is scheduled
+        }
+        const blocks = outline ? prqlBlocksOf(outline, editor.document) : [];
 
         if (blocks.length === 0) {
             this.clearDecorations(editor);

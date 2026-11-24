@@ -8,10 +8,11 @@ import { BinoValidator } from './validation';
 import { BinoPreviewManager } from './preview';
 import { showSetupCheckResults } from './setup';
 import { startLanguageClient, stopLanguageClient } from './languageClient';
-import { registerPrqlFeatures } from './prql';
+import { registerPrqlFeatures, updatePrqlContext } from './prql';
 import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
 import { BinoCodeLensProvider } from './codelens';
+import { registerBinoDocumentsCache } from './binoDocuments';
 import { RowsPreviewManager } from './rowsPreview';
 import { DataSourceWizardManager } from './wizard/wizardPanel';
 import { AddElementCommand } from './addElement';
@@ -368,12 +369,23 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
                 lspDaemonPid = daemonClient?.isConnected ? daemonClient.pid : undefined;
                 return startLanguageClient(context, outputChannel, lspProjectRoot);
             })
+            .then(languageClientStarted)
             .catch(err => {
                 outputChannel.appendLine(`[LSP] failed to start: ${err}`);
                 vscode.window.showWarningMessage(
                     'bino language server failed to start - completion and diagnostics are unavailable. See the "Bino Reports" output for details.'
                 );
             });
+    }
+
+    // Positions and (without the daemon) the index come from the server, so
+    // every new client is attached again.
+    function languageClientStarted(started: boolean): void {
+        if (started) {
+            indexer?.attachLanguageClient();
+            codeLensProvider.refresh();
+            void updatePrqlContext(vscode.window.activeTextEditor);
+        }
     }
 
     async function restartLanguageClient(): Promise<void> {
@@ -385,7 +397,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         lspDaemonPid = daemonClient?.isConnected ? daemonClient.pid : undefined;
         try {
             await stopLanguageClient();
-            await startLanguageClient(context, outputChannel, lspRoot);
+            languageClientStarted(await startLanguageClient(context, outputChannel, lspRoot));
         } catch (err) {
             outputChannel.appendLine(`[LSP] failed to restart: ${err}`);
         }
@@ -400,6 +412,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         )
     );
     context.subscriptions.push({ dispose: () => codeLensProvider.dispose() });
+    registerBinoDocumentsCache(context);
 
     // Initialize rows preview manager
     rowsPreviewManager = new RowsPreviewManager(indexer, outputChannel);
@@ -850,31 +863,6 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
             runInTerminal('graph --view flat');
         })
     );
-
-    // Watch for file changes to invalidate cache.
-    // When the daemon is connected, its server-side watcher handles this
-    // and pushes SSE events, so we skip local invalidation to avoid double work.
-    const watcher = vscode.workspace.createFileSystemWatcher('**/*.{yaml,yml}');
-
-    watcher.onDidChange(uri => {
-        if (!daemonClient?.isConnected) {
-            indexer?.invalidateFile(uri.fsPath);
-        }
-    });
-
-    watcher.onDidCreate(() => {
-        if (!daemonClient?.isConnected) {
-            indexer?.invalidateIndex();
-        }
-    });
-
-    watcher.onDidDelete(() => {
-        if (!daemonClient?.isConnected) {
-            indexer?.invalidateIndex();
-        }
-    });
-
-    context.subscriptions.push(watcher);
 
     // Initial index on activation
     await indexer.refreshIndex();

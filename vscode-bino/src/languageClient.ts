@@ -80,6 +80,8 @@ export async function startLanguageClient(
             { language: 'yaml', scheme: 'untitled' },
         ],
         outputChannel,
+        // Opt in to bino/indexChanged, the push that keeps the project index current.
+        initializationOptions: { indexChanged: true },
     };
 
     client = new LanguageClient('bino', 'bino Language Server', serverOptions, clientOptions);
@@ -87,6 +89,11 @@ export async function startLanguageClient(
     context.subscriptions.push({ dispose: () => void stopLanguageClient() });
     outputChannel.appendLine('[LSP] bino language server started');
     return true;
+}
+
+/** The running language client, if any. */
+export function getLanguageClient(): LanguageClient | undefined {
+    return client;
 }
 
 /** Stop the language client if running. */
