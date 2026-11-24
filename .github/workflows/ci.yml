@@ -194,6 +194,14 @@ jobs:
         working-directory: vscode-bino
         run: npm ci
 
+      - name: Type check
+        working-directory: vscode-bino
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: vscode-bino
+        run: npm run lint
+
       - name: Compile extension
         working-directory: vscode-bino
         run: npm run compile

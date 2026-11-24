@@ -10,7 +10,7 @@
     "url": "https://github.com/bino-bi/bino-cli-releases"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages",
@@ -817,12 +817,13 @@
     "vscode:prepublish": "npm run compile",
     "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "npm run compile -- --watch",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p .",
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "@types/vscode": "1.85.0",
+    "@types/vscode": "1.91.0",
     "@typescript-eslint/eslint-plugin": "^8.72.2",
     "@typescript-eslint/parser": "^8.61.0",
     "esbuild": "^0.28.2",

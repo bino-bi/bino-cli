@@ -88,7 +88,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     console.log('Bino Reports extension activating...');
 
     // Create shared output channel
-    const outputChannel = vscode.window.createOutputChannel('Bino Reports');
+    const outputChannel = vscode.window.createOutputChannel('Bino Reports', { log: true });
     context.subscriptions.push(outputChannel);
 
     // Initialize workspace indexer
