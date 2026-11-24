@@ -507,7 +507,12 @@ PORT_LABEL = "x"
 		t.Errorf("preview env = %v, want none", cfg.Preview.Env.Values)
 	}
 
-	if _, err := ParseProjectConfig([]byte("[build.env]\nN = 1\n")); err == nil || !strings.Contains(err.Error(), "[build.env] N must be a string") {
-		t.Errorf("non-string env value: err = %v", err)
+	// Non-string values and sub-tables are ignored, not fatal.
+	cfg, err = ParseProjectConfig([]byte("[build.env]\nS = \"s\"\nN = 1\n[build.env.extra]\nX = \"x\"\n"))
+	if err != nil {
+		t.Fatalf("non-string env value: err = %v", err)
+	}
+	if len(cfg.Build.Env.Values) != 1 || cfg.Build.Env.Values["S"] != "s" {
+		t.Errorf("build env = %v, want only S", cfg.Build.Env.Values)
 	}
 }

@@ -17,7 +17,8 @@ func TestTOMLDiagnostics(t *testing.T) {
 		msg              string
 	}{
 		{"unknown key", "report-id = \"x\"\n[lint]\ndisabel = [\"a\"]\n", "toml-unknown-key", protocol.DiagnosticSeverityWarning, [3]uint32{2, 0, 7}, "unknown key 'lint.disabel'"},
-		{"env var must be a string", "[build.env]\nOK = \"x\"\nFOO = 1\n", "toml-type", protocol.DiagnosticSeverityError, [3]uint32{2, 0, 3}, "'build.env.FOO' must be a string"},
+		{"env var must be a string", "[build.env]\nOK = \"x\"\nFOO = 1\n", "toml-type", protocol.DiagnosticSeverityWarning, [3]uint32{2, 0, 3}, "'build.env.FOO' must be a string: bino ignores it"},
+		{"env sub-table", "[build.env.extra]\nX = \"x\"\n", "toml-type", protocol.DiagnosticSeverityWarning, [3]uint32{0, 1, 16}, "'build.env.extra' must be a string: bino ignores it"},
 		{"wrong type", "report-id = \"x\"\n[lint]\ndisable = \"a\" # one rule\n", "toml-type", protocol.DiagnosticSeverityError, [3]uint32{2, 10, 13}, "'lint.disable' must be an array, not a TOML string"},
 		{"unknown trust key", "[trust]\nrequire = \"warn\"\n[[trust.signer]]\nscope = \"@a/*\"\nissuer = \"x\"\n", "toml-unknown-key", protocol.DiagnosticSeverityError, [3]uint32{4, 0, 6}, "unknown key 'trust.signer.issuer': commands that apply the trust policy fail on it"},
 		{"syntax", "report-id = \n", "toml-syntax", protocol.DiagnosticSeverityError, [3]uint32{0, 12, 12}, "TOML syntax error"},

@@ -46,8 +46,8 @@ func tomlDiagnostics(doc *Document) []protocol.Diagnostic {
 			if cmd, name, ok := envTableKey(e.Key()); ok {
 				// Variables may sit directly under [<cmd>.env] (ParseProjectConfig).
 				if _, isString := envValue(raw, cmd, name).(string); !isString {
-					out = append(out, tomlDiag(keySpan(doc, row, col), protocol.DiagnosticSeverityError, "toml-type",
-						fmt.Sprintf("'%s' must be a string", key)))
+					out = append(out, tomlDiag(keySpan(doc, row, col), protocol.DiagnosticSeverityWarning, "toml-type",
+						fmt.Sprintf("'%s' must be a string: bino ignores it", key)))
 				}
 				continue
 			}

@@ -65,9 +65,12 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 		changes[u] = append(changes[u], protocol.TextEdit{Range: s.rangeToProtocolFor(def.File, def.NameRange), NewText: params.NewName})
 	}
 	if kind == "DataSource" || kind == "DataSet" {
-		uses, err := ni.QueryRefs(name, s.fileContent)
+		uses, skipped, err := ni.QueryRefs(name, s.fileContent)
 		if err != nil {
 			return nil, jsonrpc2.NewError(jsonrpc2.Code(protocol.LSPErrorCodesRequestFailed), "rename refused: "+err.Error())
+		}
+		if len(skipped) > 0 {
+			s.log.Warnf("rename of %s: query files not readable, uses there are not renamed: %s", name, strings.Join(skipped, ", "))
 		}
 		for _, r := range uses {
 			u := uri.File(r.File)

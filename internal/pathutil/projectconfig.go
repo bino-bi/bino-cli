@@ -432,7 +432,8 @@ var EnvCommands = []string{"build", "preview", "serve"}
 
 // mergeEnvTables adds the variables written directly under [<cmd>.env] to
 // that command's Values. Both forms are documented; on a duplicate name the
-// [<cmd>.env.values] entry wins.
+// [<cmd>.env.values] entry wins. Non-string values and sub-tables are ignored,
+// as older releases did; the language server warns about them.
 func mergeEnvTables(data []byte, cfg *ProjectConfig) error {
 	var raw map[string]any
 	if err := toml.Unmarshal(data, &raw); err != nil {
@@ -453,7 +454,7 @@ func mergeEnvTables(data []byte, cfg *ProjectConfig) error {
 		for _, k := range keys {
 			v, ok := env[k].(string)
 			if !ok {
-				return fmt.Errorf("[%s.env] %s must be a string", cmd, k)
+				continue
 			}
 			if _, exists := target.Values[k]; exists {
 				continue
