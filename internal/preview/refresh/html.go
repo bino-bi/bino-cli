@@ -318,6 +318,24 @@ func withPreviewStyles(doc []byte) []byte {
 	return updated
 }
 
+// revealSourceScript posts Cmd/Ctrl-clicks on a component to the embedding
+// host, like the full preview does. Embeddings do not load the preview bundle.
+const revealSourceScript = `<script>document.addEventListener('click',function(e){` +
+	`if(!e.metaKey&&!e.ctrlKey)return;var el=e.target.closest&&e.target.closest('[data-bino-kind]');` +
+	`if(!el||window.parent===window)return;` +
+	`window.parent.postMessage({type:'bino:revealSource',kind:el.getAttribute('data-bino-kind'),` +
+	`name:el.getAttribute('data-bino-name')||'',ref:el.getAttribute('data-bino-ref')||''},'*');` +
+	`e.preventDefault();e.stopPropagation();},true);</script>`
+
+// withRevealSource injects revealSourceScript before </head>.
+func withRevealSource(doc []byte) []byte {
+	idx := bytes.Index(doc, []byte("</head>"))
+	if idx == -1 {
+		return doc
+	}
+	return slices.Concat(doc[:idx], []byte(revealSourceScript), doc[idx:])
+}
+
 // cssLengthPattern accepts the margin lengths the preview mirrors into CSS
 // custom properties. Anything else falls back to the Chrome print defaults -
 // an unvalidated value would poison the whole var() declaration.

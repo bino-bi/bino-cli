@@ -330,7 +330,7 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 		server.AddLocalAssets(pipeline.ConvertLocalAssets(assets))
 		pipeline.LogDiagnostics(cfg.Logger.Channel("datasource").Channel(name), diagnostics)
 	}
-	return body, nil
+	return withRevealSource(body), nil
 }
 
 // directEmbeddableComponentKinds are component kinds rendered directly inside

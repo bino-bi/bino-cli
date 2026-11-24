@@ -213,6 +213,11 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "bino.selectProject",
+        "title": "Switch Project...",
+        "category": "Bino"
+      },
+      {
         "command": "bino.refreshIndex",
         "title": "Refresh Index",
         "category": "Bino",
@@ -507,6 +512,10 @@
         },
         {
           "command": "bino.restartDaemon",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.selectProject",
           "when": "bino.projectDetected"
         },
         {

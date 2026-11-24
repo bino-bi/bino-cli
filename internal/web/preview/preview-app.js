@@ -185,6 +185,12 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
         name: el.getAttribute('data-bino-name') || '',
         ref: el.getAttribute('data-bino-ref') || ''
       };
+      // Absent on markdown :ref components and from older renderers.
+      var line = parseInt(el.getAttribute('data-bino-source-line') || '', 10);
+      if (line > 0) {
+        msg.sourceFile = el.getAttribute('data-bino-source-file') || '';
+        msg.line = line;
+      }
     } else {
       msg = {
         type: 'bino:revealSource',

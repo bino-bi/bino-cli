@@ -153,6 +153,7 @@ export class WorkspaceIndexer {
     private indexChangedListener: vscode.Disposable | undefined;
     // A bino.toml found below a workspace folder root, used when the upward walk finds none.
     private subfolderProjectRoot: string | undefined;
+    private currentProject: (() => string | undefined) | undefined;
 
     /** Returns true if indexing is currently in progress */
     get isIndexing(): boolean {
@@ -170,6 +171,11 @@ export class WorkspaceIndexer {
     /** Set the daemon client for fast operations */
     setDaemonClient(client: DaemonClient | undefined): void {
         this.daemonClient = client;
+    }
+
+    /** Use the window's current project (see project.ts) as the default root. */
+    setCurrentProject(current: () => string | undefined): void {
+        this.currentProject = current;
     }
 
     /** Get the configured bino CLI path */
@@ -216,6 +222,10 @@ export class WorkspaceIndexer {
      * of getProjectRootForUri.
      */
     getWorkspaceProjectRoot(): string | undefined {
+        const current = this.currentProject?.();
+        if (current) {
+            return current;
+        }
         const folders = vscode.workspace.workspaceFolders;
         if (folders) {
             for (const folder of folders) {
@@ -233,6 +243,11 @@ export class WorkspaceIndexer {
         if (uri) {
             const fileDir = path.dirname(uri.fsPath);
             return this.findProjectRoot(fileDir);
+        }
+
+        const current = this.currentProject?.();
+        if (current) {
+            return current;
         }
 
         // Try active editor first
