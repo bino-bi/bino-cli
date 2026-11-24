@@ -25,6 +25,8 @@ type OutlineBlock struct {
 	// Content spans the query text in the source. For a block scalar StartCol
 	// is the content indent column and the range covers whole lines.
 	Content Range
+	// Folded marks a folded (>) block scalar, whose lines the value joins.
+	Folded bool
 }
 
 // Outline lists the mapping documents of a buffer with their ranges and
@@ -91,7 +93,7 @@ func outlineDoc(root *yaml.Node, src string, offset, endLine int) (OutlineDoc, b
 			if r, ok := scalarContentRange(src, n); ok {
 				r.StartLine += offset
 				r.EndLine += offset
-				d.Blocks = append(d.Blocks, OutlineBlock{Field: field, Content: r})
+				d.Blocks = append(d.Blocks, OutlineBlock{Field: field, Content: r, Folded: n.Style&yaml.FoldedStyle != 0})
 			}
 		}
 	}

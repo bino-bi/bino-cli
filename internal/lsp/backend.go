@@ -71,6 +71,9 @@ type Backend interface {
 	// Columns introspects the columns of a named DataSet/DataSource. The caller
 	// imposes the deadline (introspection has no built-in timeout).
 	Columns(ctx context.Context, name string) ([]string, error)
+	// Sample returns the columns, column types and first limit rows of a named
+	// DataSet/DataSource. The caller imposes the deadline.
+	Sample(ctx context.Context, name string, limit int) (DatasetSample, error)
 	// GraphDeps returns a dependency-graph slice rooted at kind/name.
 	GraphDeps(ctx context.Context, kind, name, direction string, maxDepth int) (GraphResult, error)
 

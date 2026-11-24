@@ -36,6 +36,9 @@ func (f *fakeBackend) MergedSchema(context.Context) (json.RawMessage, error) { r
 func (f *fakeBackend) Columns(_ context.Context, name string) ([]string, error) {
 	return f.columns[name], nil
 }
+func (f *fakeBackend) Sample(_ context.Context, name string, _ int) (DatasetSample, error) {
+	return DatasetSample{Columns: f.columns[name]}, nil
+}
 func (f *fakeBackend) GraphDeps(context.Context, string, string, string, int) (GraphResult, error) {
 	return GraphResult{}, nil
 }

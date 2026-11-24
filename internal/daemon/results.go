@@ -52,6 +52,8 @@ type RowsResult struct {
 	// names it shows which definition the constraints selected.
 	File  string `json:"file,omitempty"`
 	Error string `json:"error,omitempty"`
+	// Types holds the DuckDB type of each column ("" for a spec.constants column).
+	Types []string `json:"types,omitempty"`
 }
 
 // GraphNode is a node in a dependency-graph traversal result.
@@ -135,14 +137,14 @@ func (s *State) Rows(ctx context.Context, name string, limit int) RowsResult {
 	doc, ambiguous, err := s.target(name)
 	if err == nil {
 		res.File = doc.File
-		var cols []string
-		var rows []map[string]any
-		cols, rows, res.Truncated, res.Kind, err = s.rowsFor(ctx, doc, ambiguous, limit)
-		if cols != nil {
-			res.Columns = cols
+		var p rowsPreview
+		p, err = s.rowsFor(ctx, doc, ambiguous, limit)
+		res.Truncated, res.Kind, res.Types = p.truncated, p.kind, p.types
+		if p.columns != nil {
+			res.Columns = p.columns
 		}
-		if rows != nil {
-			res.Rows = rows
+		if p.rows != nil {
+			res.Rows = p.rows
 		}
 	}
 	if err != nil {

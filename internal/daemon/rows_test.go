@@ -174,6 +174,9 @@ spec:
 	if names := columnNames(t, rows); len(names) != 4 || names[3] != "_unit" {
 		t.Errorf("row columns = %v", names)
 	}
+	if types, _ := rows["types"].([]any); len(types) != 4 || types[0] != "VARCHAR" || types[1] != "DOUBLE" || types[3] != "" {
+		t.Errorf("types = %v, want [VARCHAR DOUBLE  ] (constants have none)", rows["types"])
+	}
 	data, _ := rows["rows"].([]any)
 	if len(data) != 4 {
 		t.Fatalf("rows = %d, want 4", len(data))

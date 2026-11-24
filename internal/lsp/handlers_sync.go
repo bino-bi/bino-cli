@@ -41,8 +41,10 @@ func (s *Server) analyze(ctx context.Context, doc *Document) {
 
 // DidSave lets the project-change path (watcher / SSE) drive re-validation; the
 // buffer already matches disk and was validated on the last didChange, so we do
-// not re-run buffer validation here (avoids double-analyze).
-func (s *Server) DidSave(_ context.Context, _ *protocol.DidSaveTextDocumentParams) error {
+// not re-run buffer validation here (avoids double-analyze). It only schedules
+// the opt-in DuckDB check of the file's query blocks.
+func (s *Server) DidSave(_ context.Context, params *protocol.DidSaveTextDocumentParams) error {
+	s.scheduleQueryCheck(params.TextDocument.URI)
 	return nil
 }
 
@@ -53,6 +55,7 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 	s.docs.Remove(params.TextDocument.URI)
 	s.updateNav(ctx, params.TextDocument.URI.FsPath())
 	s.clearDraft(params.TextDocument.URI)
+	s.forgetQueryCheck(params.TextDocument.URI)
 	return nil
 }
 

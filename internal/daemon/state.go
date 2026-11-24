@@ -461,11 +461,21 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 	if err != nil {
 		return nil, nil, false, "", err
 	}
-	return s.rowsFor(ctx, targetDoc, ambiguous, limit)
+	p, err := s.rowsFor(ctx, targetDoc, ambiguous, limit)
+	return p.columns, p.rows, p.truncated, p.kind, err
+}
+
+// rowsPreview is the result of rowsFor.
+type rowsPreview struct {
+	columns   []string
+	types     []string // the DuckDB type of each column
+	rows      []map[string]any
+	truncated bool
+	kind      string
 }
 
 // rowsFor returns preview rows of a document target already resolved.
-func (s *State) rowsFor(ctx context.Context, targetDoc *config.Document, ambiguous config.Ambiguities, limit int) (columns []string, rowData []map[string]any, truncated bool, kind string, err error) {
+func (s *State) rowsFor(ctx context.Context, targetDoc *config.Document, ambiguous config.Ambiguities, limit int) (rowsPreview, error) {
 	var query string
 	var constants []dataset.Constant
 	switch targetDoc.Kind {
@@ -474,23 +484,31 @@ func (s *State) rowsFor(ctx context.Context, targetDoc *config.Document, ambiguo
 	case "DataSet":
 		compiled, err := s.prepareDataSet(ctx, targetDoc)
 		if err != nil {
-			return nil, nil, false, "", ambiguous.Explain(err)
+			return rowsPreview{}, ambiguous.Explain(err)
 		}
 		query = dataset.LimitQuery(compiled.Query, limit+1)
 		constants = compiled.Constants
 	default:
-		return nil, nil, false, "", fmt.Errorf("unsupported kind: %s", targetDoc.Kind)
+		return rowsPreview{}, fmt.Errorf("unsupported kind: %s", targetDoc.Kind)
 	}
 
 	rows, err := s.session.DB().QueryContext(ctx, query)
 	if err != nil {
-		return nil, nil, false, "", ambiguous.Explain(fmt.Errorf("query: %w", err))
+		return rowsPreview{}, ambiguous.Explain(fmt.Errorf("query: %w", err))
 	}
 	defer rows.Close()
 
 	cols, err := rows.Columns()
 	if err != nil {
-		return nil, nil, false, "", fmt.Errorf("get columns: %w", err)
+		return rowsPreview{}, fmt.Errorf("get columns: %w", err)
+	}
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return rowsPreview{}, fmt.Errorf("get column types: %w", err)
+	}
+	typeOf := make(map[string]string, len(colTypes))
+	for _, ct := range colTypes {
+		typeOf[ct.Name()] = ct.DatabaseTypeName()
 	}
 
 	var results []map[string]any
@@ -507,7 +525,7 @@ func (s *State) rowsFor(ctx context.Context, targetDoc *config.Document, ambiguo
 			break
 		}
 		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, nil, false, "", fmt.Errorf("scan row: %w", err)
+			return rowsPreview{}, fmt.Errorf("scan row: %w", err)
 		}
 		row := make(map[string]any, len(cols))
 		for i, col := range cols {
@@ -520,8 +538,12 @@ func (s *State) rowsFor(ctx context.Context, targetDoc *config.Document, ambiguo
 		results = []map[string]any{}
 	}
 	cols, _ = dataset.StampConstants(results, cols, constants)
+	types := make([]string, len(cols))
+	for i, c := range cols {
+		types[i] = typeOf[c]
+	}
 
-	return cols, results, rowCount > limit, targetDoc.Kind, nil
+	return rowsPreview{columns: cols, types: types, rows: results, truncated: rowCount > limit, kind: targetDoc.Kind}, nil
 }
 
 // BuildGraph computes the dependency graph from cached documents.

@@ -19,9 +19,12 @@ import (
 // alive.
 func (s *Server) SetTrace(_ context.Context, _ *protocol.SetTraceParams) error { return nil }
 
-// DidChangeConfiguration acknowledges a client configuration push. bino reads no
-// client settings (the project root comes from --work-dir), so this is a no-op.
-func (s *Server) DidChangeConfiguration(_ context.Context, _ *protocol.DidChangeConfigurationParams) error {
+// DidChangeConfiguration reads bino.queryDiagnostics from a client
+// configuration push. The project root comes from --work-dir, not from here.
+func (s *Server) DidChangeConfiguration(_ context.Context, params *protocol.DidChangeConfigurationParams) error {
+	if params != nil {
+		s.applyQueryDiagnosticsSetting(params.Settings)
+	}
 	return nil
 }
 

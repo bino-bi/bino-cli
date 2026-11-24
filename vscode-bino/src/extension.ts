@@ -9,7 +9,6 @@ import { BinoPreviewManager } from './preview';
 import { showSetupCheckResults } from './setup';
 import { startLanguageClient, stopLanguageClient } from './languageClient';
 import { registerPrqlFeatures, updatePrqlContext } from './prql';
-import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
 import { BinoCodeLensProvider } from './codelens';
 import { registerBinoDocumentsCache } from './binoDocuments';
@@ -499,9 +498,6 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
 
     // Register PRQL features (editor, SQL preview integration)
     registerPrqlFeatures(context);
-
-    // Register PRQL inline highlighting in YAML
-    registerPrqlHighlighting(context);
 
     // Register PRQL completions/snippets in YAML
     registerPrqlCompletion(context);

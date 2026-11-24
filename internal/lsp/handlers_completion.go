@@ -31,8 +31,10 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 	if !ok {
 		return nil, nil
 	}
-	items, incomplete := s.assembleCompletion(ctx, doc, pc, rawValue)
-	padAfterColon(doc, params.Position, items)
+	items, incomplete := s.assembleCompletion(ctx, doc, pc, rawValue, line, col)
+	if pc.Kind != reportspec.PosQueryScalar { // a ':' in SQL is not a YAML key
+		padAfterColon(doc, params.Position, items)
+	}
 	if incomplete {
 		return &protocol.CompletionList{IsIncomplete: true, Items: items}, nil
 	}
@@ -126,7 +128,7 @@ func (s *Server) CompletionResolve(_ context.Context, item *protocol.CompletionI
 	return item, nil
 }
 
-func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc reportspec.PositionContext, rawValue bool) (items []protocol.CompletionItem, incomplete bool) {
+func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc reportspec.PositionContext, rawValue bool, line, col int) (items []protocol.CompletionItem, incomplete bool) {
 	// A completion panic must never crash the server or break the editor session;
 	// log it and return no suggestions.
 	defer func() {
@@ -184,11 +186,7 @@ func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc repor
 		}
 		return completeParamValues(findParam(decls, pc.FieldName)), false
 	case reportspec.PosQueryScalar:
-		cols := s.unionColumns(ctx, pc.BoundDatasets)
-		if cols == nil {
-			return nil, true // not warm yet - re-query once introspection lands
-		}
-		return completeColumns(cols), false
+		return s.completeQuery(ctx, doc, pc, line, col)
 	case reportspec.PosFreeValue:
 		schema := s.getSchema(ctx)
 		node := schema.ResolveAt(pathSegments(pc.Path), pc.KindsByPath)
@@ -252,7 +250,8 @@ func keySet(keys []string) map[string]bool {
 
 // unionColumns returns the deduped, order-preserving union of the bound
 // datasets' columns, bounded by a 100ms deadline. It returns nil when no columns
-// are available in time so the caller can mark the list incomplete.
+// are available in time so the caller can mark the list incomplete; the lookups
+// keep running and warm the cache for the next request.
 func (s *Server) unionColumns(ctx context.Context, datasets []string) []string {
 	if len(datasets) == 0 {
 		return nil
@@ -263,11 +262,11 @@ func (s *Server) unionColumns(ctx context.Context, datasets []string) []string {
 	var out []string
 	got := false
 	for _, ds := range datasets {
-		cols, err := s.backend.Columns(cctx, strings.TrimPrefix(ds, "$"))
-		if err != nil {
+		cols, ok := s.data.columns(cctx, s.backend, strings.TrimPrefix(ds, "$"))
+		if !ok {
 			// Debug, not Warn: this fires per keystroke under the 100ms
 			// budget and would spam the editor log when the backend is slow.
-			s.log.Debugf("column completion: columns for %q unavailable: %v", ds, err)
+			s.log.Debugf("column completion: columns for %q unavailable", ds)
 			continue
 		}
 		got = true
@@ -310,14 +309,14 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	if !ok {
 		return nil, nil
 	}
-	md := s.hoverText(ctx, pc)
+	md := s.hoverText(ctx, doc, pc, line, col)
 	if md == "" {
 		return nil, nil
 	}
 	return &protocol.Hover{Contents: &protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: md}}, nil
 }
 
-func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) string {
+func (s *Server) hoverText(ctx context.Context, doc *Document, pc reportspec.PositionContext, line, col int) string {
 	switch pc.Kind {
 	case reportspec.PosScenarioItem:
 		return scenarioMeaning(pc.Prefix)
@@ -330,13 +329,7 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 		if pc.FieldName == "ref" || pc.FieldName == "page" {
 			return s.refTargetHover(ctx, pc)
 		}
-		cctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-		defer cancel()
-		cols, err := s.backend.Columns(cctx, strings.TrimPrefix(pc.Prefix, "$"))
-		if err != nil || len(cols) == 0 {
-			return ""
-		}
-		return "**" + pc.Prefix + "** columns:\n\n" + "`" + strings.Join(cols, "`, `") + "`"
+		return s.datasetHover(ctx, pc.Prefix)
 	case reportspec.PosParamKey, reportspec.PosParamValue:
 		decls, ok := s.paramsForTarget(ctx, pc.RefKind, pc.RefName)
 		if !ok {
@@ -365,6 +358,8 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 		return ""
 	case reportspec.PosFreeValue:
 		return valueHover(s.getSchema(ctx).ResolveAt(pathSegments(pc.Path), pc.KindsByPath))
+	case reportspec.PosQueryScalar:
+		return s.queryHover(ctx, doc, pc, line, col)
 	default:
 		return ""
 	}

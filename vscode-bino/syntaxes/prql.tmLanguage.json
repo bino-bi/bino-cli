@@ -1,0 +1,99 @@
+{
+    "name": "PRQL (bino)",
+    "scopeName": "source.prql.bino",
+    "patterns": [
+        {
+            "include": "#comment"
+        },
+        {
+            "include": "#string"
+        },
+        {
+            "include": "#date"
+        },
+        {
+            "include": "#number"
+        },
+        {
+            "include": "#keyword"
+        },
+        {
+            "include": "#constant"
+        },
+        {
+            "include": "#operator"
+        }
+    ],
+    "repository": {
+        "comment": {
+            "match": "#.*$",
+            "name": "comment.line.number-sign.prql"
+        },
+        "string": {
+            "patterns": [
+                {
+                    "begin": "[fsr]?\"",
+                    "end": "\"",
+                    "name": "string.quoted.double.prql",
+                    "patterns": [
+                        {
+                            "match": "\\\\.",
+                            "name": "constant.character.escape.prql"
+                        }
+                    ]
+                },
+                {
+                    "begin": "[fsr]?'",
+                    "end": "'",
+                    "name": "string.quoted.single.prql",
+                    "patterns": [
+                        {
+                            "match": "\\\\.",
+                            "name": "constant.character.escape.prql"
+                        }
+                    ]
+                },
+                {
+                    "match": "`[^`]*`",
+                    "name": "variable.other.quoted.prql"
+                }
+            ]
+        },
+        "date": {
+            "match": "@\\d{4}-\\d{2}-\\d{2}(?:T[\\d:.]+)?",
+            "name": "constant.other.date.prql"
+        },
+        "number": {
+            "match": "\\b\\d+(?:_\\d+)*(?:\\.\\d+)?(?:e[+-]?\\d+)?\\b",
+            "name": "constant.numeric.prql"
+        },
+        "keyword": {
+            "patterns": [
+                {
+                    "match": "\\b(?:from|select|derive|filter|group|aggregate|sort|take|join|window|append|loop|let|func|prql|into|case|module|type)\\b",
+                    "name": "keyword.control.prql"
+                },
+                {
+                    "match": "\\b(?:side|inner|left|right|full|cross|asc|desc|rows|range|expanding|rolling)\\b",
+                    "name": "keyword.other.prql"
+                }
+            ]
+        },
+        "constant": {
+            "match": "\\b(?:true|false|null|this|that)\\b",
+            "name": "constant.language.prql"
+        },
+        "operator": {
+            "patterns": [
+                {
+                    "match": "==|!=|>=|<=|=>|->|&&|\\|\\||~=|\\?\\?|\\.\\.|[+\\-*/%<>=!]",
+                    "name": "keyword.operator.prql"
+                },
+                {
+                    "match": "\\|",
+                    "name": "keyword.operator.pipe.prql"
+                }
+            ]
+        }
+    }
+}

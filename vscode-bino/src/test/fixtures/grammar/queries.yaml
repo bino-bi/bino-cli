@@ -1,0 +1,23 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: |
+    SELECT region FROM sales_csv
+  title: after
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_prql
+spec:
+  prql: |
+    from sales_csv | take 5
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: inline
+spec:
+  query: SELECT 1 FROM t

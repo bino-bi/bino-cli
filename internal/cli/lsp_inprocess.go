@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,8 +14,9 @@ import (
 	"bino.bi/bino/internal/plugin"
 )
 
-// columnIntrospectDeadline caps in-process column introspection so a slow/locking
-// query never hangs an LSP request (IntrospectColumns has no built-in timeout).
+// columnIntrospectDeadline caps in-process column introspection without a
+// caller deadline so a slow/locking query never hangs an LSP request
+// (IntrospectColumns has no built-in timeout).
 const columnIntrospectDeadline = 800 * time.Millisecond
 
 // lspInProcessBackend satisfies lsp.Backend over a local daemon.ManagedState - the
@@ -72,11 +74,32 @@ func (b *lspInProcessBackend) MergedSchema(ctx context.Context) (json.RawMessage
 }
 
 func (b *lspInProcessBackend) Columns(ctx context.Context, name string) ([]string, error) {
-	cctx, cancel := context.WithTimeout(ctx, columnIntrospectDeadline)
+	cctx, cancel := introspectContext(ctx)
 	defer cancel()
 	b.sessMu.Lock()
 	defer b.sessMu.Unlock()
 	return b.managed.State.IntrospectColumns(cctx, name)
+}
+
+func (b *lspInProcessBackend) Sample(ctx context.Context, name string, limit int) (lsp.DatasetSample, error) {
+	cctx, cancel := introspectContext(ctx)
+	defer cancel()
+	b.sessMu.Lock()
+	defer b.sessMu.Unlock()
+	r := b.managed.State.Rows(cctx, name, limit)
+	if r.Error != "" {
+		return lsp.DatasetSample{}, errors.New(r.Error)
+	}
+	return lsp.DatasetSample{Kind: r.Kind, Columns: r.Columns, Types: r.Types, Rows: r.Rows}, nil
+}
+
+// introspectContext applies columnIntrospectDeadline unless the caller already
+// set a deadline of its own.
+func introspectContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, columnIntrospectDeadline)
 }
 
 func (b *lspInProcessBackend) GraphDeps(ctx context.Context, kind, name, direction string, maxDepth int) (lsp.GraphResult, error) {
