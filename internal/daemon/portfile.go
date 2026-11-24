@@ -100,5 +100,13 @@ func ReadPortFile(projectRoot string) (*PortFile, error) {
 
 // RemovePortFile removes the daemon port file.
 func RemovePortFile(projectRoot string) {
-	_ = os.Remove(PortFilePath(projectRoot))
+	path := PortFilePath(projectRoot)
+	// Another daemon may have taken the file over; only remove our own.
+	if data, err := os.ReadFile(path); err == nil {
+		var pf PortFile
+		if json.Unmarshal(data, &pf) == nil && pf.PID != 0 && pf.PID != os.Getpid() {
+			return
+		}
+	}
+	_ = os.Remove(path)
 }

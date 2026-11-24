@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -103,5 +104,29 @@ func TestProcessAlive(t *testing.T) {
 	}
 	if processAlive(cmd.Process.Pid) {
 		t.Errorf("processAlive(%d) = true for an exited process", cmd.Process.Pid)
+	}
+}
+
+func TestRemovePortFileKeepsAnotherDaemonsFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Dir(PortFilePath(root)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	other := []byte(`{"pid":` + strconv.Itoa(os.Getpid()+1) + `,"port":1}`)
+	if err := os.WriteFile(PortFilePath(root), other, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	RemovePortFile(root)
+	if _, err := os.Stat(PortFilePath(root)); err != nil {
+		t.Fatalf("file of another daemon was removed: %v", err)
+	}
+
+	own := []byte(`{"pid":` + strconv.Itoa(os.Getpid()) + `,"port":1}`)
+	if err := os.WriteFile(PortFilePath(root), own, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	RemovePortFile(root)
+	if _, err := os.Stat(PortFilePath(root)); !os.IsNotExist(err) {
+		t.Fatalf("own file was not removed: %v", err)
 	}
 }
