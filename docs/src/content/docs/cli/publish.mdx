@@ -61,7 +61,7 @@ are immutable and there is no unpublish.
 
 An AI agent can publish through the [MCP server](/cli/mcp/#registry) with `registry_publish`
 (same `bump`, `dry_run` and `visibility` inputs, plus `sign_key`, `sign_cert_chain` and
-`sign_keyless` for `--sign`), but only when the server was started with
+`sign_keyless` for `--sign`; key and chain paths must be inside the project), but only when the server was started with
 `--allow-publish`; see the [security notes](/cli/mcp/#security).
 
 ## Examples

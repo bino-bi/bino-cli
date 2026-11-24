@@ -296,11 +296,12 @@ func TestPublishKeylessRefusesPrivatePackage(t *testing.T) {
 	t.Setenv(envSigstoreIDToken, "a-token")
 	kl := attesttest.NewKeyless(t)
 	tokens := kl.InstallSigner(t, "alice@example.com", trustIssuer)
-	for _, visibility := range []string{"private", ""} {
+	// An empty visibility is a registry without signature support.
+	for visibility, want := range map[string]string{"private": "not public", "": "does not accept signed releases"} {
 		srv, capture := fakeSignedPublishServer(t, visibility)
 		newSignedKitProject(t, srv.URL)
 		_, err := execPublish(t, "--bump", "patch", "--sign", "--keyless")
-		if err == nil || !strings.Contains(err.Error(), "not public") {
+		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("visibility %q: err = %v, want a refusal", visibility, err)
 		}
 		if capture.calls != 1 || !capture.manifest.DryRun {
@@ -411,5 +412,47 @@ func TestRegistryPublishPassesSignFlags(t *testing.T) {
 	}
 	if capture.calls != before {
 		t.Errorf("sign_keyless outside CI reached the registry")
+	}
+}
+
+// An unchanged republish mints nothing, so the outcome claims no signer.
+func TestPublishSignedUnchangedClaimsNoSigner(t *testing.T) {
+	isolateSigningEnv(t)
+	srv, _ := fakePublishServer(t, http.StatusOK, func(m registry.PublishManifest) string {
+		d, _, _ := registry.ManifestDigest(m.Files)
+		if m.DryRun {
+			return fmt.Sprintf(`{"dryRun":true,"digest":%q,"version":"1.0.0","visibility":"private","files":[],"warnings":[]}`, d)
+		}
+		return fmt.Sprintf(`{"package":"@acme/kit","version":"1.0.0","digest":%q,"unchanged":true,"files":[],"warnings":[]}`, d)
+	})
+	dir := newSignedKitProject(t, srv.URL)
+	_, key, _ := ed25519.GenerateKey(rand.Reader)
+	writeKeyPEM(t, filepath.Join(dir, "signing.pem"), key)
+
+	stdout, err := execPublish(t, "--bump", "patch", "--json", "--sign", "--key", "signing.pem")
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	var outcome publishOutcome
+	if err := json.Unmarshal([]byte(stdout), &outcome); err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.Unchanged || outcome.Signer != "" || outcome.RootKind != "" {
+		t.Errorf("outcome = %+v, want unchanged with no signer", outcome)
+	}
+}
+
+func TestRegistryPublishRefusesKeyOutsideProject(t *testing.T) {
+	isolateSigningEnv(t)
+	srv, capture := fakeSignedPublishServer(t, "private")
+	cs := newPublishClient(t, srv.URL, nil)
+	for _, path := range []string{"/etc/ssl/private/key.pem", "../key.pem"} {
+		res, _ := callPublish(t, cs, map[string]any{"bump": "patch", "sign_key": path})
+		if !res.IsError || !strings.Contains(toolText(t, res), "inside the project") {
+			t.Errorf("%s: %s", path, toolText(t, res))
+		}
+	}
+	if capture.calls != 0 {
+		t.Errorf("registry contacted %d time(s), want 0", capture.calls)
 	}
 }

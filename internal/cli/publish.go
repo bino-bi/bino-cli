@@ -159,7 +159,7 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 		}
 		p.Out.StepDone("Validated", 0)
 		if signing != nil {
-			if err := checkSignable(signing, res, digest, manifest.Visibility); err != nil {
+			if err := checkSignable(signing, res, digest); err != nil {
 				return err
 			}
 		}
@@ -171,13 +171,13 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 
 	var attestation []byte
 	var signer *registry.ReleaseSigner
+	var dry registry.DryRunResult
 	if signing != nil {
 		p.Out.Step("Signing...")
-		dry, err := client.PublishDryRun(ctx, manifest, uploads)
-		if err != nil {
+		if dry, err = client.PublishDryRun(ctx, manifest, uploads); err != nil {
 			return publishError(p, err)
 		}
-		if err := checkSignable(signing, dry, digest, manifest.Visibility); err != nil {
+		if err := checkSignable(signing, dry, digest); err != nil {
 			return err
 		}
 		if attestation, signer, err = signRelease(ctx, signing, pkg.Name, dry.Version, dry.Digest); err != nil {
@@ -197,7 +197,13 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 		Kinds: res.Kinds, Files: res.Files, Unchanged: res.Unchanged,
 		Warnings: findingLines(res.Warnings),
 	}
-	if signer != nil {
+	switch {
+	case signer == nil:
+	case res.Version != dry.Version || res.Digest != dry.Digest:
+		return ExternalErrorf("the registry published %s@%s (digest %s), but bino signed %s (digest %s)", res.Package, res.Version, res.Digest, dry.Version, dry.Digest)
+	case res.Unchanged:
+		p.Out.Warning(fmt.Sprintf("%s@%s was already published; bino cannot tell whether it carries this signature", res.Package, res.Version))
+	default:
 		outcome.Signer, outcome.RootKind = signer.Signer, signer.RootKind
 	}
 	return emitPublishOutcome(cmd, outcome, opts.jsonOut, p)

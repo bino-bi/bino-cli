@@ -169,7 +169,8 @@ digest of the file manifest.
 bino first runs a dry run to learn the version the registry will mint and its
 digest, checks the digest is the one it computed itself, signs both, and then
 publishes with the signature. If another version is published between the two
-steps, the registry refuses the signature; run `bino publish` again.
+steps, the registry refuses the signature; run `bino publish` again. A
+registry without signature support is refused before anything is signed.
 
 There are three ways to sign:
 

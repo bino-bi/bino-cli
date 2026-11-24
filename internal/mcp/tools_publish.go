@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -21,8 +22,8 @@ type registryPublishInput struct {
 	Visibility string `json:"visibility,omitempty" jsonschema:"visibility for a first publish: public or private (the registry owns it afterwards)"`
 	// The signing options map to `bino publish --sign`.
 	SignKeyless   bool   `json:"sign_keyless,omitempty" jsonschema:"sign keyless through the public Sigstore; only works in CI (GitHub Actions with id-token: write, or SIGSTORE_ID_TOKEN set) and only for public packages"`
-	SignKey       string `json:"sign_key,omitempty" jsonschema:"path of an unencrypted PKCS #8 PEM private key to sign the release with, relative to the project root"`
-	SignCertChain string `json:"sign_cert_chain,omitempty" jsonschema:"with sign_key: path of the PEM certificate chain for that key, leaf first"`
+	SignKey       string `json:"sign_key,omitempty" jsonschema:"path of an unencrypted PKCS #8 PEM private key to sign the release with, inside the project and relative to its root"`
+	SignCertChain string `json:"sign_cert_chain,omitempty" jsonschema:"with sign_key: path of the PEM certificate chain for that key, leaf first, inside the project"`
 }
 
 // publishOutcome mirrors the --json shape of `bino publish` (internal/cli
@@ -90,6 +91,12 @@ func (h *handlers) runPublish(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 	}
 	if in.Visibility != "" {
 		args = append(args, "--visibility", in.Visibility)
+	}
+	for _, f := range []string{in.SignKey, in.SignCertChain} {
+		// The human allowed publishing, not signing with any key on disk.
+		if f != "" && !filepath.IsLocal(f) {
+			return errorResult(fmt.Errorf("sign_key and sign_cert_chain must be paths inside the project, got %q", f)), registryPublishOutput{ExitCode: 1}, nil
+		}
 	}
 	if in.SignKeyless || in.SignKey != "" || in.SignCertChain != "" {
 		args = append(args, "--sign")

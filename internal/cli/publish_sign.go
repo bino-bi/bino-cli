@@ -81,21 +81,19 @@ func newPublishSigning(o signOptions) (*publishSigning, error) {
 }
 
 // checkSignable checks a dry run of the publish about to be signed: the
-// registry must have digested the tree exactly as bino did, and a keyless
-// signature, which goes to the public Sigstore log, needs a public package.
-// declared is the visibility the manifest sends, set only on a first publish.
-func checkSignable(s *publishSigning, res registry.DryRunResult, localDigest, declared string) error {
+// registry must have digested the tree exactly as bino did, and must report
+// the visibility, which registries without signature support do not. A
+// keyless signature, which goes to the public Sigstore log, needs a public
+// package.
+func checkSignable(s *publishSigning, res registry.DryRunResult, localDigest string) error {
 	if res.Digest != localDigest {
 		return ExternalErrorf("the registry digests this package as %s, but bino computed %s; refusing to sign a digest bino cannot check", res.Digest, localDigest)
 	}
-	if !s.keyless {
-		return nil
+	if res.Visibility == "" {
+		return ExternalErrorWithHint(errors.New("this registry does not accept signed releases"),
+			"publish without --sign, or ask the registry operator to upgrade")
 	}
-	vis := res.Visibility
-	if vis == "" {
-		vis = declared
-	}
-	if vis != "public" {
+	if s.keyless && res.Visibility != "public" {
 		return wrapErrorWithHint(ErrorKindConfig,
 			errors.New("--keyless writes the package name and version to the public Sigstore transparency log, and this package is not public"),
 			"sign a private package with --key, or make it public first")
