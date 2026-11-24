@@ -11,7 +11,7 @@ Enhanced YAML editing for Bino Reports report manifests with intelligent autocom
 - **Column Introspection**: When editing `scenarios:`/`variances:` arrays or a `query:`/`prql:` block, suggests real column names from the referenced dataset via DuckDB
 - **Reference Completions**: Smart completions for `signingProfile`, `selectedStyle`, and other cross-document references
 - **Kind Completions**: Suggests all valid document kinds when typing `kind:`
-- **Designer**: A schema-driven property-form editor for Table/Chart/Text/Tree/Grid manifests (**Bino: Open Designer**)
+- **Designer**: A schema-driven property-form editor for Table/Chart/Text/Tree/Grid manifests (**Bino: Open Designer**, or **Reopen Editor With... > Bino Designer** on a YAML file)
 - **DataSource Wizard**: Scaffolds a DataSource + DataSet pair from a file or database connection (**Bino: New DataSource from File/Database…**)
 - **Tree/Table Editor & Rows Preview**: A grid editor for `Tree`-kind manifests, plus a live 100-row data sample for any DataSource/DataSet
 - **PRQL Integration**: When editing `spec.prql` blocks in DataSet manifests, right-click to open a dedicated PRQL editor or SQL preview (requires the [PRQL extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode))

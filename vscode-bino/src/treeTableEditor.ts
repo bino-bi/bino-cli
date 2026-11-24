@@ -3,21 +3,29 @@ import { parseAllDocuments, Document, Scalar, YAMLMap, YAMLSeq, Pair, isScalar, 
 import { WorkspaceIndexer } from './indexer';
 import { SchemaResolver, FieldDef } from './schemaResolver';
 import { AuthoringClient, formatEditDiagnostics, EditResult } from './authoringClient';
-import { getTreeTableHtml, getErrorHtml, getPlaceholderHtml, TreeDocument, TreeNode } from './treeTableHtml';
+import { getNonce } from './webviewNonce';
+import { getTreeTableHtml, renderTreeContent, renderTreeMessage, TreeDocument, TreeNode } from './treeTableHtml';
+
+/** One open Tree editor, bound to one TextDocument. */
+interface TreeSession {
+    document: vscode.TextDocument;
+    panel: vscode.WebviewPanel;
+    debounceTimer?: ReturnType<typeof setTimeout>;
+    suppressForwardSync: boolean;
+}
 
 /**
- * Manages the tree-table editor webview panel.
- * Follows the RowsPreviewManager pattern: single panel, synced to the active text editor.
+ * The tree-table editor as a custom text editor on a YAML file. The webview
+ * page loads once; each change posts the new tree to it. Writes go through the
+ * AuthoringClient as a WorkspaceEdit on the open TextDocument, so undo works.
  */
-export class TreeTableEditorManager {
-    private panel: vscode.WebviewPanel | undefined;
+export class TreeEditorProvider implements vscode.CustomTextEditorProvider {
+    static readonly viewType = 'bino.treeEditor';
+
     private indexer: WorkspaceIndexer;
     private authoring: AuthoringClient;
     private schema: SchemaResolver;
-    private currentEditor: vscode.TextEditor | undefined;
-    private debounceTimer: ReturnType<typeof setTimeout> | undefined;
-    private suppressForwardSync = false;
-    private disposables: vscode.Disposable[] = [];
+    private readonly sessions = new Set<TreeSession>();
 
     constructor(
         indexer: WorkspaceIndexer,
@@ -29,109 +37,45 @@ export class TreeTableEditorManager {
         this.schema.load();
     }
 
-    /** Open or reveal the tree-table editor panel */
-    openPanel(): void {
-        if (this.panel) {
-            this.panel.reveal(vscode.ViewColumn.Beside);
-            this.syncToActiveEditor();
+    /** Open the tree editor for the active YAML text editor, beside it. */
+    async openForActiveEditor(): Promise<void> {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'yaml') {
+            vscode.window.showInformationMessage('Bino: open a Bino YAML file to use the Tree Editor.');
             return;
         }
-
-        this.panel = vscode.window.createWebviewPanel(
-            'binoTreeEditor',
-            'Bino Tree Editor',
-            vscode.ViewColumn.Beside,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-            }
-        );
-
-        // Panel dispose
-        this.panel.onDidDispose(() => {
-            this.panel = undefined;
-            this.currentEditor = undefined;
-            this.disposeListeners();
-        });
-
-        // Handle messages from webview
-        this.panel.webview.onDidReceiveMessage(msg => this.handleMessage(msg));
-
-        // Set up listeners
-        this.setupListeners();
-
-        // Initial sync
-        this.syncToActiveEditor();
+        await vscode.commands.executeCommand('vscode.openWith', editor.document.uri, TreeEditorProvider.viewType, vscode.ViewColumn.Beside);
     }
 
-    /** Set up VS Code event listeners */
-    private setupListeners(): void {
-        // Forward sync: text document changes -> update tree
-        this.disposables.push(
+    resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): void {
+        const session: TreeSession = { document, panel, suppressForwardSync: false };
+        this.sessions.add(session);
+        panel.webview.options = { enableScripts: true };
+        panel.webview.html = getTreeTableHtml(getNonce());
+
+        const listeners = [
+            panel.webview.onDidReceiveMessage(msg => this.handleMessage(session, msg)),
+            // Forward sync: document changes -> update tree, debounced for fast typing.
             vscode.workspace.onDidChangeTextDocument(e => {
-                if (this.suppressForwardSync) { return; }
-                if (this.currentEditor && e.document === this.currentEditor.document) {
-                    this.debouncedSync();
-                }
-            })
-        );
-
-        // Active editor change -> re-parse if bino YAML
-        this.disposables.push(
-            vscode.window.onDidChangeActiveTextEditor(editor => {
-                // Don't react to our own webview getting focus
-                if (!editor) { return; }
-                if (editor.document.uri.scheme === 'output') { return; }
-                this.syncToActiveEditor(editor);
-            })
-        );
+                if (session.suppressForwardSync || e.document.uri.toString() !== document.uri.toString()) { return; }
+                if (session.debounceTimer) { clearTimeout(session.debounceTimer); }
+                session.debounceTimer = setTimeout(() => this.forwardSync(session), 300);
+            }),
+        ];
+        panel.onDidDispose(() => {
+            if (session.debounceTimer) { clearTimeout(session.debounceTimer); }
+            for (const l of listeners) { l.dispose(); }
+            this.sessions.delete(session);
+        });
     }
 
-    private disposeListeners(): void {
-        for (const d of this.disposables) { d.dispose(); }
-        this.disposables = [];
-    }
-
-    /** Debounce forward sync to avoid thrashing on fast typing */
-    private debouncedSync(): void {
-        if (this.debounceTimer) { clearTimeout(this.debounceTimer); }
-        this.debounceTimer = setTimeout(() => {
-            this.forwardSync();
-        }, 300);
-    }
-
-    /** Sync the tree to the current active text editor */
-    private syncToActiveEditor(editor?: vscode.TextEditor): void {
-        const target = editor || vscode.window.activeTextEditor;
-        if (!target || !this.panel) { return; }
-
-        // Check if it's a YAML file
-        if (target.document.languageId !== 'yaml') {
-            if (this.currentEditor?.document.languageId === 'yaml') {
-                // Switched away from a YAML file - show placeholder
-                this.currentEditor = undefined;
-                this.panel.webview.html = getPlaceholderHtml();
-            }
-            return;
-        }
-
-        // Check if it's a bino document
-        const text = target.document.getText();
+    /** Parse the document and post the new tree to the webview */
+    private forwardSync(session: TreeSession): void {
+        const text = session.document.getText();
         if (!text.includes('apiVersion: bino.bi')) {
-            this.currentEditor = undefined;
-            this.panel.webview.html = getPlaceholderHtml();
+            this.postTree(session, renderTreeMessage('This file is not a Bino manifest.', false));
             return;
         }
-
-        this.currentEditor = target;
-        this.forwardSync();
-    }
-
-    /** Parse the current editor and update the webview */
-    private forwardSync(): void {
-        if (!this.panel || !this.currentEditor) { return; }
-
-        const text = this.currentEditor.document.getText();
 
         try {
             const docs = parseYamlDocuments(text);
@@ -151,77 +95,65 @@ export class TreeTableEditorManager {
             // Also add default metadata fields
             metadataFieldsMap.set('_default', this.schema.getMetadataFields());
 
-            const html = getTreeTableHtml(docs, kindFieldsMap, metadataFieldsMap);
-
-            // Use postMessage for incremental updates (faster than replacing entire HTML)
-            // For the initial render, set the full HTML
-            if (!this.panel.webview.html || this.panel.webview.html.includes('empty-state') || this.panel.webview.html.includes('placeholder')) {
-                this.panel.webview.html = html;
-            } else {
-                // Extract just the tree-table content for incremental update
-                const match = html.match(/<div id="tree-table">([\s\S]*)<\/div>\s*<div id="completion-dropdown"/);
-                if (match) {
-                    this.panel.webview.postMessage({ type: 'setTree', html: match[1] });
-                } else {
-                    this.panel.webview.html = html;
-                }
-            }
+            this.postTree(session, renderTreeContent(docs, kindFieldsMap, metadataFieldsMap));
         } catch {
-            this.panel.webview.html = getErrorHtml('Failed to parse YAML. Fix syntax errors and try again.');
+            this.postTree(session, renderTreeMessage('Failed to parse YAML. Fix syntax errors and try again.', true));
         }
+    }
+
+    private postTree(session: TreeSession, html: string): void {
+        // A delayed re-sync after an edit can land after the editor closed.
+        if (!this.sessions.has(session)) { return; }
+        void session.panel.webview.postMessage({ type: 'setTree', html });
     }
 
     /** Handle messages from the webview */
-    private async handleMessage(msg: any): Promise<void> {
+    private async handleMessage(session: TreeSession, msg: any): Promise<void> {
         switch (msg.type) {
+            case 'ready':
+                this.forwardSync(session);
+                break;
             case 'goToLine':
-                await this.handleGoToLine(msg.docIndex, msg.line);
+                await this.handleGoToLine(session, msg.line);
                 break;
             case 'editValue':
-                await this.handleEditValue(msg.docIndex, msg.path, msg.newValue);
+                await this.handleEditValue(session, msg.docIndex, msg.path, msg.newValue);
                 break;
             case 'removeField':
-                await this.handleRemoveField(msg.docIndex, msg.path);
+                await this.handleRemoveField(session, msg.docIndex, msg.path);
                 break;
             case 'addField':
-                await this.handleAddField(msg.docIndex, msg.parentPath, msg.key, msg.fieldType, msg.defaultValue);
+                await this.handleAddField(session, msg.docIndex, msg.parentPath, msg.key, msg.fieldType, msg.defaultValue);
                 break;
             case 'addArrayItem':
-                await this.handleAddArrayItem(msg.docIndex, msg.path, msg.itemIsObject);
+                await this.handleAddArrayItem(session, msg.docIndex, msg.path, msg.itemIsObject);
                 break;
             case 'addTypedArrayItem':
-                await this.handleAddTypedArrayItem(msg.docIndex, msg.path, msg.kindEnum);
+                await this.handleAddTypedArrayItem(session, msg.docIndex, msg.path, msg.kindEnum);
                 break;
             case 'requestCompletions':
-                await this.handleRequestCompletions(msg.docIndex, msg.path, msg.fieldType, msg.currentValue);
+                await this.handleRequestCompletions(session, msg.docIndex, msg.path, msg.fieldType, msg.currentValue);
                 break;
         }
     }
 
-    /** Navigate the text editor to a specific line */
-    private async handleGoToLine(docIndex: number, line: number): Promise<void> {
-        if (!this.currentEditor) { return; }
-
-        // Reveal the text editor (it might be behind the webview)
-        await vscode.window.showTextDocument(this.currentEditor.document, {
-            viewColumn: this.currentEditor.viewColumn,
-            preserveFocus: false,
-        });
-
+    /** Show the document in a text editor (beside the tree) at a line */
+    private async handleGoToLine(session: TreeSession, line: number): Promise<void> {
         const position = new vscode.Position(line, 0);
-        this.currentEditor.selection = new vscode.Selection(position, position);
-        this.currentEditor.revealRange(
-            new vscode.Range(position, position),
-            vscode.TextEditorRevealType.InCenter
-        );
+        const visible = vscode.window.visibleTextEditors.find(e => e.document === session.document);
+        const editor = await vscode.window.showTextDocument(session.document, {
+            viewColumn: visible?.viewColumn ?? vscode.ViewColumn.Beside,
+            preserveFocus: false,
+            selection: new vscode.Range(position, position),
+        });
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
     }
 
     /** Apply a value edit from the webview to the text document */
-    private async handleEditValue(docIndex: number, path: string[], newValue: unknown): Promise<void> {
-        if (!this.currentEditor) { return; }
-        await this.applyAuthoringEdit(
+    private async handleEditValue(session: TreeSession, docIndex: number, path: string[], newValue: unknown): Promise<void> {
+        await this.applyAuthoringEdit(session,
             this.authoring.edit({
-                file: this.currentEditor.document.uri.fsPath,
+                file: session.document.uri.fsPath,
                 position: docIndex + 1,
                 patch: { [path.join('.')]: newValue },
             })
@@ -229,11 +161,10 @@ export class TreeTableEditorManager {
     }
 
     /** Remove a field from the YAML document */
-    private async handleRemoveField(docIndex: number, path: string[]): Promise<void> {
-        if (!this.currentEditor) { return; }
-        await this.applyAuthoringEdit(
+    private async handleRemoveField(session: TreeSession, docIndex: number, path: string[]): Promise<void> {
+        await this.applyAuthoringEdit(session,
             this.authoring.remove({
-                file: this.currentEditor.document.uri.fsPath,
+                file: session.document.uri.fsPath,
                 position: docIndex + 1,
                 paths: [path.join('.')],
             })
@@ -241,15 +172,14 @@ export class TreeTableEditorManager {
     }
 
     /** Add a new field to the YAML document */
-    private async handleAddField(docIndex: number, parentPath: string[], key: string, fieldType: string, providedDefault?: unknown): Promise<void> {
-        if (!this.currentEditor) { return; }
+    private async handleAddField(session: TreeSession, docIndex: number, parentPath: string[], key: string, fieldType: string, providedDefault?: unknown): Promise<void> {
 
         const defaultValue = providedDefault !== undefined && providedDefault !== null ? providedDefault : getDefaultValueForType(fieldType);
         const fullPath = [...parentPath, key];
 
-        await this.applyAuthoringEdit(
+        await this.applyAuthoringEdit(session,
             this.authoring.edit({
-                file: this.currentEditor.document.uri.fsPath,
+                file: session.document.uri.fsPath,
                 position: docIndex + 1,
                 patch: { [fullPath.join('.')]: defaultValue },
             })
@@ -257,13 +187,13 @@ export class TreeTableEditorManager {
     }
 
     /**
-     * Apply an authoring mutation that targets the current editor's open buffer.
+     * Apply an authoring mutation that targets the session's open document.
      * The AuthoringClient merges it via a WorkspaceEdit (firing onDidChange), so
      * we hold the forward-sync guard across the apply and re-sync afterwards.
      * A rejected edit (schema diagnostics) is surfaced and the buffer untouched.
      */
-    private async applyAuthoringEdit(pending: Promise<EditResult>): Promise<void> {
-        this.suppressForwardSync = true;
+    private async applyAuthoringEdit(session: TreeSession, pending: Promise<EditResult>): Promise<void> {
+        session.suppressForwardSync = true;
         try {
             const result = await pending;
             if (!result.ok) {
@@ -273,22 +203,21 @@ export class TreeTableEditorManager {
             // Allow forward sync after a short delay to let the edit settle, then
             // re-sync to pick up any normalization by the engine.
             setTimeout(() => {
-                this.suppressForwardSync = false;
-                this.forwardSync();
+                session.suppressForwardSync = false;
+                this.forwardSync(session);
             }, 100);
         }
     }
 
     /** Add a new item to an array */
-    private async handleAddArrayItem(docIndex: number, path: string[], itemIsObject?: boolean): Promise<void> {
-        if (!this.currentEditor) { return; }
+    private async handleAddArrayItem(session: TreeSession, docIndex: number, path: string[], itemIsObject?: boolean): Promise<void> {
 
         // The Go engine appends to the end of the sequence (creating it if absent),
         // so there is no need to compute the current array length here.
         const itemDefault = itemIsObject ? {} : '';
-        await this.applyAuthoringEdit(
+        await this.applyAuthoringEdit(session,
             this.authoring.append({
-                file: this.currentEditor.document.uri.fsPath,
+                file: session.document.uri.fsPath,
                 position: docIndex + 1,
                 path: path.join('.'),
                 value: itemDefault,
@@ -300,8 +229,7 @@ export class TreeTableEditorManager {
      * Add a typed child to a children array (LayoutPage/LayoutCard/Grid).
      * Shows QuickPick for kind, then for ref vs inline.
      */
-    private async handleAddTypedArrayItem(docIndex: number, path: string[], kindEnum: string[]): Promise<void> {
-        if (!this.currentEditor) { return; }
+    private async handleAddTypedArrayItem(session: TreeSession, docIndex: number, path: string[], kindEnum: string[]): Promise<void> {
 
         // Step 1: Pick a kind
         const kindItems = kindEnum.map(k => ({ label: k }));
@@ -344,9 +272,9 @@ export class TreeTableEditorManager {
 
         // The Go engine appends the child, auto-vivifying the children array if it
         // does not exist yet, so both the create-first and append cases are one op.
-        await this.applyAuthoringEdit(
+        await this.applyAuthoringEdit(session,
             this.authoring.append({
-                file: this.currentEditor.document.uri.fsPath,
+                file: session.document.uri.fsPath,
                 position: docIndex + 1,
                 path: path.join('.'),
                 value: childObj,
@@ -356,13 +284,12 @@ export class TreeTableEditorManager {
 
     /** Handle completion requests from the webview */
     private async handleRequestCompletions(
+        session: TreeSession,
         docIndex: number,
         path: string[],
         fieldType: string,
         currentValue: string
     ): Promise<void> {
-        if (!this.panel) { return; }
-
         let items: string[] = [];
 
         switch (fieldType) {
@@ -387,7 +314,7 @@ export class TreeTableEditorManager {
                 break;
             case 'column': {
                 // Find the dataset reference in the same document
-                const columns = await this.getColumnsForDoc(docIndex);
+                const columns = await this.getColumnsForDoc(session.document, docIndex);
                 items = columns;
                 break;
             }
@@ -399,14 +326,12 @@ export class TreeTableEditorManager {
             items = items.filter(item => item.toLowerCase().includes(lower));
         }
 
-        this.panel.webview.postMessage({ type: 'completions', items });
+        void session.panel.webview.postMessage({ type: 'completions', items });
     }
 
     /** Get column names for the dataset referenced in a document */
-    private async getColumnsForDoc(docIndex: number): Promise<string[]> {
-        if (!this.currentEditor) { return []; }
-
-        const text = this.currentEditor.document.getText();
+    private async getColumnsForDoc(document: vscode.TextDocument, docIndex: number): Promise<string[]> {
+        const text = document.getText();
         const docs = parseYamlDocuments(text);
         const doc = docs[docIndex];
         if (!doc) { return []; }
@@ -426,9 +351,7 @@ export class TreeTableEditorManager {
     }
 
     dispose(): void {
-        this.disposeListeners();
-        if (this.debounceTimer) { clearTimeout(this.debounceTimer); }
-        if (this.panel) { this.panel.dispose(); }
+        for (const session of this.sessions) { session.panel.dispose(); }
     }
 }
 

@@ -1,0 +1,13 @@
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: intro
+spec:
+  value: Hello
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue
+spec:
+  dataset: sales

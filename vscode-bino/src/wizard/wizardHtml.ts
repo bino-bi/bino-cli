@@ -1,11 +1,4 @@
-function getNonce(): string {
-  let text = '';
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  for (let i = 0; i < 32; i++) {
-    text += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return text;
-}
+import { getNonce } from '../webviewNonce';
 
 /** Returns the full HTML for the wizard webview. The webview is self-contained:
  *  it holds the editable state and talks to the host via postMessage. */
@@ -349,7 +342,7 @@ function script(): string {
     let nameCell;
     if (m.custom) {
       nameCell = '<span class="m-namewrap"><input type="text" class="m-name" data-i="' + i + '" value="' + esc(m.target) + '">'
-        + '<button type="button" class="link m-del" data-i="' + i + '" title="Remove column">✕</button></span>';
+        + '<button type="button" class="link m-del" data-i="' + i + '" title="Remove column" aria-label="Remove column">✕</button></span>';
     } else {
       nameCell = esc(m.target) + badge;
     }

@@ -29,6 +29,26 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "bino.designer",
+        "displayName": "Bino Designer",
+        "selector": [
+          { "filenamePattern": "*.yaml" },
+          { "filenamePattern": "*.yml" }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "bino.treeEditor",
+        "displayName": "Bino Tree Editor",
+        "selector": [
+          { "filenamePattern": "*.yaml" },
+          { "filenamePattern": "*.yml" }
+        ],
+        "priority": "option"
+      }
+    ],
     "snippets": [
       {
         "language": "yaml",

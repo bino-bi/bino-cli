@@ -25,70 +25,44 @@ export interface TreeNode {
 }
 
 /**
- * Generate the complete HTML for the tree-table webview.
+ * Generate the tree-table webview page. It loads once; the host then posts
+ * `setTree` messages with the content from renderTreeContent.
  */
-export function getTreeTableHtml(
+export function getTreeTableHtml(nonce: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <title>Tree Editor</title>
+    <style>${getStyles()}</style>
+</head>
+<body>
+    <div id="tree-table"></div>
+    <div id="completion-dropdown" class="completion-dropdown" role="listbox" style="display:none;"></div>
+    <script nonce="${nonce}">${getScript()}</script>
+</body>
+</html>`;
+}
+
+/** Render the tree content for all documents of a file. */
+export function renderTreeContent(
     documents: TreeDocument[],
     kindFieldsMap: Map<string, FieldDef[]>,
     metadataFieldsMap: Map<string, FieldDef[]>
 ): string {
-    const docSections = documents.map(doc => renderDocSection(doc, kindFieldsMap.get(doc.kind), metadataFieldsMap.get(doc.kind || '_default'))).join('\n');
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-    <title>Tree Editor</title>
-    <style>${getStyles()}</style>
-</head>
-<body>
-    <div id="tree-table">
-        ${documents.length === 0
-            ? '<div class="empty-state">No YAML documents found</div>'
-            : docSections}
-    </div>
-    <div id="completion-dropdown" class="completion-dropdown" style="display:none;"></div>
-    <script>${getScript()}</script>
-</body>
-</html>`;
+    if (documents.length === 0) {
+        return renderTreeMessage('No YAML documents found', false);
+    }
+    return documents.map(doc => renderDocSection(doc, kindFieldsMap.get(doc.kind), metadataFieldsMap.get(doc.kind || '_default'))).join('\n');
 }
 
-/** Generate the error-state HTML */
-export function getErrorHtml(message: string): string {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-    <title>Tree Editor</title>
-    <style>${getStyles()}</style>
-</head>
-<body>
-    <div class="error-banner">${escapeHtml(message)}</div>
-    <script>${getScript()}</script>
-</body>
-</html>`;
-}
-
-/** Generate the placeholder HTML for non-YAML editors */
-export function getPlaceholderHtml(): string {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-    <title>Tree Editor</title>
-    <style>${getStyles()}</style>
-</head>
-<body>
-    <div class="empty-state">Open a Bino YAML file to view its structure</div>
-    <script>${getScript()}</script>
-</body>
-</html>`;
+/** Render a status line (empty state or error) in place of the tree. */
+export function renderTreeMessage(message: string, isError: boolean): string {
+    return isError
+        ? `<div class="error-banner" role="alert">${escapeHtml(message)}</div>`
+        : `<div class="empty-state">${escapeHtml(message)}</div>`;
 }
 
 function renderDocSection(doc: TreeDocument, specFields?: FieldDef[], metadataFields?: FieldDef[]): string {
@@ -97,12 +71,12 @@ function renderDocSection(doc: TreeDocument, specFields?: FieldDef[], metadataFi
 
     return `
     <div class="doc-section" data-doc-index="${doc.docIndex}">
-        <div class="doc-header" data-collapsed="false" onclick="toggleDocSection(this)">
-            <span class="disclosure">&#9660;</span>
+        <button type="button" class="doc-header" data-collapsed="false" aria-expanded="true" data-action="toggle-doc">
+            <span class="disclosure" aria-hidden="true">&#9660;</span>
             ${kindBadge}
             ${nameLabel}
             <span class="doc-line">line ${doc.startLine + 1}</span>
-        </div>
+        </button>
         <div class="doc-body">
             <table class="tree-table">
                 <colgroup>
@@ -153,8 +127,8 @@ function renderContainerRow(node: TreeNode, depth: number, docIndex: number, isR
     return `<tr class="tree-row expandable" ${pathAttr} ${docAttr} ${lineAttr}>
         <td class="cell-key">
             <div class="cell-key-inner" style="padding-left: ${indent + 4}px;">
-                <span class="disclosure clickable" onclick="toggleRow(this)">&#9660;</span>
-                <span class="${keyClass}" onclick="goToLine(${docIndex}, ${node.line})">${escapeHtml(node.key)}</span>
+                ${renderToggle(node.key)}
+                ${renderKeyLink(node.key, keyClass)}
             </div>
         </td>
         <td class="cell-type"><span class="type-badge type-${node.type}">${escapeHtml(node.type)}</span></td>
@@ -266,33 +240,32 @@ function renderGhostRow(field: FieldDef, depth: number, docIndex: number, parent
     const fullPath = [...parentPath, field.key];
     const pathAttr = `data-path='${escapeHtml(JSON.stringify(fullPath))}'`;
     const docAttr = `data-doc-index="${docIndex}"`;
-    const escapedPath = escapeHtml(JSON.stringify(JSON.stringify(fullPath)));
 
     const keyClass = field.required ? 'key-name key-required ghost-key' : 'key-name ghost-key';
     const typeBadge = renderTypeBadge(field.type, field);
     const desc = field.description
-        ? `<span class="info-icon" title="${escapeHtml(field.description)}">&#9432;</span>`
+        ? renderInfoIcon(field.description)
         : '';
 
     // Ghost value: type-specific activation controls
     let valueCell: string;
     if (field.type === 'object') {
-        valueCell = `<button class="ghost-btn ghost-btn-map" onclick="activateField(${docIndex}, ${escapedPath}, 'object', null)" title="Create object"><span class="ghost-btn-icon">{&thinsp;}</span> Add</button>`;
+        valueCell = `<button type="button" class="ghost-btn ghost-btn-map" data-action="activate-field" data-field-type="object" title="Create object" aria-label="Add ${escapeHtml(field.key)} object"><span class="ghost-btn-icon" aria-hidden="true">{&thinsp;}</span> Add</button>`;
     } else if (field.type === 'array') {
         const itemKindField = field.children?.find(f => f.key === 'kind' && f.required && f.enumValues);
         if (itemKindField) {
             // Typed array (children) - use kind picker flow
-            const kindEnumJson = escapeHtml(JSON.stringify(JSON.stringify(itemKindField.enumValues)));
-            valueCell = `<button class="ghost-btn ghost-btn-array" onclick="addTypedArrayItem(${docIndex}, ${escapedPath}, ${kindEnumJson})" title="Add child component"><span class="ghost-btn-icon">[&thinsp;]</span> Add</button>`;
+            const kindEnumAttr = escapeHtml(JSON.stringify(itemKindField.enumValues));
+            valueCell = `<button type="button" class="ghost-btn ghost-btn-array" data-action="add-typed" data-kind-enum="${kindEnumAttr}" title="Add child component" aria-label="Add child component to ${escapeHtml(field.key)}"><span class="ghost-btn-icon" aria-hidden="true">[&thinsp;]</span> Add</button>`;
         } else {
             // If items are objects (have children fields), create [{}]; otherwise ['']
             const itemsAreObjects = field.children && field.children.length > 0;
             const arrayDefault = itemsAreObjects ? 'array-object' : 'array';
-            valueCell = `<button class="ghost-btn ghost-btn-array" onclick="activateField(${docIndex}, ${escapedPath}, '${arrayDefault}', null)" title="Create array with first item"><span class="ghost-btn-icon">[&thinsp;]</span> Add</button>`;
+            valueCell = `<button type="button" class="ghost-btn ghost-btn-array" data-action="activate-field" data-field-type="${arrayDefault}" title="Create array with first item" aria-label="Add ${escapeHtml(field.key)} array"><span class="ghost-btn-icon" aria-hidden="true">[&thinsp;]</span> Add</button>`;
         }
     } else {
         const defaultForType = field.enumValues ? field.enumValues[0] : getDefaultPlaceholder(field.type);
-        valueCell = `<span class="ghost-value" onclick="activateField(${docIndex}, ${escapedPath}, '${escapeHtml(field.type)}', ${escapeHtml(JSON.stringify(JSON.stringify(field.enumValues?.[0] ?? null)))})">${escapeHtml(defaultForType)}</span>`;
+        valueCell = `<button type="button" class="ghost-value" data-action="activate-field" data-field-type="${escapeHtml(field.type)}" data-default="${escapeHtml(JSON.stringify(field.enumValues?.[0] ?? null))}" aria-label="Set ${escapeHtml(field.key)}">${escapeHtml(defaultForType)}</button>`;
     }
 
     return `<tr class="tree-row ghost-row" ${pathAttr} ${docAttr} data-line="0">
@@ -329,8 +302,6 @@ function renderNode(
 ): string {
     const hasChildren = node.children && node.children.length > 0;
     const indent = depth * 16;
-    const disclosureClass = hasChildren ? 'disclosure clickable' : 'disclosure leaf';
-    const disclosureChar = hasChildren ? '&#9660;' : '';
     const pathAttr = `data-path='${escapeHtml(JSON.stringify(node.path))}'`;
     const docAttr = `data-doc-index="${docIndex}"`;
     const lineAttr = `data-line="${node.line}"`;
@@ -341,14 +312,14 @@ function renderNode(
 
     // Description info icon
     const desc = fieldDef?.description
-        ? `<span class="info-icon" title="${escapeHtml(fieldDef.description)}">&#9432;</span>`
+        ? renderInfoIcon(fieldDef.description)
         : '';
 
     // Type badge
     const typeBadge = renderTypeBadge(node.type, fieldDef);
 
     // Value cell with clear button
-    const valueCell = renderValueCell(node, docIndex, fieldDef, isRequired);
+    const valueCell = renderValueCell(node, fieldDef, isRequired);
 
     // Inline action buttons in the key cell
     let actionBtns = '';
@@ -356,11 +327,11 @@ function renderNode(
         const itemKindField = fieldDef?.children?.find(f => f.key === 'kind' && f.required && f.enumValues);
         if (itemKindField) {
             // Typed array (children) - use kind picker flow
-            const kindEnumJson = escapeHtml(JSON.stringify(JSON.stringify(itemKindField.enumValues)));
-            actionBtns = `<button class="add-btn" onclick="event.stopPropagation(); addTypedArrayItem(${docIndex}, ${escapeHtml(JSON.stringify(JSON.stringify(node.path)))}, ${kindEnumJson})" title="Add child component">+</button>`;
+            const kindEnumAttr = escapeHtml(JSON.stringify(itemKindField.enumValues));
+            actionBtns = `<button type="button" class="add-btn" data-action="add-typed" data-kind-enum="${kindEnumAttr}" title="Add child component" aria-label="Add child component to ${escapeHtml(node.key)}">+</button>`;
         } else {
             const itemsAreObjects = fieldDef?.children && fieldDef.children.length > 0;
-            actionBtns = `<button class="add-btn" onclick="event.stopPropagation(); addArrayItem(${docIndex}, ${escapeHtml(JSON.stringify(JSON.stringify(node.path)))}, ${!!itemsAreObjects})" title="Add item">+</button>`;
+            actionBtns = `<button type="button" class="add-btn" data-action="add-item" data-item-object="${!!itemsAreObjects}" title="Add item" aria-label="Add item to ${escapeHtml(node.key)}">+</button>`;
         }
     } else if (node.type === 'object' && fieldDef?.children && fieldDef.children.length > 0) {
         // + button to add field to this object (via add-field menu)
@@ -369,19 +340,19 @@ function renderNode(
             .filter(f => !existingKeys.has(f.key))
             .map(f => ({ key: f.key, type: f.type, desc: f.description || '' }));
         if (addable.length > 0) {
-            actionBtns = `<button class="add-btn" onclick="event.stopPropagation(); showAddFieldMenu(this, ${docIndex}, ${escapeHtml(JSON.stringify(JSON.stringify(node.path)))})" data-addable-fields='${escapeHtml(JSON.stringify(addable))}' title="Add field">+</button>`;
+            actionBtns = `<button type="button" class="add-btn" data-action="add-field-menu" data-addable-fields='${escapeHtml(JSON.stringify(addable))}' title="Add field" aria-label="Add field to ${escapeHtml(node.key)}" aria-haspopup="menu">+</button>`;
         }
     }
     if (isArrayItem) {
         // - button to remove this array item
-        actionBtns = `<button class="remove-item-btn" onclick="event.stopPropagation(); removeField(${docIndex}, ${escapeHtml(JSON.stringify(JSON.stringify(node.path)))})" title="Remove item">&minus;</button>`;
+        actionBtns = `<button type="button" class="remove-item-btn" data-action="remove" title="Remove item" aria-label="Remove item ${escapeHtml(node.key)}">&minus;</button>`;
     }
 
     return `<tr class="tree-row${hasChildren ? ' expandable' : ''}${isArrayItem ? ' array-item-row' : ''}" ${pathAttr} ${docAttr} ${lineAttr}>
         <td class="cell-key">
             <div class="cell-key-inner" style="padding-left: ${indent + 4}px;">
-                <span class="${disclosureClass}" onclick="toggleRow(this)">${disclosureChar}</span>
-                <span class="${keyClass}" onclick="goToLine(${docIndex}, ${node.line})">${escapeHtml(node.key)}</span>
+                ${hasChildren ? renderToggle(node.key) : '<span class="disclosure leaf"></span>'}
+                ${renderKeyLink(node.key, keyClass)}
                 ${desc}
                 ${actionBtns}
             </div>
@@ -389,6 +360,20 @@ function renderNode(
         <td class="cell-type">${typeBadge}</td>
         <td class="cell-value">${valueCell}</td>
     </tr>`;
+}
+
+/** The expand/collapse toggle of a row with children. */
+function renderToggle(key: string): string {
+    return `<button type="button" class="disclosure clickable" data-action="toggle-row" aria-expanded="true" aria-label="Collapse ${escapeHtml(key)}">&#9660;</button>`;
+}
+
+/** The key label; activating it shows the line in the text editor. */
+function renderKeyLink(key: string, keyClass: string): string {
+    return `<button type="button" class="${keyClass}" data-action="go-to-line" title="Go to line">${escapeHtml(key)}</button>`;
+}
+
+function renderInfoIcon(description: string): string {
+    return `<span class="info-icon" role="img" tabindex="0" title="${escapeHtml(description)}" aria-label="${escapeHtml(description)}">&#9432;</span>`;
 }
 
 function isTopLevelRequired(key: string): boolean {
@@ -400,15 +385,14 @@ function renderTypeBadge(type: string, fieldDef?: FieldDef): string {
     return `<span class="type-badge type-${displayType}">${escapeHtml(displayType)}</span>`;
 }
 
-function renderValueCell(node: TreeNode, docIndex: number, fieldDef: FieldDef | undefined, isRequired: boolean): string {
-    const pathJson = JSON.stringify(node.path);
-    const escapedPath = escapeHtml(JSON.stringify(pathJson));
+function renderValueCell(node: TreeNode, fieldDef: FieldDef | undefined, isRequired: boolean): string {
+    const label = escapeHtml(node.path.join('.'));
 
     // Clear button - shown for non-required, non-top-level fields that have a value
     const isArrayItem = /^\[\d+\]$/.test(node.key);
     const canClear = !isRequired && !isTopLevelRequired(node.key) && !isArrayItem;
     const clearBtn = canClear
-        ? `<button class="clear-btn" onclick="event.stopPropagation(); removeField(${docIndex}, ${escapedPath})" title="Remove value">&#10005;</button>`
+        ? `<button type="button" class="clear-btn" data-action="remove" title="Remove value" aria-label="Remove ${label}">&#10005;</button>`
         : '';
 
     // Objects and arrays show summary + clear button
@@ -427,13 +411,13 @@ function renderValueCell(node: TreeNode, docIndex: number, fieldDef: FieldDef | 
         const options = fieldDef.enumValues
             .map(v => `<option value="${escapeHtml(v)}"${v === String(node.value) ? ' selected' : ''}>${escapeHtml(v)}</option>`)
             .join('');
-        return `<div class="value-cell-wrap"><select class="value-select" onchange="editValue(${docIndex}, ${escapedPath}, this.value)">${options}</select>${clearBtn}</div>`;
+        return `<div class="value-cell-wrap"><select class="value-select" data-edit aria-label="${label}">${options}</select>${clearBtn}</div>`;
     }
 
     // Boolean fields - checkbox
     if (node.type === 'boolean') {
         const checked = node.value ? ' checked' : '';
-        return `<div class="value-cell-wrap"><label class="value-checkbox"><input type="checkbox"${checked} onchange="editValue(${docIndex}, ${escapedPath}, this.checked)"><span>${node.value ? 'true' : 'false'}</span></label>${clearBtn}</div>`;
+        return `<div class="value-cell-wrap"><label class="value-checkbox"><input type="checkbox"${checked} data-edit aria-label="${label}"><span>${node.value ? 'true' : 'false'}</span></label>${clearBtn}</div>`;
     }
 
     // Null
@@ -449,9 +433,7 @@ function renderValueCell(node: TreeNode, docIndex: number, fieldDef: FieldDef | 
     const completionField = getCompletionFieldType(node, fieldDef);
     const completionAttr = completionField ? ` data-completion-field="${completionField}"` : '';
 
-    return `<div class="value-cell-wrap"><input class="value-input" type="${inputType}" value="${escapeHtml(valueStr)}"${completionAttr}
-        onfocus="onInputFocus(this)" onblur="onInputBlur(this, ${docIndex}, ${escapedPath})"
-        onkeydown="onInputKeydown(event, this, ${docIndex}, ${escapedPath})">${clearBtn}</div>`;
+    return `<div class="value-cell-wrap"><input class="value-input" type="${inputType}" value="${escapeHtml(valueStr)}"${completionAttr} aria-label="${label}">${clearBtn}</div>`;
 }
 
 /** Determine if a field should trigger completion */
@@ -927,6 +909,18 @@ function getStyles(): string {
             opacity: 0.8;
         }
 
+        /* Buttons that replace clickable spans keep the old look. */
+        button { font-family: inherit; font-size: inherit; color: inherit; }
+        button.disclosure, button.key-name, button.ghost-value {
+            border: none;
+            background: none;
+            padding: 0;
+            text-align: left;
+        }
+        button.doc-header { width: 100%; border: none; border-bottom: 1px solid var(--vscode-panel-border); text-align: left; }
+        button.add-field-item { width: 100%; border: none; background: none; text-align: left; }
+        button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; opacity: 1 !important; }
+
         /* Scrollbar styling */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -943,14 +937,23 @@ function getStyles(): string {
 function getScript(): string {
     return `
     const vscode = acquireVsCodeApi();
+    const tree = document.getElementById('tree-table');
     let activeAddMenu = null;
     let activeCompletionDropdown = null;
     let completionSelectedIndex = -1;
+
+    function rowInfo(row) {
+        return {
+            docIndex: parseInt(row.getAttribute('data-doc-index'), 10),
+            path: JSON.parse(row.getAttribute('data-path') || '[]'),
+        };
+    }
 
     // ---- Document section collapse/expand ----
     function toggleDocSection(header) {
         const collapsed = header.getAttribute('data-collapsed') === 'true';
         header.setAttribute('data-collapsed', collapsed ? 'false' : 'true');
+        header.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
     }
 
     // ---- Row expand/collapse ----
@@ -958,6 +961,7 @@ function getScript(): string {
         const row = disclosure.closest('tr');
         if (!row) return;
         const isCollapsed = disclosure.classList.contains('collapsed');
+        const key = (disclosure.getAttribute('aria-label') || '').replace(/^(Expand|Collapse) /, '');
 
         if (isCollapsed) {
             disclosure.classList.remove('collapsed');
@@ -966,6 +970,8 @@ function getScript(): string {
             disclosure.classList.add('collapsed');
             showChildRows(row, false);
         }
+        disclosure.setAttribute('aria-expanded', isCollapsed ? 'true' : 'false');
+        disclosure.setAttribute('aria-label', (isCollapsed ? 'Collapse ' : 'Expand ') + key);
     }
 
     function showChildRows(parentRow, show) {
@@ -999,14 +1005,15 @@ function getScript(): string {
     }
 
     // ---- Click key to go to line ----
-    function goToLine(docIndex, line) {
-        vscode.postMessage({ type: 'goToLine', docIndex, line });
+    function goToLine(row) {
+        const info = rowInfo(row);
+        vscode.postMessage({ type: 'goToLine', docIndex: info.docIndex, line: parseInt(row.getAttribute('data-line'), 10) || 0 });
     }
 
     // ---- Edit value ----
-    function editValue(docIndex, pathJson, newValue) {
-        const path = JSON.parse(pathJson);
-        vscode.postMessage({ type: 'editValue', docIndex, path, newValue });
+    function editValue(row, newValue) {
+        const info = rowInfo(row);
+        vscode.postMessage({ type: 'editValue', docIndex: info.docIndex, path: info.path, newValue });
     }
 
     function onInputFocus(input) {
@@ -1017,19 +1024,19 @@ function getScript(): string {
         }
     }
 
-    function onInputBlur(input, docIndex, pathJson) {
+    function onInputBlur(input) {
+        const row = input.closest('tr');
         setTimeout(() => {
             hideCompletionDropdown();
             if (input.value !== input._originalValue) {
-                const path = JSON.parse(pathJson);
                 let value = input.value;
                 if (input.type === 'number') { value = Number(value); }
-                vscode.postMessage({ type: 'editValue', docIndex, path, newValue: value });
+                editValue(row, value);
             }
         }, 150);
     }
 
-    function onInputKeydown(event, input, docIndex, pathJson) {
+    function onInputKeydown(event, input) {
         if (activeCompletionDropdown) {
             if (event.key === 'ArrowDown') {
                 event.preventDefault();
@@ -1071,10 +1078,8 @@ function getScript(): string {
 
     // ---- Completions ----
     function requestCompletions(input, fieldType) {
-        const row = input.closest('tr');
-        const docIndex = parseInt(row.getAttribute('data-doc-index'));
-        const path = JSON.parse(row.getAttribute('data-path') || '[]');
-        vscode.postMessage({ type: 'requestCompletions', docIndex, path, fieldType, currentValue: input.value });
+        const info = rowInfo(input.closest('tr'));
+        vscode.postMessage({ type: 'requestCompletions', docIndex: info.docIndex, path: info.path, fieldType, currentValue: input.value });
         window._completionInput = input;
     }
 
@@ -1087,7 +1092,7 @@ function getScript(): string {
 
         const dropdown = document.getElementById('completion-dropdown');
         dropdown.innerHTML = items.map((item, i) =>
-            '<div class="completion-item" onmousedown="selectCompletion(this)">' +
+            '<div class="completion-item" role="option">' +
             escapeHtml(item) + '</div>'
         ).join('');
 
@@ -1117,11 +1122,13 @@ function getScript(): string {
 
         if (completionSelectedIndex >= 0) {
             items[completionSelectedIndex].classList.remove('selected');
+            items[completionSelectedIndex].removeAttribute('aria-selected');
         }
         completionSelectedIndex += delta;
         if (completionSelectedIndex < 0) completionSelectedIndex = items.length - 1;
         if (completionSelectedIndex >= items.length) completionSelectedIndex = 0;
         items[completionSelectedIndex].classList.add('selected');
+        items[completionSelectedIndex].setAttribute('aria-selected', 'true');
         items[completionSelectedIndex].scrollIntoView({ block: 'nearest' });
     }
 
@@ -1136,14 +1143,16 @@ function getScript(): string {
     }
 
     // ---- Remove field (clear value) ----
-    function removeField(docIndex, pathJson) {
-        const path = JSON.parse(pathJson);
-        vscode.postMessage({ type: 'removeField', docIndex, path });
+    function removeField(row) {
+        const info = rowInfo(row);
+        vscode.postMessage({ type: 'removeField', docIndex: info.docIndex, path: info.path });
     }
 
     // ---- Activate ghost field (add to YAML) ----
-    function activateField(docIndex, pathJson, fieldType, defaultEnumValue) {
-        const path = JSON.parse(pathJson);
+    function activateField(row, button) {
+        const info = rowInfo(row);
+        const fieldType = button.getAttribute('data-field-type');
+        const defaultEnumValue = JSON.parse(button.getAttribute('data-default') || 'null');
         let value;
         if (defaultEnumValue !== null && defaultEnumValue !== undefined) {
             value = defaultEnumValue;
@@ -1158,26 +1167,26 @@ function getScript(): string {
                 default: value = ''; break;
             }
         }
-        const key = path[path.length - 1];
-        const parentPath = path.slice(0, -1);
-        vscode.postMessage({ type: 'addField', docIndex, parentPath, key, fieldType, defaultValue: value });
+        const key = info.path[info.path.length - 1];
+        const parentPath = info.path.slice(0, -1);
+        vscode.postMessage({ type: 'addField', docIndex: info.docIndex, parentPath, key, fieldType, defaultValue: value });
     }
 
     // ---- Add array item ----
-    function addArrayItem(docIndex, pathJson, itemIsObject) {
-        const path = JSON.parse(pathJson);
-        vscode.postMessage({ type: 'addArrayItem', docIndex, path, itemIsObject: !!itemIsObject });
+    function addArrayItem(row, button) {
+        const info = rowInfo(row);
+        vscode.postMessage({ type: 'addArrayItem', docIndex: info.docIndex, path: info.path, itemIsObject: button.getAttribute('data-item-object') === 'true' });
     }
 
     // ---- Add typed array item (children with kind picker) ----
-    function addTypedArrayItem(docIndex, pathJson, kindEnumJson) {
-        const path = JSON.parse(pathJson);
-        const kindEnum = JSON.parse(kindEnumJson);
-        vscode.postMessage({ type: 'addTypedArrayItem', docIndex, path, kindEnum });
+    function addTypedArrayItem(row, button) {
+        const info = rowInfo(row);
+        const kindEnum = JSON.parse(button.getAttribute('data-kind-enum') || '[]');
+        vscode.postMessage({ type: 'addTypedArrayItem', docIndex: info.docIndex, path: info.path, kindEnum });
     }
 
     // ---- Add field menu ----
-    function showAddFieldMenu(button, docIndex, parentPathJson) {
+    function showAddFieldMenu(button, row) {
         closeAddMenu();
         const addableRaw = button.getAttribute('data-addable-fields');
         if (!addableRaw) return;
@@ -1186,19 +1195,22 @@ function getScript(): string {
         try { fields = JSON.parse(addableRaw); } catch { return; }
         if (!fields || fields.length === 0) return;
 
+        const info = rowInfo(row);
         const menu = document.createElement('div');
         menu.className = 'add-field-menu';
+        menu.setAttribute('role', 'menu');
 
         for (const f of fields) {
-            const item = document.createElement('div');
+            const item = document.createElement('button');
+            item.type = 'button';
             item.className = 'add-field-item';
+            item.setAttribute('role', 'menuitem');
             item.innerHTML = '<span class="field-key">' + escapeHtml(f.key) + '</span>' +
                 (f.desc ? '<span class="field-desc">' + escapeHtml(f.desc.substring(0, 80)) + '</span>' : '');
-            item.onclick = () => {
+            item.addEventListener('click', () => {
                 closeAddMenu();
-                const parentPath = JSON.parse(parentPathJson);
-                vscode.postMessage({ type: 'addField', docIndex, parentPath, key: f.key, fieldType: f.type });
-            };
+                vscode.postMessage({ type: 'addField', docIndex: info.docIndex, parentPath: info.path, key: f.key, fieldType: f.type });
+            });
             menu.appendChild(item);
         }
 
@@ -1207,6 +1219,7 @@ function getScript(): string {
         menu.style.top = (rect.bottom + 2) + 'px';
         document.body.appendChild(menu);
         activeAddMenu = menu;
+        menu.firstChild.focus();
 
         setTimeout(() => {
             document.addEventListener('click', closeAddMenuHandler, { once: true });
@@ -1226,12 +1239,101 @@ function getScript(): string {
         }
     }
 
+    // ---- Event delegation (no inline handlers: the CSP allows only the nonce script) ----
+    tree.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-action]');
+        if (!el || !tree.contains(el)) return;
+        const row = el.closest('tr');
+        switch (el.getAttribute('data-action')) {
+            case 'toggle-doc': toggleDocSection(el); break;
+            case 'toggle-row': toggleRow(el); break;
+            case 'go-to-line': goToLine(row); break;
+            case 'activate-field': activateField(row, el); break;
+            case 'add-typed': addTypedArrayItem(row, el); break;
+            case 'add-item': addArrayItem(row, el); break;
+            case 'add-field-menu': e.stopPropagation(); showAddFieldMenu(el, row); break;
+            case 'remove': removeField(row); break;
+        }
+    });
+    tree.addEventListener('change', (e) => {
+        const el = e.target;
+        if (!el.hasAttribute('data-edit')) return;
+        editValue(el.closest('tr'), el.type === 'checkbox' ? el.checked : el.value);
+    });
+    tree.addEventListener('focusin', (e) => {
+        if (e.target.classList.contains('value-input')) onInputFocus(e.target);
+    });
+    tree.addEventListener('focusout', (e) => {
+        if (e.target.classList.contains('value-input')) onInputBlur(e.target);
+    });
+    tree.addEventListener('keydown', (e) => {
+        if (e.target.classList.contains('value-input')) onInputKeydown(e, e.target);
+    });
+    document.getElementById('completion-dropdown').addEventListener('mousedown', (e) => {
+        const item = e.target.closest('.completion-item');
+        if (item) selectCompletion(item);
+    });
+
+    // ---- Tree updates keep collapse state and focus ----
+    function rowKey(row) {
+        return row.getAttribute('data-doc-index') + '|' + row.getAttribute('data-path');
+    }
+
+    function findRow(key) {
+        for (const row of tree.querySelectorAll('tr.tree-row')) {
+            if (rowKey(row) === key) return row;
+        }
+        return null;
+    }
+
+    function setTree(html) {
+        const collapsedDocs = Array.from(tree.querySelectorAll('.doc-header[data-collapsed="true"]'))
+            .map((h) => h.closest('.doc-section').getAttribute('data-doc-index'));
+        const collapsedRows = Array.from(tree.querySelectorAll('.disclosure.collapsed'))
+            .map((d) => rowKey(d.closest('tr')));
+        const focused = tree.contains(document.activeElement) ? document.activeElement : null;
+        const focusRow = focused && focused.closest('tr');
+        const focus = focusRow ? {
+            row: rowKey(focusRow),
+            selector: focused.classList.contains('value-input') ? '.value-input'
+                : focused.getAttribute('data-action') ? '[data-action="' + focused.getAttribute('data-action') + '"]'
+                : focused.tagName.toLowerCase(),
+            value: focused.classList.contains('value-input') ? focused.value : undefined,
+            original: focused._originalValue,
+        } : null;
+
+        tree.innerHTML = html;
+
+        for (const idx of collapsedDocs) {
+            const header = tree.querySelector('.doc-section[data-doc-index="' + idx + '"] > .doc-header');
+            if (header) toggleDocSection(header);
+        }
+        for (const key of collapsedRows) {
+            const row = findRow(key);
+            const disclosure = row && row.querySelector('.disclosure.clickable');
+            if (disclosure) toggleRow(disclosure);
+        }
+        if (focus) {
+            const row = findRow(focus.row);
+            const el = row && row.querySelector(focus.selector);
+            if (el) {
+                if (focus.value !== undefined) {
+                    el.value = focus.value;
+                    el._originalValue = focus.original;
+                }
+                el.focus();
+                // focusin reset the baseline; keep the user's unsaved typing dirty.
+                if (focus.value !== undefined) el._originalValue = focus.original;
+            }
+        }
+    }
+
     // ---- Message handling from extension ----
     window.addEventListener('message', event => {
         const msg = event.data;
         switch (msg.type) {
             case 'setTree':
-                document.getElementById('tree-table').innerHTML = msg.html;
+                setTree(msg.html);
                 break;
             case 'completions':
                 showCompletions(msg.items);
@@ -1256,5 +1358,7 @@ function getScript(): string {
         div.textContent = str;
         return div.innerHTML;
     }
+
+    vscode.postMessage({ type: 'ready' });
     `;
 }

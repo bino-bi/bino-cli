@@ -74,7 +74,7 @@ function renderRow(edge: Edge): string {
 }
 
 function delBtn(): string {
-    return `<button type="button" class="dw-del" data-dw-role="del-row" title="Remove">×</button>`;
+    return `<button type="button" class="dw-del" data-dw-role="del-row" title="Remove" aria-label="Remove row">×</button>`;
 }
 
 function strOf(v: unknown): string {

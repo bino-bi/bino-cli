@@ -73,7 +73,7 @@ function renderRow(token: string, slots: readonly string[]): string {
         <span class="dw-vs">vs</span>
         <select class="dw-select dw-sm" data-dw-role="compare">${slotOpts(compare)}</select>
         <select class="dw-select dw-sm" data-dw-role="sentiment">${sentOpts}</select>
-        <button type="button" class="dw-del" data-dw-role="del-row" title="Remove">×</button>
+        <button type="button" class="dw-del" data-dw-role="del-row" title="Remove" aria-label="Remove row">×</button>
         <div class="dw-preview" data-dw-role="preview">${esc(meaning)}</div>
     </div>`;
 }

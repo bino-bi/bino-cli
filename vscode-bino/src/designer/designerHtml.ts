@@ -58,27 +58,56 @@ export interface PickDatasetMessage {
     current?: string;
 }
 
-export type ToWebview = SetFormMessage | ColumnsMessage;
-export type ToHost = EditFieldMessage | PickDatasetMessage;
+/** A component document the file holds, identified by kind and name. */
+export interface DesignerDocRef {
+    kind: string;
+    name: string;
+}
 
-/** Build the complete designer webview HTML (CSP mirrors the tree editor). */
-export function getDesignerHtml(): string {
+/** host → webview: the file's component documents and the one shown. */
+export interface SetDocsMessage {
+    type: 'setDocs';
+    docs: DesignerDocRef[];
+    current?: DesignerDocRef;
+}
+
+/** webview → host: the webview script is loaded; carries its saved target. */
+export interface ReadyMessage {
+    type: 'ready';
+    target?: DesignerDocRef;
+}
+
+/** webview → host: the user picked another document of the file. */
+export interface SelectTargetMessage {
+    type: 'selectTarget';
+    target: DesignerDocRef;
+}
+
+export type ToWebview = SetFormMessage | ColumnsMessage | SetDocsMessage;
+export type ToHost = EditFieldMessage | PickDatasetMessage | ReadyMessage | SelectTargetMessage;
+
+/** Build the complete designer webview HTML. Scripts run only with the nonce. */
+export function getDesignerHtml(nonce: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <title>Component Designer</title>
     <style>${getStyles()}</style>
 </head>
 <body>
+    <div id="doc-picker" class="doc-picker" hidden>
+        <label for="doc-select">Document</label>
+        <select id="doc-select" class="designer-select"></select>
+    </div>
     <div id="header" class="header"></div>
     <div id="binding" class="binding"></div>
     <div id="form" class="form">
         <div class="empty-state">Open the designer on an embeddable component.</div>
     </div>
-    <script>${getScript()}</script>
+    <script nonce="${nonce}">${getScript()}</script>
 </body>
 </html>`;
 }
@@ -123,6 +152,15 @@ function getStyles(): string {
             font-weight: 500;
         }
         .doc-name { font-weight: 600; }
+        .doc-picker {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
+        .doc-picker[hidden] { display: none; }
+        .doc-picker select { flex: 1; }
         .binding {
             padding: 8px 14px;
             border-bottom: 1px solid var(--vscode-panel-border);
@@ -163,6 +201,7 @@ function getStyles(): string {
         .field-row:hover { background: var(--vscode-list-hoverBackground); }
         .field-label-wrap { overflow: hidden; }
         .field-label {
+            display: block;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -530,7 +569,7 @@ function getScript(): string {
                     '<span class="dw-vs">vs</span>' +
                     '<select class="dw-select dw-sm" data-dw-role="compare">' + opt(a, slots) + '</select>' +
                     '<select class="dw-select dw-sm" data-dw-role="sentiment">' + opt('pos', sentiments) + '</select>' +
-                    '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove">\\u00d7</button>' +
+                    '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove" aria-label="Remove row">\\u00d7</button>' +
                     '<div class="dw-preview" data-dw-role="preview"></div>';
                 rowsEl.appendChild(row);
                 wireRow(row); refresh(row); emit();
@@ -610,21 +649,21 @@ function getScript(): string {
                         '<select class="dw-select dw-sm" data-dw-role="fn">' + fns.map((f) => '<option value="' + f + '"' + (f === 'set' ? ' selected' : '') + '>' + f + '</option>').join('') + '</select>' +
                         '<input class="dw-input dw-sm" type="text" data-dw-role="arg" list="' + listId + '" placeholder="field or _custom">' +
                         '<datalist id="' + listId + '">' + columns.map((c) => '<option value="' + c + '">').join('') + '</datalist>' +
-                        '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove">\\u00d7</button>';
+                        '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove" aria-label="Remove row">\\u00d7</button>';
                 } else if (field === 'columnthereof') {
                     row.className = 'dw-row dw-row-wrap';
                     row.innerHTML =
                         '<input class="dw-input dw-sm" type="text" data-dw-role="scenario" placeholder="scenario">' +
                         '<input class="dw-input dw-sm" type="text" data-dw-role="name" placeholder="name">' +
                         '<input class="dw-input dw-sm" type="text" data-dw-role="subGroups" placeholder="subGroups (comma-separated)">' +
-                        '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove">\\u00d7</button>';
+                        '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove" aria-label="Remove row">\\u00d7</button>';
                 } else {
                     row.className = 'dw-row dw-row-wrap';
                     const sub = field === 'thereof' ? '<input class="dw-input dw-sm" type="text" data-dw-role="subCategory" placeholder="subCategory">' : '';
                     row.innerHTML =
                         '<input class="dw-input dw-sm" type="text" data-dw-role="rowGroup" placeholder="rowGroup">' +
                         '<input class="dw-input dw-sm" type="text" data-dw-role="category" placeholder="category">' + sub +
-                        '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove">\\u00d7</button>';
+                        '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove" aria-label="Remove row">\\u00d7</button>';
                 }
                 rowsEl.appendChild(row);
                 wireRow(row);
@@ -672,7 +711,7 @@ function getScript(): string {
                     '<input class="dw-input dw-sm" type="text" data-dw-role="to" placeholder="to">' +
                     '<select class="dw-select dw-sm" data-dw-role="operator">' + ops.map((o) => '<option value="' + o + '">' + o + '</option>').join('') + '</select>' +
                     '<input class="dw-input dw-sm" type="text" data-dw-role="label" placeholder="label">' +
-                    '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove">\\u00d7</button>' +
+                    '<button type="button" class="dw-del" data-dw-role="del-row" title="Remove" aria-label="Remove row">\\u00d7</button>' +
                     '</div>' +
                     '<details class="dw-style"><summary>style</summary><div class="dw-style-body">' +
                     '<label class="dw-flabel">color <input class="dw-color" type="color" data-dw-role="style-color" value="#000000"></label>' +
@@ -721,7 +760,7 @@ function getScript(): string {
         }
 
         return '<div class="field-row" data-path="' + pathAttr + '" data-value-type="' + typeAttr + '" ' + indent + '>' +
-            '<div class="field-label-wrap"><div class="' + labelClass + '">' + escapeHtml(r.label) + tag + '</div>' + desc + '</div>' +
+            '<div class="field-label-wrap"><label class="' + labelClass + '">' + escapeHtml(r.label) + tag + '</label>' + desc + '</div>' +
             '<div class="field-control">' + (r.controlHtml || '') + '</div>' +
             '</div>';
     }
@@ -733,9 +772,66 @@ function getScript(): string {
             return;
         }
         form.innerHTML = rows.map((r) => renderRow(r, 0)).join('');
+        linkLabels(form);
         wireControls(form);
         wireWidgets(form);
     }
+
+    // Tie each row label to its control: a plain control via <label for>, a
+    // widget (several controls) as a labelled group.
+    let labelSeq = 0;
+    function linkLabels(form) {
+        form.querySelectorAll('.field-row').forEach((row) => {
+            const label = row.querySelector('.field-label');
+            if (!label) { return; }
+            const n = ++labelSeq;
+            const dw = row.querySelector('.dw');
+            const control = row.querySelector('[data-designer-edit]');
+            if (!dw && control) {
+                control.id = 'fc-' + n;
+                label.htmlFor = control.id;
+                return;
+            }
+            label.id = 'fl-' + n;
+            const group = dw || row.querySelector('.field-control');
+            group.setAttribute('role', 'group');
+            group.setAttribute('aria-labelledby', label.id);
+        });
+        labelBareControls(form);
+    }
+
+    // Widget controls carry only a placeholder; give them an accessible name.
+    function labelBareControls(root) {
+        root.querySelectorAll('input, select, textarea').forEach((c) => {
+            if (c.getAttribute('aria-label') || c.closest('label') || (c.id && root.querySelector('label[for="' + c.id + '"]'))) { return; }
+            const name = c.getAttribute('placeholder') || c.getAttribute('data-dw-role');
+            if (name) { c.setAttribute('aria-label', name); }
+        });
+    }
+    new MutationObserver(() => labelBareControls(document.getElementById('form')))
+        .observe(document.getElementById('form'), { childList: true, subtree: true });
+
+    // Document picker for a file with several components.
+    const docPicker = document.getElementById('doc-picker');
+    const docSelect = document.getElementById('doc-select');
+    let docRefs = [];
+    function renderDocs(docs, current) {
+        docRefs = docs || [];
+        docPicker.hidden = docRefs.length < 2;
+        if (docRefs.length === 0) {
+            document.getElementById('header').innerHTML = '';
+            document.getElementById('binding').innerHTML = '';
+            document.getElementById('form').innerHTML = '<div class="empty-state">This file has no embeddable component.</div>';
+        }
+        docSelect.innerHTML = docRefs.map((d, i) => {
+            const on = current && d.kind === current.kind && d.name === current.name;
+            return '<option value="' + i + '"' + (on ? ' selected' : '') + '>' + escapeHtml(d.kind + ' ' + d.name) + '</option>';
+        }).join('');
+    }
+    docSelect.addEventListener('change', () => {
+        const d = docRefs[Number(docSelect.value)];
+        if (d) { vscode.postMessage({ type: 'selectTarget', target: { kind: d.kind, name: d.name } }); }
+    });
 
     // Push live columns into any column-aware widget that registered a receiver.
     function deliverColumns(msg) {
@@ -749,12 +845,17 @@ function getScript(): string {
         if (!msg) { return; }
         switch (msg.type) {
             case 'setForm':
+                // Saved state lets a restored editor reopen on the same component.
+                vscode.setState({ target: { kind: msg.kind, name: msg.name } });
                 renderHeader(msg.kind, msg.name);
                 renderBinding(msg.bindingHtml);
                 renderForm(msg.rows);
                 break;
             case 'columns':
                 deliverColumns(msg);
+                break;
+            case 'setDocs':
+                renderDocs(msg.docs, msg.current);
                 break;
         }
     });
@@ -776,5 +877,8 @@ function getScript(): string {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
     }
+
+    const saved = vscode.getState();
+    vscode.postMessage({ type: 'ready', target: saved && saved.target });
     `;
 }

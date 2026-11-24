@@ -15,8 +15,8 @@ import { BinoCodeLensProvider } from './codelens';
 import { RowsPreviewManager } from './rowsPreview';
 import { DataSourceWizardManager } from './wizard/wizardPanel';
 import { AddElementCommand } from './addElement';
-import { TreeTableEditorManager } from './treeTableEditor';
-import { DesignerPanel } from './designer/designerPanel';
+import { TreeEditorProvider } from './treeTableEditor';
+import { DesignerEditorProvider } from './designer/designerPanel';
 import { PreviewTreeProvider } from './previewTree';
 import { EnvironmentTreeProvider } from './environmentTree';
 import { DependenciesTreeProvider } from './dependenciesTree';
@@ -29,8 +29,8 @@ let validator: BinoValidator | undefined;
 let previewManager: BinoPreviewManager | undefined;
 let rowsPreviewManager: RowsPreviewManager | undefined;
 let wizardManager: DataSourceWizardManager | undefined;
-let treeTableEditorManager: TreeTableEditorManager | undefined;
-let designerPanel: DesignerPanel | undefined;
+let treeTableEditorManager: TreeEditorProvider | undefined;
+let designerPanel: DesignerEditorProvider | undefined;
 let indexerStatusBarItem: vscode.StatusBarItem | undefined;
 let validationStatusBarItem: vscode.StatusBarItem | undefined;
 let daemonClient: DaemonClient | undefined;
@@ -330,12 +330,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push({ dispose: () => wizardManager?.dispose() });
 
     // Initialize tree-table editor manager
-    treeTableEditorManager = new TreeTableEditorManager(indexer, context.extensionPath);
-    context.subscriptions.push({ dispose: () => treeTableEditorManager?.dispose() });
+    treeTableEditorManager = new TreeEditorProvider(indexer, context.extensionPath);
+    context.subscriptions.push(
+        { dispose: () => treeTableEditorManager?.dispose() },
+        vscode.window.registerCustomEditorProvider(TreeEditorProvider.viewType, treeTableEditorManager, {
+            webviewOptions: { retainContextWhenHidden: true },
+        })
+    );
 
     // Initialize the component designer (schema-driven form + live canvas)
-    designerPanel = new DesignerPanel(indexer, previewManager, context.extensionPath);
-    context.subscriptions.push({ dispose: () => designerPanel?.dispose() });
+    designerPanel = new DesignerEditorProvider(indexer, previewManager, context.extensionPath);
+    context.subscriptions.push(
+        { dispose: () => designerPanel?.dispose() },
+        vscode.window.registerCustomEditorProvider(DesignerEditorProvider.viewType, designerPanel, {
+            webviewOptions: { retainContextWhenHidden: true },
+        })
+    );
 
     // Register PRQL features (editor, SQL preview integration)
     registerPrqlFeatures(context);
@@ -608,8 +618,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Tree-table editor command
     context.subscriptions.push(
-        vscode.commands.registerCommand('bino.openTreeEditor', () => {
-            treeTableEditorManager?.openPanel();
+        vscode.commands.registerCommand('bino.openTreeEditor', async () => {
+            await treeTableEditorManager?.openForActiveEditor();
         })
     );
 

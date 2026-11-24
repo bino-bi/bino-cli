@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import { parseAllDocuments, isMap, isScalar, Scalar, YAMLMap } from 'yaml';
+import { parseAllDocuments, isMap, isScalar, Document, Scalar, YAMLMap } from 'yaml';
 import { WorkspaceIndexer, LSPDocument } from '../indexer';
 import { SchemaResolver, FieldDef } from '../schemaResolver';
 import { AuthoringClient, formatEditDiagnostics, EditResult } from '../authoringClient';
 import { BinoPreviewManager } from '../preview';
 import { isEmbeddableKind, getEmbeddableKinds } from '../embeddable';
+import { getNonce } from '../webviewNonce';
 import { WidgetRegistry, WidgetContext, Binding, StandardColumn } from './widgets/registry';
 import { enumSelectWidget } from './widgets/enumSelect';
 import { scenarioWidget } from './widgets/scenario';
@@ -13,35 +13,44 @@ import { varianceWidget } from './widgets/variance';
 import { stackWidget } from './widgets/stack';
 import { aggregateWidget } from './widgets/aggregate';
 import { edgesWidget } from './widgets/edges';
-import { getDesignerHtml, FormRow } from './designerHtml';
+import { getDesignerHtml, FormRow, DesignerDocRef } from './designerHtml';
 
-/** The component currently shown in the designer. */
-interface DesignerTarget {
-    file: string;
+/** An embeddable component document found in a YAML file. */
+export interface ComponentDoc extends DesignerDocRef {
     /** 1-based document ordinal within the file. */
-    docIndex: number;
-    kind: string;
-    name: string;
+    position: number;
+    /** Offset of the document start in the file text. */
+    start: number;
+    doc: Document;
+}
+
+/** One open Designer editor, bound to one TextDocument. */
+interface DesignerSession {
+    document: vscode.TextDocument;
+    panel: vscode.WebviewPanel;
+    /** The shown component. Tracked by kind and name, since positions shift. */
+    target?: DesignerDocRef;
+    binding?: Binding;
+    refreshTimer?: ReturnType<typeof setTimeout>;
+    suppressForwardSync: boolean;
 }
 
 /**
- * The component designer: a schema-driven property panel for one embeddable
- * manifest with a live canvas. It generalizes the tree-table editor's webview
- * infra (singleton panel, lifecycle/guards, message plumbing) but renders a form
- * - generic controls per `FieldDef`, with custom widgets resolved through the
- * widget registry - instead of a raw property grid. Edits write through the
- * brief-01 AuthoringClient and the canvas re-renders on the next SSE tick.
+ * The component designer: a schema-driven property form for one embeddable
+ * manifest, as a custom text editor on the YAML file. VS Code restores it after
+ * a reload, and every write goes through the AuthoringClient as a WorkspaceEdit
+ * on the open TextDocument, so undo works on the document. A file with several
+ * components shows a picker; custom widgets resolve through the widget registry.
  */
-export class DesignerPanel {
-    private panel: vscode.WebviewPanel | undefined;
+export class DesignerEditorProvider implements vscode.CustomTextEditorProvider {
+    static readonly viewType = 'bino.designer';
+
     private readonly schema: SchemaResolver;
     private readonly authoring: AuthoringClient;
     private readonly registry = new WidgetRegistry();
-    private target: DesignerTarget | undefined;
-    private binding: Binding | undefined;
-    private disposables: vscode.Disposable[] = [];
-    private refreshTimer: ReturnType<typeof setTimeout> | undefined;
-    private suppressForwardSync = false;
+    private readonly sessions = new Set<DesignerSession>();
+    /** Component to show when the editor for a URI opens (set by `open`). */
+    private readonly pendingTargets = new Map<string, DesignerDocRef>();
 
     constructor(
         private readonly indexer: WorkspaceIndexer,
@@ -62,11 +71,11 @@ export class DesignerPanel {
     }
 
     /**
-     * Open or reveal the designer for an embeddable. With no target, resolves the
-     * artefact at the active editor's cursor, else prompts. Non-embeddable kinds
-     * are rejected.
+     * Open the designer for an embeddable. With no target, resolves the
+     * component at the active editor's cursor, else prompts. Non-embeddable
+     * kinds are rejected.
      */
-    async open(target?: LSPDocument): Promise<void> {
+    async open(target?: Pick<LSPDocument, 'file' | 'kind' | 'name'>): Promise<void> {
         const doc = target ?? this.resolveActiveEmbeddable() ?? (await this.pickEmbeddable());
         if (!doc) {
             return; // user cancelled / nothing embeddable
@@ -75,106 +84,96 @@ export class DesignerPanel {
             vscode.window.showInformationMessage(`Bino: ${doc.kind} is not an embeddable component.`);
             return;
         }
-
-        this.ensurePanel();
-        await this.bindTarget(doc);
+        const uri = vscode.Uri.file(doc.file);
+        const ref = { kind: doc.kind, name: doc.name };
+        const session = [...this.sessions].find(s => s.document.uri.toString() === uri.toString());
+        if (session) {
+            await this.bindTarget(session, ref);
+            session.panel.reveal();
+            return;
+        }
+        this.pendingTargets.set(uri.toString(), ref);
         // The embedded preview is its own panel with its own CodeLens; the
         // designer intentionally does NOT open it here (it only refreshes an
         // already-open preview after an edit - see reloadCanvas).
-        this.panel!.reveal(vscode.ViewColumn.Beside);
+        await vscode.commands.executeCommand('vscode.openWith', uri, DesignerEditorProvider.viewType, vscode.ViewColumn.Beside);
     }
 
-    /** Create the singleton webview panel and wire its lifecycle. */
-    private ensurePanel(): void {
-        if (this.panel) {
-            return;
-        }
-        this.panel = vscode.window.createWebviewPanel(
-            'binoDesigner',
-            'Bino Designer',
-            vscode.ViewColumn.Beside,
-            { enableScripts: true, retainContextWhenHidden: true }
-        );
-        this.panel.webview.html = getDesignerHtml();
-        this.panel.webview.onDidReceiveMessage(msg => this.handleMessage(msg));
-        this.panel.onDidDispose(() => {
-            this.panel = undefined;
-            this.target = undefined;
-            this.binding = undefined;
-            this.disposeListeners();
-        });
-        this.setupListeners();
-    }
+    resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): void {
+        const session: DesignerSession = { document, panel, suppressForwardSync: false };
+        this.sessions.add(session);
+        panel.webview.options = { enableScripts: true };
+        panel.webview.html = getDesignerHtml(getNonce());
 
-    /** Re-render the form when the bound file changes on disk/in the buffer. */
-    private setupListeners(): void {
-        this.disposables.push(
+        const listeners = [
+            panel.webview.onDidReceiveMessage(msg => this.handleMessage(session, msg)),
+            // Re-render when the document changes, except for our own edits.
             vscode.workspace.onDidChangeTextDocument(e => {
-                if (this.suppressForwardSync) { return; }
-                if (this.target && e.document.uri.fsPath === this.target.file) {
-                    this.debouncedRenderForm();
-                }
-            })
-        );
+                if (session.suppressForwardSync || e.document.uri.toString() !== document.uri.toString()) { return; }
+                if (session.refreshTimer) { clearTimeout(session.refreshTimer); }
+                session.refreshTimer = setTimeout(() => { void this.bindTarget(session, session.target); }, 300);
+            }),
+        ];
+        panel.onDidDispose(() => {
+            if (session.refreshTimer) { clearTimeout(session.refreshTimer); }
+            for (const l of listeners) { l.dispose(); }
+            this.sessions.delete(session);
+        });
     }
 
-    /** Debounce form re-renders so direct typing in the YAML doesn't thrash. */
-    private debouncedRenderForm(): void {
-        if (this.refreshTimer) { clearTimeout(this.refreshTimer); }
-        this.refreshTimer = setTimeout(() => { void this.renderForm(); }, 300);
-    }
-
-    private disposeListeners(): void {
-        for (const d of this.disposables) { d.dispose(); }
-        this.disposables = [];
-    }
-
-    /** Switch the designer to a component and (re)derive its binding. */
-    private async bindTarget(doc: LSPDocument): Promise<void> {
-        this.target = { file: doc.file, docIndex: doc.position, kind: doc.kind, name: doc.name };
-        this.binding = undefined;
-        const dataset = this.readDataset();
-        if (dataset) {
-            await this.refreshBinding(dataset);
+    /**
+     * Point the session at a component by kind and name, falling back to the
+     * file's first component, and render it.
+     */
+    private async bindTarget(s: DesignerSession, wanted?: DesignerDocRef): Promise<void> {
+        const docs = componentDocs(s.document.getText());
+        const chosen = (wanted && docs.find(d => d.kind === wanted.kind && d.name === wanted.name)) ?? docs[0];
+        s.target = chosen ? { kind: chosen.kind, name: chosen.name } : undefined;
+        void s.panel.webview.postMessage({
+            type: 'setDocs',
+            docs: docs.map(d => ({ kind: d.kind, name: d.name })),
+            current: s.target,
+        });
+        const dataset = this.readDataset(s);
+        if (dataset !== s.binding?.dataset) {
+            await this.refreshBinding(s, dataset);
         }
-        await this.renderForm();
-        if (this.panel?.title !== undefined) {
-            this.panel.title = `Designer: ${doc.name}`;
-        }
+        await this.renderForm(s);
     }
 
     /** Build the form rows from the live schema and push them to the webview. */
-    private async renderForm(): Promise<void> {
-        if (!this.panel || !this.target) { return; }
-        const { kind, name } = this.target;
+    private async renderForm(s: DesignerSession): Promise<void> {
+        if (!s.target) { return; }
+        const { kind, name } = s.target;
         const fields = this.schema.getFieldsForKind(kind);
-        const spec = this.readSpecMap();
+        const spec = this.readSpecMap(s);
         // Plain-JSON view of the spec so a widget can read a sibling field
         // (e.g. variance constrains its slots to spec.scenarios).
         const specJson = (spec ? toJSON(spec) : undefined) as Record<string, unknown> | undefined;
+        const hasDataset = this.kindHasDataset(kind);
 
         const rows: FormRow[] = [];
         for (const field of fields) {
             // The dataset field is surfaced by the dedicated binding control.
-            if (field.key === 'dataset' && this.kindHasDataset()) { continue; }
-            rows.push(this.buildRow(kind, field, spec, specJson));
+            if (field.key === 'dataset' && hasDataset) { continue; }
+            rows.push(this.buildRow(kind, field, spec, s.binding, specJson));
         }
 
-        this.panel.webview.postMessage({
+        void s.panel.webview.postMessage({
             type: 'setForm',
             kind,
             name,
-            bindingHtml: this.kindHasDataset() ? this.renderBindingControl() : '',
+            bindingHtml: hasDataset ? this.renderBindingControl(s.binding) : '',
             rows,
         });
 
         // Hand columns to any column-aware widget after the form mounts.
-        if (this.binding) {
-            this.panel.webview.postMessage({
+        if (s.binding) {
+            void s.panel.webview.postMessage({
                 type: 'columns',
-                dataset: this.binding.dataset,
-                columns: this.binding.columns,
-                standardColumns: this.binding.standardColumns,
+                dataset: s.binding.dataset,
+                columns: s.binding.columns,
+                standardColumns: s.binding.standardColumns,
             });
         }
     }
@@ -183,7 +182,7 @@ export class DesignerPanel {
      * Render one field: a registry widget if matched, a collapsible group for a
      * nested object (recursing into its scalar children), else a generic control.
      */
-    private buildRow(kind: string, field: FieldDef, spec: YAMLMap | undefined, specJson?: Record<string, unknown>): FormRow {
+    private buildRow(kind: string, field: FieldDef, spec: YAMLMap | undefined, binding: Binding | undefined, specJson?: Record<string, unknown>): FormRow {
         const value = valueAt(spec, field.path);
         const base = {
             // FieldDef.path is spec-relative (resolver roots at the spec def), so
@@ -201,7 +200,7 @@ export class DesignerPanel {
             const ctx: WidgetContext = {
                 field,
                 value,
-                binding: this.binding,
+                binding,
                 spec: specJson,
                 // onChange is realized by the webview posting editField for the
                 // control; the host need not be called directly here.
@@ -216,7 +215,7 @@ export class DesignerPanel {
             return {
                 ...base,
                 controlHtml: count > 0 ? `{${count}}` : '(empty)',
-                children: field.children.map(child => this.buildRow(kind, child, spec, specJson)),
+                children: field.children.map(child => this.buildRow(kind, child, spec, binding, specJson)),
             };
         }
 
@@ -246,8 +245,8 @@ export class DesignerPanel {
     }
 
     /** The data-binding control: shows the bound dataset and a re-bind action. */
-    private renderBindingControl(): string {
-        const ds = this.binding?.dataset;
+    private renderBindingControl(binding: Binding | undefined): string {
+        const ds = binding?.dataset;
         const value = ds
             ? `<span class="binding-value">${escapeHtml(ds)}</span>`
             : `<span class="binding-empty">none</span>`;
@@ -260,57 +259,72 @@ export class DesignerPanel {
     }
 
     /** Handle messages from the webview. */
-    private async handleMessage(msg: { type?: string;[k: string]: unknown }): Promise<void> {
+    private async handleMessage(s: DesignerSession, msg: { type?: string;[k: string]: unknown }): Promise<void> {
         switch (msg.type) {
+            case 'ready': {
+                // The webview (re)loaded: show the requested component, else the
+                // one it showed before a reload, else the file's first.
+                const key = s.document.uri.toString();
+                const wanted = this.pendingTargets.get(key) ?? (msg.target as DesignerDocRef | undefined);
+                this.pendingTargets.delete(key);
+                s.binding = undefined;
+                await this.bindTarget(s, wanted);
+                break;
+            }
+            case 'selectTarget':
+                await this.bindTarget(s, msg.target as DesignerDocRef);
+                break;
             case 'editField':
                 if (msg.remove === true) {
-                    await this.handleRemoveField(msg.path as string[]);
+                    await this.handleRemoveField(s, msg.path as string[]);
                 } else {
-                    await this.handleEditField(msg.path as string[], msg.value);
+                    await this.handleEditField(s, msg.path as string[], msg.value);
                 }
                 break;
             case 'pickDataset':
-                await this.handlePickDataset();
+                await this.handlePickDataset(s);
                 break;
         }
     }
 
     /** Apply a field edit through the AuthoringClient, then reload the canvas. */
-    private async handleEditField(path: string[], value: unknown): Promise<void> {
-        if (!this.target || !Array.isArray(path) || path.length === 0) { return; }
-        const ok = await this.applyEdit(
+    private async handleEditField(s: DesignerSession, path: string[], value: unknown): Promise<void> {
+        const position = this.findTarget(s)?.position;
+        if (position === undefined || !Array.isArray(path) || path.length === 0) { return; }
+        const ok = await this.applyEdit(s,
             this.authoring.edit({
-                file: this.target.file,
-                position: this.target.docIndex,
+                file: s.document.uri.fsPath,
+                position,
                 patch: { [path.join('.')]: value },
             })
         );
         if (ok) {
             // If the dataset changed, refresh column-dependent widgets.
             if (path.length === 2 && path[0] === 'spec' && path[1] === 'dataset') {
-                await this.refreshBinding(String(value));
-                await this.renderForm();
+                await this.refreshBinding(s, String(value));
+                await this.renderForm(s);
             }
-            this.reloadCanvas();
+            this.reloadCanvas(s);
         }
     }
 
     /** Delete a field's key (an emptied control), then reload the canvas. */
-    private async handleRemoveField(path: string[]): Promise<void> {
-        if (!this.target || !Array.isArray(path) || path.length === 0) { return; }
-        const ok = await this.applyEdit(
+    private async handleRemoveField(s: DesignerSession, path: string[]): Promise<void> {
+        const position = this.findTarget(s)?.position;
+        if (position === undefined || !Array.isArray(path) || path.length === 0) { return; }
+        const ok = await this.applyEdit(s,
             this.authoring.remove({
-                file: this.target.file,
-                position: this.target.docIndex,
+                file: s.document.uri.fsPath,
+                position,
                 paths: [path.join('.')],
             })
         );
-        if (ok) { this.reloadCanvas(); }
+        if (ok) { this.reloadCanvas(s); }
     }
 
     /** Prompt for a dataset and bind it (writes spec.dataset, refreshes columns). */
-    private async handlePickDataset(): Promise<void> {
-        if (!this.target) { return; }
+    private async handlePickDataset(s: DesignerSession): Promise<void> {
+        if (!s.target) { return; }
         const items = this.indexer.getDatasetCompletions().map(name => ({ label: name }));
         if (items.length === 0) {
             vscode.window.showInformationMessage('Bino: no datasets or datasources in the workspace.');
@@ -321,19 +335,20 @@ export class DesignerPanel {
             title: 'Bino Designer: Data Binding',
         });
         if (!picked) { return; }
-        await this.handleEditField(['spec', 'dataset'], picked.label);
+        await this.handleEditField(s, ['spec', 'dataset'], picked.label);
     }
 
     /**
      * Apply an authoring mutation and surface a rejection. Returns true on
      * success so the caller can reload the canvas only on a real write.
-     * The AuthoringClient merges it via a WorkspaceEdit (firing onDidChange), so
-     * we hold the forward-sync guard across the apply to keep the designer's own
+     * The custom editor keeps the TextDocument open, so the AuthoringClient
+     * merges the edit as a WorkspaceEdit (one undo step, firing onDidChange).
+     * We hold the forward-sync guard across the apply to keep the designer's own
      * edits from re-rendering the form (and stealing focus); external edits still
      * refresh. The guard clears after a short delay to let the edit settle.
      */
-    private async applyEdit(pending: Promise<EditResult>): Promise<boolean> {
-        this.suppressForwardSync = true;
+    private async applyEdit(s: DesignerSession, pending: Promise<EditResult>): Promise<boolean> {
+        s.suppressForwardSync = true;
         try {
             const result = await pending;
             if (!result.ok) {
@@ -342,7 +357,7 @@ export class DesignerPanel {
             }
             return true;
         } finally {
-            setTimeout(() => { this.suppressForwardSync = false; }, 100);
+            setTimeout(() => { s.suppressForwardSync = false; }, 100);
         }
     }
 
@@ -350,94 +365,73 @@ export class DesignerPanel {
      * Ask the embedded preview to re-show the current component. The canvas also
      * auto-reloads on the SSE refresh tick; this keeps it pinned to our target.
      */
-    private reloadCanvas(): void {
+    private reloadCanvas(s: DesignerSession): void {
         // Never open the preview from the designer; only refresh it if the user
         // already opened the embedded preview separately (its own CodeLens).
-        if (!this.target || !this.preview.isEmbeddedPreviewOpen()) { return; }
+        const target = this.findTarget(s);
+        if (!target || !this.preview.isEmbeddedPreviewOpen()) { return; }
         void this.preview.previewArtefactEmbedded({
-            kind: this.target.kind,
-            name: this.target.name,
-            file: this.target.file,
-            position: this.target.docIndex,
+            kind: target.kind,
+            name: target.name,
+            file: s.document.uri.fsPath,
+            position: target.position,
         });
     }
 
     /** Fetch live columns + the canonical standard columns for the binding. */
-    private async refreshBinding(dataset: string): Promise<void> {
-        if (!dataset) { this.binding = undefined; return; }
+    private async refreshBinding(s: DesignerSession, dataset: string | undefined): Promise<void> {
+        if (!dataset) { s.binding = undefined; return; }
         const [columns, standard] = await Promise.all([
             this.indexer.getColumns(dataset),
             this.indexer.datasetSchema(),
         ]);
-        this.binding = {
+        s.binding = {
             dataset,
             columns,
             standardColumns: standard as StandardColumn[],
         };
     }
 
-    /** True when the bound kind exposes a `spec.dataset` field. */
-    private kindHasDataset(): boolean {
-        if (!this.target) { return false; }
-        return this.schema.getFieldsForKind(this.target.kind).some(f => f.key === 'dataset');
+    /** True when the kind exposes a `spec.dataset` field. */
+    private kindHasDataset(kind: string): boolean {
+        return this.schema.getFieldsForKind(kind).some(f => f.key === 'dataset');
     }
 
     /** Read the current `spec.dataset` value from the bound document, if any. */
-    private readDataset(): string | undefined {
-        const spec = this.readSpecMap();
+    private readDataset(s: DesignerSession): string | undefined {
+        const spec = this.readSpecMap(s);
         if (!spec) { return undefined; }
         const ds = spec.get('dataset');
         return typeof ds === 'string' && ds ? ds : undefined;
     }
 
+    /** The shown component's document in the current text, found by kind and name. */
+    private findTarget(s: DesignerSession): ComponentDoc | undefined {
+        const target = s.target;
+        if (!target) { return undefined; }
+        return componentDocs(s.document.getText()).find(d => d.kind === target.kind && d.name === target.name);
+    }
+
     /** Resolve the bound document's `spec` mapping from a read-only YAML parse. */
-    private readSpecMap(): YAMLMap | undefined {
-        if (!this.target) { return undefined; }
-        const text = this.currentText(this.target.file);
-        if (text === undefined) { return undefined; }
-        let docs;
-        try {
-            docs = parseAllDocuments(text);
-        } catch {
-            return undefined;
-        }
-        const doc = docs[this.target.docIndex - 1];
-        if (!doc || !isMap(doc.contents)) { return undefined; }
-        const spec = (doc.contents as YAMLMap).get('spec');
+    private readSpecMap(s: DesignerSession): YAMLMap | undefined {
+        const contents = this.findTarget(s)?.doc.contents;
+        if (!isMap(contents)) { return undefined; }
+        const spec = (contents as YAMLMap).get('spec');
         return isMap(spec) ? (spec as YAMLMap) : undefined;
     }
 
-    /** The live buffer text if the file is open, else its on-disk text. */
-    private currentText(file: string): string | undefined {
-        const open = vscode.workspace.textDocuments.find(d => d.uri.fsPath === file);
-        if (open) { return open.getText(); }
-        try {
-            return fs.readFileSync(file, 'utf8');
-        } catch {
-            return undefined;
-        }
-    }
-
     /** Resolve the embeddable at the active editor's cursor (closest doc start). */
-    private resolveActiveEmbeddable(): LSPDocument | undefined {
+    private resolveActiveEmbeddable(): Pick<LSPDocument, 'file' | 'kind' | 'name'> | undefined {
         const editor = vscode.window.activeTextEditor;
         if (!editor) { return undefined; }
-        const filePath = editor.document.uri.fsPath.replace(/\\/g, '/');
-        const cursorLine = editor.selection.active.line;
-        const candidates = this.indexer
-            .getDocuments(getEmbeddableKinds())
-            .filter(d => d.file.replace(/\\/g, '/') === filePath);
-        if (candidates.length === 0) { return undefined; }
-
-        const text = editor.document.getText();
-        const withLines = candidates.map(d => ({ d, startLine: documentStartLine(text, d.position) }));
-        let chosen = withLines[0];
-        for (const c of withLines) {
-            if (c.startLine <= cursorLine && c.startLine >= chosen.startLine) {
-                chosen = c;
-            }
+        const cursor = editor.document.offsetAt(editor.selection.active);
+        const docs = componentDocs(editor.document.getText());
+        if (docs.length === 0) { return undefined; }
+        let chosen = docs[0];
+        for (const d of docs) {
+            if (d.start <= cursor) { chosen = d; }
         }
-        return chosen.d;
+        return { file: editor.document.uri.fsPath, kind: chosen.kind, name: chosen.name };
     }
 
     /** Prompt the user to choose an embeddable component. */
@@ -456,10 +450,30 @@ export class DesignerPanel {
     }
 
     dispose(): void {
-        if (this.refreshTimer) { clearTimeout(this.refreshTimer); }
-        this.disposeListeners();
-        this.panel?.dispose();
+        for (const s of this.sessions) { s.panel.dispose(); }
     }
+}
+
+/** The embeddable component documents of a YAML file, in file order. */
+export function componentDocs(text: string): ComponentDoc[] {
+    let parsed: Document[];
+    try {
+        parsed = parseAllDocuments(text) as Document[];
+    } catch {
+        return [];
+    }
+    const out: ComponentDoc[] = [];
+    parsed.forEach((doc, i) => {
+        if (!isMap(doc.contents)) { return; }
+        const contents = doc.contents as YAMLMap;
+        const kind = contents.get('kind');
+        const metadata = contents.get('metadata');
+        const name = isMap(metadata) ? (metadata as YAMLMap).get('name') : undefined;
+        if (typeof kind === 'string' && typeof name === 'string' && isEmbeddableKind(kind)) {
+            out.push({ kind, name, position: i + 1, start: doc.range?.[0] ?? 0, doc });
+        }
+    });
+    return out;
 }
 
 /** Minimal HTML escaper for host-built control fragments. */
@@ -492,27 +506,4 @@ function valueAt(spec: YAMLMap | undefined, relPath: string[]): unknown {
     if (!spec || relPath.length === 0 || relPath.includes('[]')) { return undefined; }
     const node = spec.getIn(relPath, true);
     return node === undefined ? undefined : toJSON(node);
-}
-
-/** 0-based start line of the 1-based Nth document in a multi-doc YAML string. */
-function documentStartLine(text: string, docIndex: number): number {
-    const lines = text.split('\n');
-    let current = 0;
-    for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-        const line = lines[lineNum].trim();
-        if (lineNum === 0) {
-            if (line === '---') { continue; }
-            if (line && !line.startsWith('#')) {
-                current = 1;
-                if (current === docIndex) { return 0; }
-            }
-        } else if (line === '---') {
-            current++;
-            if (current === docIndex) { return lineNum + 1; }
-        } else if (current === 0 && line && !line.startsWith('#')) {
-            current = 1;
-            if (current === docIndex) { return lineNum; }
-        }
-    }
-    return 0;
 }
