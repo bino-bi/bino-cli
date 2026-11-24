@@ -24,7 +24,8 @@
     "data"
   ],
   "activationEvents": [
-    "workspaceContains:**/bino.toml"
+    "workspaceContains:**/bino.toml",
+    "onView:binoGettingStarted"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -45,6 +46,11 @@
     },
     "views": {
       "bino": [
+        {
+          "id": "binoGettingStarted",
+          "name": "Getting Started",
+          "when": "!bino.projectDetected"
+        },
         {
           "id": "binoDocuments",
           "name": "Documents",
@@ -74,9 +80,8 @@
     },
     "viewsWelcome": [
       {
-        "view": "binoDocuments",
-        "contents": "No Bino project detected.\n[Initialize Project](command:bino.initProject)\n[Open Folder](command:vscode.openFolder)",
-        "when": "!bino.projectDetected"
+        "view": "binoGettingStarted",
+        "contents": "No Bino project detected.\n[Initialize Project](command:bino.initProject)\n[Check Setup](command:bino.checkSetup)\n[Open Folder](command:vscode.openFolder)"
       }
     ],
     "commands": [
