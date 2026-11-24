@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { BinoDocumentsResult, QueryBlock, blockContainsLine, blockText } from '../binoDocuments';
 import { prqlBlockAt } from '../prql';
@@ -50,12 +52,30 @@ suite('positions: pure logic', () => {
     });
 });
 
+// Needs a real bino: BINO_TEST_BIN=/path/to/bino xvfb-run -a npm test
 suite('positions: language server', function () {
-    suiteSetup(function () {
-        // Needs a bino binary; .vscode-test.mjs points bino.binPath at it.
+    const config = () => vscode.workspace.getConfiguration('bino');
+
+    suiteSetup(async function () {
         if (!process.env.BINO_TEST_BIN) {
             this.skip();
         }
+        // The daemon starts with the new binary and the language server follows it.
+        await config().update('binPath', process.env.BINO_TEST_BIN, vscode.ConfigurationTarget.Global);
+    });
+
+    suiteTeardown(async function () {
+        if (!process.env.BINO_TEST_BIN) {
+            return;
+        }
+        await config().update('binPath', undefined, vscode.ConfigurationTarget.Global);
+        const root = vscode.workspace.workspaceFolders![0].uri.fsPath;
+        const portFile = path.join(root, '.bino', 'daemon.json');
+        try {
+            process.kill(JSON.parse(fs.readFileSync(portFile, 'utf8')).pid);
+            await new Promise(r => setTimeout(r, 500));
+        } catch { /* no daemon */ }
+        fs.rmSync(path.join(root, '.bino'), { recursive: true, force: true });
     });
 
     async function lensesOf(doc: vscode.TextDocument, until: (l: vscode.CodeLens[]) => boolean): Promise<vscode.CodeLens[]> {
