@@ -105,7 +105,7 @@ func (j *JSONLogger) Record(level, msg string, fields map[string]any) {
 	if j == nil || j.core == nil {
 		return
 	}
-	entry := make(map[string]any, len(fields)+4)
+	entry := make(map[string]any)
 	for k, v := range fields {
 		entry[k] = v
 	}
