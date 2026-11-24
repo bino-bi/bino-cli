@@ -79,6 +79,7 @@ func NewServer(backend Backend, log logx.Logger, phase2 bool, root string) *Serv
 		log:     log,
 		phase2:  phase2,
 		root:    root,
+		data:    dataCache{log: log},
 	}
 }
 
@@ -470,12 +471,14 @@ func (s *Server) Shutdown(_ context.Context) error {
 	if s.analyzer != nil {
 		s.analyzer.Shutdown()
 	}
+	s.checks.stop()
 	return nil
 }
 
 // Exit terminates the server: it cancels the connection context so Serve's
 // <-conn.Done() returns even if the client does not close the stream.
 func (s *Server) Exit(_ context.Context) error {
+	s.checks.stop()
 	if s.cancel != nil {
 		s.cancel()
 	}

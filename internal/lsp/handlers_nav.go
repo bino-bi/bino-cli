@@ -16,7 +16,10 @@ import (
 func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionParams) (protocol.DefinitionResult, error) {
 	pc, ok := s.resolve(params.TextDocument.URI, params.Position)
 	if ok && pc.Kind == reportspec.PosQueryScalar {
-		doc, _ := s.docs.Get(params.TextDocument.URI)
+		doc, open := s.docs.Get(params.TextDocument.URI)
+		if !open {
+			return nil, nil // closed since resolve
+		}
 		line, col := doc.PositionToLineCol(params.Position)
 		return s.queryDefinition(ctx, doc, pc, line, col)
 	}

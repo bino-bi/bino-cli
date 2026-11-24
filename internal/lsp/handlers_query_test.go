@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
@@ -81,6 +82,7 @@ func TestScanQuery(t *testing.T) {
 		{"SELECT /* from */ x FROM ", false, "from", "", false, false},
 		{"from x\njoin `a-b", true, "join", "a-b", true, false},
 		{"from x # join ", true, "", "", false, true},
+		{"SELECT * FROM umsä", false, "from", "umsä", false, false},
 	}
 	for _, tt := range tests {
 		got := scanQuery(tt.text, tt.prql)
@@ -116,10 +118,18 @@ type queryBackend struct {
 	colErr  map[string]error
 	calls   atomic.Int32
 	samples map[string]DatasetSample
+	gate    chan struct{} // when set, Columns waits for it
 }
 
 func (b *queryBackend) Columns(ctx context.Context, name string) ([]string, error) {
 	b.calls.Add(1)
+	if b.gate != nil {
+		select {
+		case <-b.gate:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	if err := b.colErr[name]; err != nil {
 		return nil, err
 	}
@@ -149,7 +159,7 @@ func TestQueryDiagnostics_ErrorOnBlockLine(t *testing.T) {
 	s.queryDiagnostics.Store(true)
 	doc := "kind: DataSet\nmetadata:\n  name: ds\nspec:\n  query: |\n    SELECT region,\n      amout\n    FROM sales_src\n"
 	u := openDoc(t, s, doc)
-	s.runQueryCheck(u.FsPath())
+	checkNow(s, u.FsPath())
 	diags := s.queryDiags[u.FsPath()]
 	if len(diags) != 1 {
 		t.Fatalf("want one diagnostic, got %v", diags)
@@ -169,7 +179,7 @@ func TestQueryDiagnostics_IgnoresNonDuckDBErrors(t *testing.T) {
 	s := newQueryServer(be)
 	s.queryDiagnostics.Store(true)
 	u := openDoc(t, s, "kind: DataSet\nmetadata:\n  name: ds\nspec:\n  query: SELECT 1\n")
-	s.runQueryCheck(u.FsPath())
+	checkNow(s, u.FsPath())
 	if diags := s.queryDiags[u.FsPath()]; len(diags) != 0 {
 		t.Errorf("want no diagnostics, got %v", diags)
 	}
@@ -239,5 +249,141 @@ func TestColumnCache_InvalidatedOnProjectChange(t *testing.T) {
 	complete()
 	if n := be.calls.Load(); n != 2 {
 		t.Errorf("columns fetched %d times after a project change, want 2", n)
+	}
+}
+
+// checkNow runs a file's query check as the current schedule would.
+func checkNow(s *Server, path string) {
+	s.checks.schedule(path, func(uint64) {})
+	s.checks.mu.Lock()
+	seq := s.checks.seq[path]
+	s.checks.mu.Unlock()
+	s.runQueryCheck(path, seq)
+}
+
+var errBrokenColumn = errors.New("query schema: Binder Error: Referenced column \"x\" not found\n\nLINE 1: SELECT x")
+
+func TestQueryDiagnostics_SupersededAndClosedRunsAreDropped(t *testing.T) {
+	be := &queryBackend{colErr: map[string]error{"ds": errBrokenColumn}}
+	s := newQueryServer(be)
+	s.queryDiagnostics.Store(true)
+	u := openDoc(t, s, "kind: DataSet\nmetadata:\n  name: ds\nspec:\n  query: SELECT x\n")
+	path := u.FsPath()
+	s.checks.schedule(path, func(uint64) {})
+	s.checks.mu.Lock()
+	old := s.checks.seq[path]
+	s.checks.mu.Unlock()
+	s.checks.schedule(path, func(uint64) {}) // saved again
+	s.runQueryCheck(path, old)
+	if _, ok := s.queryDiags[path]; ok {
+		t.Fatal("a superseded check stored its result")
+	}
+	checkNow(s, path)
+	if len(s.queryDiags[path]) != 1 {
+		t.Fatalf("the current check must store its result, got %v", s.queryDiags[path])
+	}
+	s.forgetQueryCheck(u) // what DidClose does for query checks
+	if _, ok := s.queryDiags[path]; ok {
+		t.Error("closing the file must clear its query diagnostics")
+	}
+}
+
+func TestQueryChecks_FallbackRerunsAfterRefresh(t *testing.T) {
+	var q queryChecks
+	runs := make(chan uint64, 4)
+	q.schedule("/p.yaml", func(seq uint64) { runs <- seq })
+	q.mu.Lock()
+	p := q.pending["/p.yaml"]
+	q.mu.Unlock()
+	q.fire("/p.yaml", p, func(seq uint64) { runs <- seq }) // the fallback, no refresh yet
+	<-runs
+	q.projectChanged()
+	select {
+	case <-runs:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a check that ran before the refresh was not re-run after it")
+	}
+	q.stop()
+}
+
+func TestDataCache_InvalidateDuringFetch(t *testing.T) {
+	gate := make(chan struct{})
+	be := &queryBackend{gate: gate}
+	s := newQueryServer(be)
+	short, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if _, ok := s.data.columns(short, be, "sales"); ok {
+		t.Fatal("the gated fetch cannot have finished")
+	}
+	s.data.invalidate()
+	close(gate)
+	cols, ok := s.data.columns(context.Background(), be, "sales")
+	if !ok || len(cols) != 3 {
+		t.Fatalf("a lookup after invalidate must start a fresh fetch, got %v %v", cols, ok)
+	}
+	if n := be.calls.Load(); n != 2 {
+		t.Errorf("fetches = %d, want 2", n)
+	}
+}
+
+func TestDataCache_CachesErrors(t *testing.T) {
+	be := &queryBackend{colErr: map[string]error{"sales": errBrokenColumn}}
+	s := newQueryServer(be)
+	for range 3 {
+		if _, ok := s.data.columns(context.Background(), be, "sales"); ok {
+			t.Fatal("a broken dataset has no columns")
+		}
+	}
+	if n := be.calls.Load(); n != 1 {
+		t.Errorf("a broken dataset was fetched %d times, want 1", n)
+	}
+}
+
+func TestQueryCompletion_PRQLQuotesWithBackticks(t *testing.T) {
+	items := completeTableNames([]IndexDoc{{Kind: "DataSet", Name: "my-ds"}}, "", false, true)
+	if got, _ := items[0].InsertText.Get(); got != "`my-ds`" {
+		t.Errorf("PRQL insert text = %q, want backticks", got)
+	}
+	items = completeTableNames([]IndexDoc{{Kind: "DataSet", Name: "my-ds"}}, "", false, false)
+	if got, _ := items[0].InsertText.Get(); got != `"my-ds"` {
+		t.Errorf("SQL insert text = %q, want double quotes", got)
+	}
+}
+
+func TestQueryDefinition_ClosedDocument(t *testing.T) {
+	s := newTestServer()
+	res, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File("/proj/closed.yaml")},
+		},
+	})
+	if err != nil || res != nil {
+		t.Errorf("want no result for a closed document, got %v %v", res, err)
+	}
+}
+
+func TestQueryCompletion_NoPaddingAfterSQLCast(t *testing.T) {
+	s := newTestServer()
+	u := openDoc(t, s, "kind: DataSet\nmetadata:\n  name: ds\nspec:\n  query: |\n    SELECT a::\n")
+	res, _ := s.Completion(context.Background(), completionParams(u, 5, 14))
+	list, ok := res.(protocol.CompletionItemSlice)
+	if !ok || len(list) == 0 {
+		t.Fatalf("want items after a cast, got %T", res)
+	}
+	for _, it := range list {
+		if v, ok := it.InsertText.Get(); ok && strings.HasPrefix(v, " ") {
+			t.Fatalf("item %q got a leading space inside a query", it.Label)
+		}
+	}
+}
+
+func TestQueryErrorRange_FoldedFlagNotComment(t *testing.T) {
+	be := &queryBackend{colErr: map[string]error{"ds": errors.New("Binder Error: bad\n\nLINE 2: x")}}
+	s := newQueryServer(be)
+	s.queryDiagnostics.Store(true)
+	u := openDoc(t, s, "kind: DataSet\nmetadata:\n  name: ds\nspec:\n  query: | # a > b\n    SELECT\n      x\n")
+	checkNow(s, u.FsPath())
+	if d := s.queryDiags[u.FsPath()]; len(d) != 1 || d[0].Range.Start.Line != 6 {
+		t.Errorf("a '>' in the header comment must not mark the block folded: %v", d)
 	}
 }

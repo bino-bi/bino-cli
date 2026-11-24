@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,34 +27,58 @@ const (
 	queryCheckBudget = 3 * time.Second
 )
 
-// queryChecks holds one pending on-save check per file.
+// queryChecks holds one pending on-save check per file. seq numbers every
+// schedule so a run whose file was saved again (or closed) is dropped; gen
+// counts project refreshes so a check that ran before the refresh carrying
+// its save runs again after it.
 type queryChecks struct {
 	mu      sync.Mutex
-	pending map[string]*time.Timer
+	gen     uint64
+	next    uint64
+	seq     map[string]uint64
+	pending map[string]*pendingCheck
+	stopped bool
 }
 
-func (q *queryChecks) schedule(path string, run func()) {
+type pendingCheck struct {
+	timer *time.Timer
+	gen   uint64 // refreshes seen at save time
+	seq   uint64
+}
+
+func (q *queryChecks) schedule(path string, run func(seq uint64)) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if t := q.pending[path]; t != nil {
-		t.Stop()
+	if q.stopped {
+		return
+	}
+	if old := q.pending[path]; old != nil {
+		old.timer.Stop()
 	}
 	if q.pending == nil {
-		q.pending = make(map[string]*time.Timer)
+		q.pending = make(map[string]*pendingCheck)
+		q.seq = make(map[string]uint64)
 	}
-	var t *time.Timer
-	t = time.AfterFunc(queryCheckDelay, func() {
-		q.mu.Lock()
-		mine := q.pending[path] == t
-		if mine {
-			delete(q.pending, path)
-		}
+	q.next++
+	p := &pendingCheck{gen: q.gen, seq: q.next}
+	q.seq[path] = p.seq
+	p.timer = time.AfterFunc(queryCheckDelay, func() { q.fire(path, p, run) })
+	q.pending[path] = p
+}
+
+// fire runs a due check. Without a refresh since the save the backend may
+// still hold the old text, so the entry stays for projectChanged to re-run.
+func (q *queryChecks) fire(path string, p *pendingCheck, run func(seq uint64)) {
+	q.mu.Lock()
+	if q.stopped || q.pending[path] != p {
 		q.mu.Unlock()
-		if mine {
-			run()
-		}
-	})
-	q.pending[path] = t
+		return
+	}
+	if q.gen != p.gen {
+		delete(q.pending, path)
+	}
+	q.mu.Unlock()
+	run(p.seq)
 }
 
 // projectChanged runs the pending checks soon: the refresh that carries the
@@ -61,9 +86,39 @@ func (q *queryChecks) schedule(path string, run func()) {
 func (q *queryChecks) projectChanged() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for _, t := range q.pending {
-		t.Reset(queryCheckSettle)
+	q.gen++
+	for _, p := range q.pending {
+		p.timer.Reset(queryCheckSettle)
 	}
+}
+
+// current reports whether seq is still the latest check of path.
+func (q *queryChecks) current(path string, seq uint64) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return !q.stopped && q.seq[path] == seq
+}
+
+// forget drops the pending check of path and supersedes a running one.
+func (q *queryChecks) forget(path string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if p := q.pending[path]; p != nil {
+		p.timer.Stop()
+	}
+	delete(q.pending, path)
+	delete(q.seq, path)
+}
+
+// stop cancels every pending check for good (server shutdown).
+func (q *queryChecks) stop() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.stopped = true
+	for _, p := range q.pending {
+		p.timer.Stop()
+	}
+	q.pending = nil
 }
 
 // wantsQueryDiagnostics reads {"queryDiagnostics": true} from initializationOptions.
@@ -112,12 +167,31 @@ func (s *Server) scheduleQueryCheck(u uri.URI) {
 		return
 	}
 	path := u.FsPath()
-	s.checks.schedule(path, func() { s.runQueryCheck(path) })
+	s.checks.schedule(path, func(seq uint64) { s.runQueryCheck(path, seq) })
+}
+
+// forgetQueryCheck drops a closed file's pending check and its query errors.
+func (s *Server) forgetQueryCheck(u uri.URI) {
+	path := u.FsPath()
+	s.checks.forget(path)
+	s.mu.Lock()
+	_, had := s.queryDiags[path]
+	delete(s.queryDiags, path)
+	s.mu.Unlock()
+	if had {
+		s.publishFile(path, 0)
+	}
 }
 
 // runQueryCheck runs each inline SQL DataSet query of a file with LIMIT 0
 // through the backend and publishes the DuckDB errors on the query's lines.
-func (s *Server) runQueryCheck(path string) {
+// seq is the check's schedule number; a superseded result is dropped.
+func (s *Server) runQueryCheck(path string, seq uint64) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.log.Errorf("query check of %s panicked: %v\n%s", path, r, debug.Stack())
+		}
+	}()
 	if !s.queryDiagnostics.Load() {
 		return
 	}
@@ -165,6 +239,10 @@ func (s *Server) runQueryCheck(path string) {
 	}
 
 	s.mu.Lock()
+	if !s.queryDiagnostics.Load() || !s.checks.current(path, seq) {
+		s.mu.Unlock()
+		return
+	}
 	if s.queryDiags == nil {
 		s.queryDiags = make(map[string][]protocol.Diagnostic)
 	}
@@ -195,7 +273,6 @@ func sqlQueryBlock(d reportspec.OutlineDoc) (reportspec.OutlineBlock, bool) {
 var (
 	duckdbErrorClass = regexp.MustCompile(`[A-Z][A-Za-z]*(?: [A-Z][A-Za-z]*)* Error: `)
 	duckdbErrorLine  = regexp.MustCompile(`\bLINE (\d+):`)
-	foldedHeader     = regexp.MustCompile(`:\s*>`)
 )
 
 // parseDuckDBError extracts a DuckDB error ("Binder Error: ...") from a
@@ -220,7 +297,7 @@ func parseDuckDBError(text string) (msg string, line int, ok bool) {
 func queryErrorRange(doc *Document, b reportspec.OutlineBlock, n int) reportspec.Range {
 	c := b.Content
 	line := c.StartLine
-	if n > 1 && c.StartLine+n-1 <= c.EndLine && !isFoldedBlock(doc, c.StartLine) {
+	if n > 1 && c.StartLine+n-1 <= c.EndLine && !b.Folded {
 		line = c.StartLine + n - 1
 	}
 	if line == c.StartLine && c.StartLine == c.EndLine {
@@ -232,16 +309,4 @@ func queryErrorRange(doc *Document, b reportspec.OutlineBlock, n int) reportspec
 		startCol = c.StartCol
 	}
 	return reportspec.Range{StartLine: line, StartCol: startCol, EndLine: line, EndCol: len([]rune(text)) + 1}
-}
-
-// isFoldedBlock reports whether the block scalar whose content starts on
-// line has a folded (>) header.
-func isFoldedBlock(doc *Document, line int) bool {
-	for l := line - 1; l >= 1; l-- {
-		text, _ := doc.lineText(l)
-		if strings.TrimSpace(text) != "" {
-			return foldedHeader.MatchString(text)
-		}
-	}
-	return false
 }

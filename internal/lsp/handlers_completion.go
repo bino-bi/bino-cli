@@ -32,7 +32,9 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		return nil, nil
 	}
 	items, incomplete := s.assembleCompletion(ctx, doc, pc, rawValue, line, col)
-	padAfterColon(doc, params.Position, items)
+	if pc.Kind != reportspec.PosQueryScalar { // a ':' in SQL is not a YAML key
+		padAfterColon(doc, params.Position, items)
+	}
 	if incomplete {
 		return &protocol.CompletionList{IsIncomplete: true, Items: items}, nil
 	}

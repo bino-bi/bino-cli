@@ -34,8 +34,10 @@ func (q queryScan) afterTable() bool {
 	return !q.inLiteral && (q.prev == "from" || q.prev == "join")
 }
 
+// isIdentByte reports an identifier byte. Every byte of a multi-byte UTF-8
+// rune counts, so names like umsätze scan as one word.
 func isIdentByte(c byte) bool {
-	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= utf8.RuneSelf
 }
 
 // scanQuery tokenizes query text that ends at the cursor. It skips string
@@ -185,7 +187,7 @@ func (s *Server) completeQuery(ctx context.Context, doc *Document, pc reportspec
 	}
 	if sc.afterTable() {
 		idx := s.getIndex(ctx)
-		return completeTableNames(idx, owner, sc.quoted), idx == nil
+		return completeTableNames(idx, owner, sc.quoted, prql), idx == nil
 	}
 	cols := s.unionColumns(ctx, pc.BoundDatasets)
 	items := completeColumns(cols)
@@ -200,8 +202,12 @@ var plainIdent = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // completeTableNames offers the project's DataSets and DataSources, except the
 // DataSet being edited. Names that are not plain identifiers are inserted
-// quoted unless the cursor already is inside quotes.
-func completeTableNames(index []IndexDoc, owner string, quoted bool) []protocol.CompletionItem {
+// quoted ("x" in SQL, `x` in PRQL) unless the cursor already is inside quotes.
+func completeTableNames(index []IndexDoc, owner string, quoted, prql bool) []protocol.CompletionItem {
+	q := `"`
+	if prql {
+		q = "`"
+	}
 	seen := map[string]bool{owner: true}
 	items := make([]protocol.CompletionItem, 0, len(index))
 	for _, d := range index {
@@ -220,7 +226,7 @@ func completeTableNames(index []IndexDoc, owner string, quoted bool) []protocol.
 			SortText: protocol.NewOptional("0" + d.Name),
 		}
 		if !quoted && !plainIdent.MatchString(d.Name) {
-			item.InsertText = protocol.NewOptional(`"` + d.Name + `"`)
+			item.InsertText = protocol.NewOptional(q + d.Name + q)
 		}
 		items = append(items, item)
 	}

@@ -55,6 +55,7 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 	s.docs.Remove(params.TextDocument.URI)
 	s.updateNav(ctx, params.TextDocument.URI.FsPath())
 	s.clearDraft(params.TextDocument.URI)
+	s.forgetQueryCheck(params.TextDocument.URI)
 	return nil
 }
 

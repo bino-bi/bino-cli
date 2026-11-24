@@ -2,14 +2,20 @@ package lsp
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
+
+	"bino.bi/bino/internal/logx"
 )
 
-// dataFetchTimeout bounds one background column or sample fetch. Callers wait
-// for it only as long as their own budget allows; a fetch that outlives the
-// caller still fills the cache for the next request.
-const dataFetchTimeout = 3 * time.Second
+// dataFetchTimeout bounds one background column or sample fetch, like the
+// in-process introspection cap: it holds the shared DuckDB session meanwhile.
+// Callers wait only as long as their own budget allows; a fetch that outlives
+// the caller still fills the cache for the next request.
+const dataFetchTimeout = 800 * time.Millisecond
 
 // sampleRows is how many rows a dataset hover shows.
 const sampleRows = 5
@@ -25,8 +31,10 @@ type DatasetSample struct {
 
 // dataCache keeps column lists and samples per dataset name until the project
 // changes, so completion and hover do not query DuckDB on every keystroke.
-// Failures are not cached; concurrent requests for one name share one fetch.
+// Errors are cached too (a broken query stays broken until the project
+// changes); timeouts are not. Concurrent requests for one name share one fetch.
 type dataCache struct {
+	log     logx.Logger
 	mu      sync.Mutex
 	gen     uint64
 	cols    fetchCache[[]string]
@@ -35,16 +43,21 @@ type dataCache struct {
 
 // fetchCache is one kind of cached value; dataCache.mu guards it.
 type fetchCache[T any] struct {
-	done    map[string]T
+	done    map[string]fetchResult[T]
 	pending map[string]chan struct{}
+}
+
+type fetchResult[T any] struct {
+	v   T
+	err error
 }
 
 // invalidate drops every entry. Fetches still running finish but do not store.
 func (c *dataCache) invalidate() {
 	c.mu.Lock()
 	c.gen++
-	c.cols.done = nil
-	c.samples.done = nil
+	c.cols = fetchCache[[]string]{}
+	c.samples = fetchCache[DatasetSample]{}
 	c.mu.Unlock()
 }
 
@@ -64,9 +77,9 @@ func (c *dataCache) sample(ctx context.Context, b Backend, name string) (Dataset
 
 func cachedFetch[T any](ctx context.Context, c *dataCache, fc *fetchCache[T], name string, fetch func(context.Context, string) (T, error)) (T, bool) {
 	c.mu.Lock()
-	if v, ok := fc.done[name]; ok {
+	if r, ok := fc.done[name]; ok {
 		c.mu.Unlock()
-		return v, true
+		return r.v, r.err == nil
 	}
 	done, running := fc.pending[name]
 	if !running {
@@ -75,23 +88,7 @@ func cachedFetch[T any](ctx context.Context, c *dataCache, fc *fetchCache[T], na
 			fc.pending = make(map[string]chan struct{})
 		}
 		fc.pending[name] = done
-		gen := c.gen
-		// The fetch must not die with the request that started it.
-		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), dataFetchTimeout)
-		go func() {
-			defer cancel()
-			v, err := fetch(fctx, name)
-			c.mu.Lock()
-			if err == nil && gen == c.gen {
-				if fc.done == nil {
-					fc.done = make(map[string]T)
-				}
-				fc.done[name] = v
-			}
-			delete(fc.pending, name)
-			c.mu.Unlock()
-			close(done)
-		}()
+		go runFetch(ctx, c, fc, c.gen, name, done, fetch)
 	}
 	c.mu.Unlock()
 
@@ -103,6 +100,36 @@ func cachedFetch[T any](ctx context.Context, c *dataCache, fc *fetchCache[T], na
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	v, ok := fc.done[name]
-	return v, ok
+	r, ok := fc.done[name]
+	return r.v, ok && r.err == nil
+}
+
+// runFetch runs one fetch for cachedFetch. invalidate may have replaced fc's
+// maps meanwhile: the generation check keeps a stale result out, and only this
+// fetch's own pending entry is removed.
+func runFetch[T any](ctx context.Context, c *dataCache, fc *fetchCache[T], gen uint64, name string, done chan struct{}, fetch func(context.Context, string) (T, error)) {
+	// The fetch must not die with the request that started it.
+	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), dataFetchTimeout)
+	var r fetchResult[T]
+	defer func() {
+		if p := recover(); p != nil {
+			c.log.Errorf("dataset fetch for %q panicked: %v\n%s", name, p, debug.Stack())
+			r = fetchResult[T]{err: fmt.Errorf("panic: %v", p)}
+		}
+		timedOut := errors.Is(r.err, context.DeadlineExceeded) || fctx.Err() != nil
+		cancel()
+		c.mu.Lock()
+		if gen == c.gen && !timedOut {
+			if fc.done == nil {
+				fc.done = make(map[string]fetchResult[T])
+			}
+			fc.done[name] = r
+		}
+		if fc.pending[name] == done {
+			delete(fc.pending, name)
+		}
+		c.mu.Unlock()
+		close(done)
+	}()
+	r.v, r.err = fetch(fctx, name)
 }
