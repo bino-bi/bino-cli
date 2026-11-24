@@ -297,7 +297,7 @@ func TestRegistryHTTPAndMCPPayloadsMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d%s", srv.Port(), tt.path)) //nolint:noctx // test
+			resp, err := daemon.TokenClient(srv.Token()).Get(fmt.Sprintf("http://127.0.0.1:%d%s", srv.Port(), tt.path)) //nolint:noctx // test
 			if err != nil {
 				t.Fatalf("GET %s: %v", tt.path, err)
 			}

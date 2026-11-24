@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 type HTTPBackend struct {
 	base     string // http://127.0.0.1:<port>
 	hc       *http.Client
+	token    string // from the daemon's port file; empty for older daemons
 	log      logx.Logger
 	onChange atomic.Pointer[func()]
 	stop     chan struct{}
@@ -35,21 +37,25 @@ type HTTPBackend struct {
 // (spawned from an older binary) previously passed the bare health check and
 // then 404'd /validate-draft - diagnostics silently vanished; erroring here
 // makes the caller fall back to a working standalone backend instead.
-func NewHTTPBackend(ctx context.Context, base string, log logx.Logger) (*HTTPBackend, error) {
+func NewHTTPBackend(ctx context.Context, base, token string, log logx.Logger) (*HTTPBackend, error) {
 	b := &HTTPBackend{
-		base: strings.TrimRight(base, "/"),
-		hc:   &http.Client{},
-		log:  log,
-		stop: make(chan struct{}),
+		base:  strings.TrimRight(base, "/"),
+		hc:    &http.Client{},
+		token: token,
+		log:   log,
+		stop:  make(chan struct{}),
 	}
 	hctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(hctx, http.MethodGet, b.base+"/health", http.NoBody) //nolint:errcheck // constant method and URL; construction cannot fail
-	resp, err := b.hc.Do(req)
+	resp, err := b.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("daemon health: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, errors.New("daemon health: the daemon rejected the token in its port file")
+	}
 	var health struct {
 		Version      string   `json:"version"`
 		Capabilities []string `json:"capabilities"`
@@ -206,12 +212,19 @@ func (r validateResponse) diags() []Diag {
 
 // --- HTTP plumbing ---
 
+func (b *HTTPBackend) do(req *http.Request) (*http.Response, error) {
+	if b.token != "" {
+		req.Header.Set("Authorization", "Bearer "+b.token)
+	}
+	return b.hc.Do(req)
+}
+
 func (b *HTTPBackend) getRaw(ctx context.Context, path string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.base+path, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := b.hc.Do(req)
+	resp, err := b.do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +248,7 @@ func (b *HTTPBackend) postJSON(ctx context.Context, path string, body []byte, ou
 	if err != nil {
 		return err
 	}
-	resp, err := b.hc.Do(req)
+	resp, err := b.do(req)
 	if err != nil {
 		return err
 	}
@@ -278,7 +291,7 @@ func (b *HTTPBackend) readEventStream(ctx context.Context) (shutdown bool) {
 	if err != nil {
 		return false
 	}
-	resp, err := b.hc.Do(req)
+	resp, err := b.do(req)
 	if err != nil {
 		return false
 	}

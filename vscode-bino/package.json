@@ -11,7 +11,7 @@
     "url": "https://github.com/bino-bi/bino-cli-releases"
   },
   "engines": {
-    "vscode": "^1.91.0"
+    "vscode": "^1.101.0"
   },
   "categories": [
     "Programming Languages",
@@ -63,6 +63,12 @@
       {
         "language": "yaml",
         "path": "./snippets/annotations.code-snippets"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "bino",
+        "label": "Bino"
       }
     ],
     "viewsContainers": {
@@ -664,7 +670,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.6.6",
-    "@types/vscode": "1.91.0",
+    "@types/vscode": "1.101.0",
     "@typescript-eslint/eslint-plugin": "^8.72.2",
     "@typescript-eslint/parser": "^8.61.0",
     "@vscode/test-cli": "^0.0.15",

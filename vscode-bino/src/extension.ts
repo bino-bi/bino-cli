@@ -23,6 +23,7 @@ import { EnvironmentTreeProvider } from './environmentTree';
 import { DependenciesTreeProvider } from './dependenciesTree';
 import { registerRegistryCommands } from './registryCommands';
 import { DaemonClient } from './daemonClient';
+import { registerMcpProvider } from './mcpProvider';
 import { loadBackendSchema, SchemaSource } from './schemaResolver';
 import { daemonVersionMismatch, getBinoPath, installedBinoVersion, runBino } from './bino';
 import { BinoStatusBar } from './statusBar';
@@ -290,6 +291,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     if (daemonEnabled) {
         daemonClient = new DaemonClient(outputChannel);
         context.subscriptions.push({ dispose: () => daemonClient?.dispose() });
+        context.subscriptions.push(registerMcpProvider(daemonClient));
 
         // Pass daemon client to indexer and preview manager
         indexer.setDaemonClient(daemonClient);

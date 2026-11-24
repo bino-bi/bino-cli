@@ -49,13 +49,28 @@ support - see sections 9-12 below.
   invoking discrete `bino lsp-helper <subcommand>` CLI calls for indexing and
   data introspection.
 
+### MCP server
+
+The extension registers the daemon's [MCP server](/cli/mcp/) with VS Code, so agent mode in
+VS Code chat can use the bino tools without any setup. It shows up as **Bino** in the MCP server
+list (`MCP: List Servers`). VS Code connects to `http://127.0.0.1:<port>/mcp` with the token from
+`.bino/daemon.json` (see [The daemon port file](/cli/mcp/#the-daemon-port-file)).
+
+The server is offered only while the daemon is connected: not with `bino.daemon.enabled` off,
+and not in an untrusted workspace. When the daemon restarts on a new port, VS Code gets the new
+address on its own.
+
+If the extension shows "The running bino daemon rejected this extension", the daemon uses a
+different token than the extension expects, usually because it comes from a newer bino. Click
+**Restart Daemon**.
+
 ---
 
 ## 1. Prerequisites
 
 Before installing the extension, make sure you have:
 
-- **VS Code** 1.91.0 or newer
+- **VS Code** 1.101.0 or newer
 - **Bino CLI** installed and on your `PATH` (or a known location)
 
 ---
