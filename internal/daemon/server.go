@@ -41,6 +41,9 @@ type Server struct {
 
 	preview *PreviewProcess
 
+	token    string
+	loopback bool
+
 	// Build state
 	buildMu  sync.Mutex
 	building bool
@@ -60,6 +63,8 @@ type ServerConfig struct {
 	// Preview, when non-nil, is the preview subprocess the routes manage. The
 	// CLI shares it with the MCP preview tools; nil creates a private one.
 	Preview *PreviewProcess
+	// Token is the secret every request must carry; empty generates one.
+	Token string
 }
 
 // NewServer constructs a daemon HTTP server.
@@ -76,6 +81,14 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("daemon: listen on %s: %w", cfg.ListenAddr, err)
 	}
 
+	token := cfg.Token
+	if token == "" {
+		if token, err = NewToken(); err != nil {
+			listener.Close() //nolint:errcheck,gosec // best-effort teardown on the init error path
+			return nil, err
+		}
+	}
+	tcpAddr, _ := listener.Addr().(*net.TCPAddr) //nolint:errcheck // a tcp listener always has a *net.TCPAddr
 	srv := &Server{
 		state:          cfg.State,
 		sse:            httpserver.NewSSEHub(),
@@ -85,6 +98,8 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		shutdownCh:     make(chan struct{}),
 		pluginRegistry: cfg.PluginRegistry,
 		preview:        cfg.Preview,
+		token:          token,
+		loopback:       tcpAddr != nil && tcpAddr.IP.IsLoopback(),
 	}
 	if srv.preview == nil {
 		root := ""
@@ -127,7 +142,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		mux.Handle("/mcp/", cfg.MCPHandler)
 	}
 
-	srv.httpServer = &http.Server{Handler: mux} //nolint:gosec // G112: local dev server on localhost
+	srv.httpServer = &http.Server{Handler: srv.authMiddleware(mux)} //nolint:gosec // G112: local dev server on localhost
 	return srv, nil
 }
 
@@ -138,6 +153,11 @@ func (s *Server) Port() int {
 		return 0
 	}
 	return addr.Port
+}
+
+// Token returns the secret clients send as "Authorization: Bearer <token>".
+func (s *Server) Token() string {
+	return s.token
 }
 
 // ClientCount returns the number of connected SSE clients.

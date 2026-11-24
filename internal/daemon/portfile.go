@@ -21,6 +21,9 @@ type PortFile struct {
 	// against their own binary to detect (and restart) a stale daemon. Empty in
 	// port files written by older daemons, which clients treat as stale.
 	Version string `json:"version,omitempty"`
+	// Token must be sent as "Authorization: Bearer <token>" on every request.
+	// Empty in port files written by older daemons, which need no token.
+	Token string `json:"token,omitempty"`
 }
 
 // PortFilePath returns the path to the port file for a given project root.
@@ -28,13 +31,15 @@ func PortFilePath(projectRoot string) string {
 	return filepath.Join(projectRoot, ".bino", portFileName)
 }
 
-// WritePortFile writes the daemon's connection info to the project root.
-func WritePortFile(projectRoot string, port int) error {
+// WritePortFile writes the daemon's connection info to the project root. The
+// file holds the token, so only the user may read it.
+func WritePortFile(projectRoot string, port int, token string) error {
 	pf := PortFile{
 		PID:       os.Getpid(),
 		Port:      port,
 		StartedAt: time.Now().UTC(),
 		Version:   version.Version,
+		Token:     token,
 	}
 	data, err := json.MarshalIndent(pf, "", "  ")
 	if err != nil {
@@ -44,8 +49,22 @@ func WritePortFile(projectRoot string, port int) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create port file directory: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // G306: port file needs standard read perms
+	// CreateTemp makes the file 0600; the rename also replaces a file an older
+	// daemon left with wider permissions, and clients never see a partial file.
+	tmp, err := os.CreateTemp(filepath.Dir(path), portFileName+".*")
+	if err != nil {
 		return fmt.Errorf("write port file: %w", err)
+	}
+	_, werr := tmp.Write(data)
+	if cerr := tmp.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Rename(tmp.Name(), path)
+	}
+	if werr != nil {
+		_ = os.Remove(tmp.Name())
+		return fmt.Errorf("write port file: %w", werr)
 	}
 	return nil
 }

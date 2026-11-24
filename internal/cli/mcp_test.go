@@ -73,7 +73,7 @@ func startMCPDaemon(t *testing.T) *mcpsdk.ClientSession {
 
 	endpoint := fmt.Sprintf("http://127.0.0.1:%d/mcp", srv.Port())
 	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test", Version: "v0"}, nil)
-	upstream, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: endpoint}, nil)
+	upstream, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: endpoint, HTTPClient: daemon.TokenClient(srv.Token())}, nil)
 	if err != nil {
 		t.Fatalf("connect %s: %v", endpoint, err)
 	}

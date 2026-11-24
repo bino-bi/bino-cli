@@ -180,6 +180,7 @@ func TestDaemon_MissingPluginKeepsRunning(t *testing.T) {
 	go func() { done <- cmd.Execute() }()
 
 	var port int
+	var token string
 	for deadline := time.Now().Add(30 * time.Second); port == 0; {
 		select {
 		case err := <-done:
@@ -190,7 +191,7 @@ func TestDaemon_MissingPluginKeepsRunning(t *testing.T) {
 			t.Fatal("daemon did not write its port file")
 		}
 		if pf, _ := daemon.ReadPortFile(dir); pf != nil { //nolint:errcheck // retried until the deadline
-			port = pf.Port
+			port, token = pf.Port, pf.Token
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -200,7 +201,7 @@ func TestDaemon_MissingPluginKeepsRunning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := daemon.TokenClient(token).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

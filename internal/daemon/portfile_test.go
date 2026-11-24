@@ -11,7 +11,7 @@ func TestWriteAndReadPortFile(t *testing.T) {
 	dir := t.TempDir()
 
 	// Write port file
-	if err := WritePortFile(dir, 12345); err != nil {
+	if err := WritePortFile(dir, 12345, "tok"); err != nil {
 		t.Fatalf("WritePortFile: %v", err)
 	}
 

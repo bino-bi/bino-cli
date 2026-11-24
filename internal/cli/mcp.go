@@ -60,7 +60,7 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 					if allowPublish {
 						logger.Warnf("--allow-publish has no effect when proxying; the daemon's --mcp-allow-publish decides whether registry_publish is exposed")
 					}
-					if err := runMCPProxy(ctx, endpoint); err != nil {
+					if err := runMCPProxy(ctx, endpoint, pf.Token); err != nil {
 						logger.Warnf("Proxy to daemon failed (%v); falling back to standalone", err)
 					} else {
 						return nil
@@ -134,7 +134,7 @@ func newStandaloneDeps(project *lazyProject, allowPublish bool) mcp.Deps {
 // server that forwards each call, and relays progress notifications back. The
 // daemon is connected first so a connect failure can fall back to standalone
 // before any byte is written to stdout.
-func runMCPProxy(ctx context.Context, endpoint string) error {
+func runMCPProxy(ctx context.Context, endpoint, token string) error {
 	var localSession atomic.Pointer[mcpsdk.ServerSession]
 
 	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "bino-mcp-proxy", Version: version.Version}, &mcpsdk.ClientOptions{
@@ -148,7 +148,7 @@ func runMCPProxy(ctx context.Context, endpoint string) error {
 		},
 	})
 
-	upstream, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: endpoint}, nil)
+	upstream, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: endpoint, HTTPClient: daemon.TokenClient(token)}, nil)
 	if err != nil {
 		return fmt.Errorf("connect daemon: %w", err)
 	}

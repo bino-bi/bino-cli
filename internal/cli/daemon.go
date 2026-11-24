@@ -172,7 +172,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			}
 
 			// Write port file
-			if err := daemon.WritePortFile(env.ProjectRoot, server.Port()); err != nil {
+			if err := daemon.WritePortFile(env.ProjectRoot, server.Port(), server.Token()); err != nil {
 				return RuntimeError(err)
 			}
 			defer daemon.RemovePortFile(env.ProjectRoot)
