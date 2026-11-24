@@ -139,7 +139,8 @@ export class DaemonClient {
     private streamGeneration = 0;
     // Bumped by every connect, switch and restart, so a connect that was overtaken stops.
     private connectGeneration = 0;
-    private connecting: { root: string; promise: Promise<boolean> } | undefined;
+    // The bino it may spawn, so a bino.binPath change does not join a connect with the old one.
+    private connecting: { root: string; bin: string; promise: Promise<boolean> } | undefined;
     private disposed = false;
     private daemonVersion: string | undefined;
     private portFileVersion: string | undefined;
@@ -178,12 +179,18 @@ export class DaemonClient {
         if (this.status === 'connected') {
             return true;
         }
+        const bin = getBinoPath();
         if (this.connecting?.root === projectRoot) {
-            return this.connecting.promise;
+            if (this.connecting.bin === bin) {
+                return this.connecting.promise;
+            }
+            // The old binary may still be starting a daemon: it would take the port file.
+            this.daemonProcess?.kill();
+            this.daemonProcess = undefined;
         }
         const generation = ++this.connectGeneration;
         const promise = this.doConnect(projectRoot, generation);
-        this.connecting = { root: projectRoot, promise };
+        this.connecting = { root: projectRoot, bin, promise };
         try {
             return await promise;
         } finally {
@@ -573,21 +580,28 @@ export class DaemonClient {
 
                 this.daemonProcess = proc;
 
-                proc.stdout?.on('data', (data: Buffer) => {
-                    this.outputChannel.append(data.toString());
-                });
-
-                proc.stderr?.on('data', (data: Buffer) => {
-                    this.outputChannel.append(data.toString());
-                });
+                // The daemon outlives a disposed client (other windows use it), and
+                // so may its output: keep reading the pipes, but stop logging.
+                const log = (data: Buffer) => {
+                    if (!this.disposed) {
+                        this.outputChannel.append(data.toString());
+                    }
+                };
+                proc.stdout?.on('data', log);
+                proc.stderr?.on('data', log);
 
                 proc.on('error', (err) => {
-                    this.outputChannel.appendLine(`[Daemon] Spawn error: ${err.message}`);
+                    if (!this.disposed) {
+                        this.outputChannel.appendLine(`[Daemon] Spawn error: ${err.message}`);
+                    }
                     this.daemonProcess = undefined;
                     resolve(false);
                 });
 
                 proc.on('exit', (code) => {
+                    if (this.disposed) {
+                        return;
+                    }
                     this.outputChannel.appendLine(`[Daemon] Process exited with code ${code}`);
                     if (this.daemonProcess !== proc) {
                         return; // an old daemon, already replaced

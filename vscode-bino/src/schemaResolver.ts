@@ -120,7 +120,8 @@ export class SchemaResolver {
 
     private apply(schema: Record<string, unknown>): void {
         this.schema = schema;
-        this.defs = (schema as any).$defs || {};
+        // A copy: inline plugin specs are added to it.
+        this.defs = { ...((schema as any).$defs || {}) };
         this.kindMappings = [];
         this.kindFieldsCache.clear();
         this.buildKindMappings();
@@ -248,9 +249,13 @@ export class SchemaResolver {
             const kindConst = ifBlock.properties?.kind?.const;
             if (!kindConst) { continue; }
 
-            const specRef = thenBlock.properties?.spec?.$ref;
-            if (specRef) {
-                const refName = specRef.replace('#/$defs/', '');
+            const spec = thenBlock.properties?.spec;
+            // A built-in kind's spec is a bare $ref into the root $defs. A plugin
+            // kind's spec is an embedded schema of its own.
+            const bareRef = spec && Object.keys(spec).length === 1 && typeof spec.$ref === 'string';
+            const refName = bareRef ? spec.$ref.replace('#/$defs/', '')
+                : spec && typeof spec === 'object' ? this.registerInlineSpec(kindConst, spec) : undefined;
+            if (refName) {
                 const mapping: KindSpecMapping = { kind: kindConst, specRef: refName };
 
                 // Check for metadata extras (LayoutPage params)
@@ -270,6 +275,33 @@ export class SchemaResolver {
                 }
             }
         }
+    }
+
+    /**
+     * Add an embedded spec schema to the defs under a name of its own. Its local
+     * `#/$defs/x` (or draft-04 `#/definitions/x`) refs point at its own defs, so
+     * they are renamed with it.
+     */
+    private registerInlineSpec(kind: string, spec: Record<string, unknown>): string {
+        const name = `${kind}:spec`;
+        const local = /^#\/(\$defs|definitions)\//;
+        const rewrite = (node: unknown): unknown => {
+            if (Array.isArray(node)) { return node.map(rewrite); }
+            if (!node || typeof node !== 'object') { return node; }
+            const out: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(node)) {
+                out[key] = key === '$ref' && typeof value === 'string' && local.test(value)
+                    ? value.replace(local, `#/$defs/${name}/`)
+                    : rewrite(value);
+            }
+            return out;
+        };
+        const { $defs, definitions, ...rest } = rewrite(spec) as Record<string, unknown>;
+        for (const [key, def] of Object.entries({ ...(definitions as object), ...($defs as object) })) {
+            this.defs[`${name}/${key}`] = def;
+        }
+        this.defs[name] = rest;
+        return name;
     }
 
     /** Resolve object properties into FieldDef array */
