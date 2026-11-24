@@ -51,6 +51,12 @@ func tomlDiagnostics(doc *Document) []protocol.Diagnostic {
 				}
 				continue
 			}
+			if strings.EqualFold(e.Key()[0], "trust") {
+				// The loader keeps these on the policy (TrustConfig.Err): commands that apply it fail.
+				out = append(out, tomlDiag(keySpan(doc, row, col), protocol.DiagnosticSeverityError, "toml-unknown-key",
+					fmt.Sprintf("unknown key '%s': commands that apply the trust policy fail on it", key)))
+				continue
+			}
 			out = append(out, tomlDiag(keySpan(doc, row, col), protocol.DiagnosticSeverityWarning, "toml-unknown-key",
 				fmt.Sprintf("unknown key '%s': bino ignores it", key)))
 		}
@@ -154,6 +160,7 @@ type tomlSchemaNode struct {
 	Description          string                     `json:"description"`
 	Properties           map[string]*tomlSchemaNode `json:"properties"`
 	AdditionalProperties json.RawMessage            `json:"additionalProperties"`
+	Items                *tomlSchemaNode            `json:"items"`
 	Definitions          map[string]*tomlSchemaNode `json:"definitions"`
 }
 
@@ -172,6 +179,22 @@ func (n *tomlSchemaNode) resolve() *tomlSchemaNode {
 	return n
 }
 
+// table returns the schema a key opens as a table: an object, or the items
+// of an array of tables such as [[trust.signer]]. Other keys yield nil.
+func (n *tomlSchemaNode) table() *tomlSchemaNode {
+	n = n.resolve()
+	if n == nil {
+		return nil
+	}
+	if n.Type == "array" {
+		n = n.Items.resolve()
+	}
+	if n == nil || n.Type != "object" {
+		return nil
+	}
+	return n
+}
+
 // child returns the schema of a table's key: a declared property, or the
 // value schema of a map such as [plugins.<name>].
 func (n *tomlSchemaNode) child(key string) *tomlSchemaNode {
@@ -180,6 +203,9 @@ func (n *tomlSchemaNode) child(key string) *tomlSchemaNode {
 		return nil
 	}
 	if p, ok := n.Properties[key]; ok {
+		if t := p.table(); t != nil {
+			return t
+		}
 		return p.resolve()
 	}
 	var v tomlSchemaNode
@@ -196,8 +222,8 @@ func tableNames() []string {
 	var walk func(prefix string, n *tomlSchemaNode)
 	walk = func(prefix string, n *tomlSchemaNode) {
 		for name, p := range n.resolve().Properties {
-			p = p.resolve()
-			if p.Type != "object" {
+			p = p.table()
+			if p == nil {
 				continue
 			}
 			path := name
@@ -253,10 +279,10 @@ func tomlCompletion(doc *Document, pos protocol.Position) []protocol.CompletionI
 	rng := lineRange(text, line, indent+1, col)
 	var items []protocol.CompletionItem
 	for name, p := range node.Properties {
-		p = p.resolve()
-		if p.Type == "object" {
+		if p.table() != nil {
 			continue // a table, offered after `[`
 		}
+		p = p.resolve()
 		items = append(items, tomlItem(name, name+" = ", protocol.CompletionItemKindProperty, p, rng))
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Label < items[j].Label })

@@ -19,6 +19,7 @@ func TestTOMLDiagnostics(t *testing.T) {
 		{"unknown key", "report-id = \"x\"\n[lint]\ndisabel = [\"a\"]\n", "toml-unknown-key", protocol.DiagnosticSeverityWarning, [3]uint32{2, 0, 7}, "unknown key 'lint.disabel'"},
 		{"env var must be a string", "[build.env]\nOK = \"x\"\nFOO = 1\n", "toml-type", protocol.DiagnosticSeverityError, [3]uint32{2, 0, 3}, "'build.env.FOO' must be a string"},
 		{"wrong type", "report-id = \"x\"\n[lint]\ndisable = \"a\" # one rule\n", "toml-type", protocol.DiagnosticSeverityError, [3]uint32{2, 10, 13}, "'lint.disable' must be an array, not a TOML string"},
+		{"unknown trust key", "[trust]\nrequire = \"warn\"\n[[trust.signer]]\nscope = \"@a/*\"\nissuer = \"x\"\n", "toml-unknown-key", protocol.DiagnosticSeverityError, [3]uint32{4, 0, 6}, "unknown key 'trust.signer.issuer': commands that apply the trust policy fail on it"},
 		{"syntax", "report-id = \n", "toml-syntax", protocol.DiagnosticSeverityError, [3]uint32{0, 12, 12}, "TOML syntax error"},
 	}
 	for _, c := range cases {
@@ -105,6 +106,15 @@ func TestTOMLCompletion(t *testing.T) {
 	}
 	if got := tomlLabels(t, "[plugins.sci]\nv", 1, 1); !contains(got, "version") || !contains(got, "hook_timeout") {
 		t.Errorf("[plugins.<name>] keys = %v", got)
+	}
+	if got := tomlLabels(t, "[tr", 0, 3); !contains(got, "trust") || !contains(got, "trust.signer") {
+		t.Errorf("tables %v miss trust, trust.signer", got)
+	}
+	if got := tomlLabels(t, "[[trust.signer]]\n", 1, 0); !contains(got, "scope") || !contains(got, "oidc-issuer") || !contains(got, "key-file") {
+		t.Errorf("[[trust.signer]] keys = %v", got)
+	}
+	if got := tomlLabels(t, "[trust]\n", 1, 0); len(got) != 1 || got[0] != "require" {
+		t.Errorf("[trust] keys = %v, want [require]", got)
 	}
 	if got := tomlLabels(t, "[lint]\ndisable = ", 1, 10); len(got) != 0 {
 		t.Errorf("no completion after '=', got %v", got)

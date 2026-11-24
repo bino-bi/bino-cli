@@ -74,6 +74,37 @@
         }
       }
     },
+    "trust": {
+      "type": "object",
+      "description": "Which registry packages must be signed, and by whom.",
+      "additionalProperties": false,
+      "properties": {
+        "require": {
+          "type": "string",
+          "enum": ["off", "warn", "signed"],
+          "description": "What happens to an unsigned package or one no rule accepts: off accepts it (the default), warn accepts it with a warning, signed fails. An invalid signature always fails."
+        },
+        "signer": {
+          "type": "array",
+          "description": "Signer rules. Set exactly one signer kind: oidc-issuer (keyless), x509-root or key-file.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["scope"],
+            "properties": {
+              "scope": { "type": "string", "description": "\"@scope/*\" for every package of a scope, or \"@scope/name\" for one package." },
+              "oidc-issuer": { "type": "string", "description": "Keyless: the OIDC issuer of the Sigstore certificate, matched exactly." },
+              "identity": { "type": "string", "description": "Keyless or x509: the certificate identity (the SAN), matched exactly." },
+              "repository": { "type": "string", "description": "Keyless: the source repository of a CI workload. Set together with workflow, instead of identity." },
+              "workflow": { "type": "string", "description": "Keyless: the workflow that signed, without the @ref part. Set together with repository." },
+              "x509-root": { "type": "string", "description": "x509: a PEM CA certificate, relative to this file." },
+              "key-file": { "type": "string", "description": "Key: a PEM public key (ed25519, ECDSA or RSA), relative to this file." },
+              "key": { "type": "string", "description": "Key: optional fingerprint of key-file." }
+            }
+          }
+        }
+      }
+    },
     "hooks": { "$ref": "#/definitions/hooks" },
     "build": { "$ref": "#/definitions/command", "description": "Defaults for 'bino build'." },
     "preview": { "$ref": "#/definitions/command", "description": "Defaults for 'bino preview'." },
