@@ -449,6 +449,11 @@ export class DesignerEditorProvider implements vscode.CustomTextEditorProvider {
         return picked?.doc;
     }
 
+    /** Re-render every open form, e.g. after the backend schema arrived. */
+    refreshAll(): void {
+        for (const s of this.sessions) { void this.bindTarget(s, s.target); }
+    }
+
     dispose(): void {
         for (const s of this.sessions) { s.panel.dispose(); }
     }

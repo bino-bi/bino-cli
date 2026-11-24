@@ -407,6 +407,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         if (started) {
             indexer?.attachLanguageClient();
             codeLensProvider.refresh();
+            treeTableEditorManager?.refreshAll();
             void updatePrqlContext(vscode.window.activeTextEditor);
         }
     }
@@ -516,6 +517,8 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
             outputChannel.appendLine(loaded ? 'Loaded the schema from bino' : 'Using the bundled schema: bino did not serve one');
             if (loaded) {
                 treeProvider.refresh();
+                treeTableEditorManager?.refreshAll();
+                designerPanel?.refreshAll();
             }
         });
     void daemonReady.then(() => {
