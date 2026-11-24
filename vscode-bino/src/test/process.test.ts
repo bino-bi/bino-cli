@@ -363,6 +363,55 @@ suite('daemon client lifecycle', () => {
         });
     }
 
+    test('a connect after a bino.binPath change does not wait for the old binary', async function () {
+        this.timeout(15000);
+        const slow = await fakeDaemon('good');
+        const fast = await fakeDaemon('good');
+        cleanups.push(() => closeServer(slow.server), () => closeServer(fast.server));
+        const root = projectRoot();
+        const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bino-bin-'));
+        const newDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bino-bin-'));
+        dirs.push(root, oldDir, newDir);
+        // The overtaken old daemon is not the client's to stop.
+        cleanups.push(() => {
+            try { cp.execFileSync('pkill', ['-f', oldDir]); } catch { /* none */ }
+        });
+        await config().update('binPath', fakeBino(oldDir, [{ root, port: slow.port, delayMs: 8000 }]), vscode.ConfigurationTarget.Global);
+
+        const c = client();
+        const first = c.connect(root);
+        await new Promise(r => setTimeout(r, 300));
+        await config().update('binPath', fakeBino(newDir, [{ root, port: fast.port, delayMs: 0 }]), vscode.ConfigurationTarget.Global);
+        assert.strictEqual(await c.connect(root), true);
+        assert.strictEqual(c.connection()?.port, fast.port);
+        assert.strictEqual(await first, false);
+        cleanups.push(() => kill(c.pid));
+        // The old binary's daemon is stopped, so it cannot take the port file later.
+        await new Promise(r => setTimeout(r, 300));
+        assert.throws(() => cp.execFileSync('pgrep', ['-f', oldDir]), 'the old daemon still runs');
+    });
+
+    test('a disposed client does not log the output of the daemon it spawned', async function () {
+        this.timeout(10000);
+        const daemon = await fakeDaemon('good');
+        cleanups.push(() => closeServer(daemon.server));
+        const root = projectRoot();
+        const bindir = fs.mkdtempSync(path.join(os.tmpdir(), 'bino-bin-'));
+        dirs.push(root, bindir);
+        await config().update('binPath', fakeBino(bindir, [{ root, port: daemon.port, delayMs: 0 }]), vscode.ConfigurationTarget.Global);
+
+        // A window closes while the daemon it spawned keeps running for others.
+        const channel = vscode.window.createOutputChannel('bino dispose test', { log: true });
+        const c = new DaemonClient(channel);
+        assert.strictEqual(await c.connect(root), true);
+        const pid = c.pid;
+        c.dispose();
+        channel.dispose();
+        // Its exit used to be logged to the closed channel: an uncaught error.
+        kill(pid);
+        await new Promise(r => setTimeout(r, 300));
+    });
+
     test('a process of another user is not our daemon', function () {
         if (process.getuid?.() === 0) {
             this.skip(); // root may signal pid 1
