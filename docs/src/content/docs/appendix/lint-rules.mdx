@@ -1396,7 +1396,9 @@ that covers it, usually because the policy changed after the lock was written.
 As in `bino registry install`, each layer of the policy that has a rule for the
 package must be met. The rule reads the signatures stored under
 `.bino/registry/.attestations/`, offline; when none are stored, it checks the
-signer `bino.lock` records for the version.
+signer `bino.lock` records for the version. A stored signature that does not
+verify is reported. Under `require = "signed"`, a signer that no rule covers is
+reported too, since `bino registry install` refuses it.
 
 A `[trust]` policy that cannot be loaded, for example one with a misspelled
 key, is reported by this rule too, on `bino.toml`.

@@ -134,7 +134,8 @@ func UnknownTrustKeys(data []byte, wholeFile bool) error {
 	var keys []string
 	for _, e := range sme.Errors {
 		k := e.Key()
-		if wholeFile || (len(k) > 0 && k[0] == "trust") {
+		// go-toml matches table names case-insensitively, so [Trust] is [trust].
+		if wholeFile || (len(k) > 0 && strings.EqualFold(k[0], "trust")) {
 			keys = append(keys, strings.Join(k, "."))
 		}
 	}

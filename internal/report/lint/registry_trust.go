@@ -71,8 +71,13 @@ func registrySignerMismatch(projectRoot string, cfg *pathutil.ProjectConfig) Rul
 				// a policy with rules in several layers needs; the one signer
 				// the lock records stands in when they are gone.
 				check, found, err := registry.StoredSignatures(projectRoot, e, policy)
+				if err != nil {
+					out = append(out, lockFinding("registry-signer-mismatch", projectRoot, data, e.Name,
+						fmt.Sprintf("%s@%s: the stored signatures do not verify: %v", e.Name, e.Version, err)))
+					continue
+				}
 				signers := check.Signers()
-				if err != nil || !found {
+				if !found {
 					signers = nil
 					if e.Signer != nil {
 						signers = []registry.Signer{*e.Signer}
@@ -81,9 +86,16 @@ func registrySignerMismatch(projectRoot string, cfg *pathutil.ProjectConfig) Rul
 				if len(signers) == 0 {
 					continue
 				}
-				if covered, trusted, _ := policy.Evaluate(e.Name, signers); covered && !trusted {
+				// Under require = "signed" install refuses a package no rule
+				// covers, so lint does too.
+				covered, trusted, _ := policy.Evaluate(e.Name, signers)
+				switch {
+				case covered && !trusted:
 					out = append(out, lockFinding("registry-signer-mismatch", projectRoot, data, e.Name,
 						fmt.Sprintf("%s@%s is locked as signed by %s, which does not satisfy the [trust] signer rules for it", e.Name, e.Version, signers[0])))
+				case !covered && policy.Level() == registry.RequireSigned:
+					out = append(out, lockFinding("registry-signer-mismatch", projectRoot, data, e.Name,
+						fmt.Sprintf("%s@%s is locked as signed by %s, but no [trust] signer rule covers it and [trust] requires signed packages", e.Name, e.Version, signers[0])))
 				}
 			}
 			return out

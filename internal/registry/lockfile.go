@@ -108,8 +108,8 @@ type BundleTime struct {
 // SignerPin is the signer a package must keep. It lives outside the package
 // entries, so it survives the package leaving the closure: a registry that
 // drops a dependency and later serves it again, signed by someone else or not
-// at all, still meets the pin. Only 'bino registry trust accept' and
-// 'trust forget' change or remove one.
+// at all, still meets the pin. Only 'bino registry trust accept' changes or
+// removes one.
 type SignerPin struct {
 	Package string `toml:"package"`
 	Signer  Signer `toml:"signer,inline"`

@@ -246,6 +246,27 @@ func TestTrustUnknownKeysFail(t *testing.T) {
 			t.Fatalf("err = %v, want ErrTrustConfig naming trust.requires", err)
 		}
 	})
+	t.Run("project table in other case", func(t *testing.T) {
+		isolateTrust(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("[Trust]\nrequires = \"signed\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := pathutil.LoadProjectConfig(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := registry.LoadTrustPolicy(dir, cfg.Trust); !errors.Is(err, registry.ErrTrustConfig) {
+			t.Fatalf("err = %v, want ErrTrustConfig for a typo under [Trust]", err)
+		}
+	})
+	t.Run("global table in other case", func(t *testing.T) {
+		isolateTrust(t)
+		writeGlobal(t, "[Trust]\nrequires = \"signed\"\n")
+		if _, err := registry.LoadTrustPolicy(t.TempDir(), pathutil.TrustConfig{}); !errors.Is(err, registry.ErrTrustConfig) {
+			t.Fatalf("err = %v, want ErrTrustConfig for a typo under [Trust]", err)
+		}
+	})
 	t.Run("global", func(t *testing.T) {
 		isolateTrust(t)
 		writeGlobal(t, "[future]\nx = 1\n[[trust.signers]]\nscope = \"@acme/*\"\n")

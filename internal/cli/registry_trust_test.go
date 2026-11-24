@@ -660,3 +660,35 @@ func TestRegistryInstallChecksAtTheRecordedTime(t *testing.T) {
 		t.Fatalf("install: err = %v, want the bundle checked at the recorded time", err)
 	}
 }
+
+func TestRegistryTrustLintMatchesInstall(t *testing.T) {
+	isolateTrustHome(t)
+	kl := attesttest.NewKeyless(t)
+	kit := signedKit("1.0.0")
+	publish(t, kit, "keyless", func(p []byte) json.RawMessage { return kl.Sign(t, "alice@example.com", trustIssuer, p) })
+	srv, _, _ := fakeRegistryServer(t, map[string]*fakePackage{"@acme/kit": kit})
+	dir := newRegistryTestProject(t, srv.URL)
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	// A broken stored bundle is reported, not replaced by the recorded signer.
+	st := attesttest.Statement(t, "@acme/kit", "1.0.0", "sha256:"+strings.Repeat("0", 64))
+	forged := []registry.Attestation{attesttest.Attestation("publish", "keyless", kl.Sign(t, "alice@example.com", trustIssuer, st))}
+	if err := registry.WriteAttestations(dir, "@acme/kit", "1.0.0", forged); err != nil {
+		t.Fatal(err)
+	}
+	if found := lintFindings(t, dir); !strings.Contains(found["registry-signer-mismatch"], "do not verify") {
+		t.Errorf("forged stored bundle: registry-signer-mismatch = %q", found["registry-signer-mismatch"])
+	}
+
+	// Under require = "signed", a signer no rule covers is refused by
+	// install, so lint reports it.
+	if err := registry.RemoveAttestations(dir, "@acme/kit"); err != nil {
+		t.Fatal(err)
+	}
+	appendTrust(t, dir, "[trust]\nrequire = \"signed\"\n")
+	if found := lintFindings(t, dir); !strings.Contains(found["registry-signer-mismatch"], "no [trust] signer rule covers it") {
+		t.Errorf("uncovered signer under signed: registry-signer-mismatch = %q", found["registry-signer-mismatch"])
+	}
+}
