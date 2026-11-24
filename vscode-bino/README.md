@@ -5,7 +5,7 @@ Enhanced YAML editing for Bino Reports report manifests with intelligent autocom
 ## Features
 
 - **Language Server**: Completion, hover, diagnostics, go-to-definition, find-references, rename, and quick-fixes are all served by the real `bino lsp` Language Server (see the [LSP docs](https://cli.bino.bi/cli/lsp/))
-- **Bino Explorer Tree View**: Browse all Bino documents grouped by kind (DataSource, DataSet, ReportArtefact, etc.) in the Explorer sidebar
+- **Bino Explorer Tree View**: Browse all Bino documents grouped by kind (DataSource, DataSet, ReportArtefact, etc.) in the Bino Reports view
 - **Go to Definition / Find References / Rename**: Ctrl+Click (Cmd+Click on macOS) on references like `dataset:`, `source:`, `secret:`, `signingProfile:`, `selectedStyle:`, or items in `dependencies:` to jump to their definitions; Shift+F12/F2 work project-wide
 - **Dataset Autocompletion**: When typing `dataset:`, suggests all DataSet names and `$`-prefixed DataSource names from your project
 - **Column Introspection**: When editing `scenarios:`/`variances:` arrays or a `query:`/`prql:` block, suggests real column names from the referenced dataset via DuckDB
@@ -17,7 +17,7 @@ Enhanced YAML editing for Bino Reports report manifests with intelligent autocom
 - **Tree/Table Editor & Rows Preview**: A grid editor for `Tree`-kind manifests, plus a live 100-row data sample for any DataSource/DataSet
 - **Build Tasks**: `bino build` runs as a `bino` task (**Terminal > Run Build Task**, or **Bino: Build Report**). Errors with a file and line go to the Problems panel, and a finished build offers **Open PDF**
 - **Get Started walkthrough**: Install bino, create a project, add a DataSource and start the preview
-- **PRQL Integration**: When editing `spec.prql` blocks in DataSet manifests, right-click to open a dedicated PRQL editor or SQL preview (requires the [PRQL extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode))
+- **PRQL Integration**: When editing `spec.prql` blocks in DataSet manifests, right-click to open a dedicated PRQL editor or SQL preview (the SQL preview requires the [PRQL extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode))
 
 The extension talks to `bino lsp` for all live editor intelligence, and to an optional
 persistent `bino daemon` (see `bino.daemon.enabled`) shared by the LSP, preview, and
@@ -72,7 +72,7 @@ You can:
 
 2. **Preview compiled SQL**: Run "Bino: Open PRQL SQL Preview" to see the SQL that DuckDB will execute. This uses the official PRQL VS Code extension's SQL Preview feature.
 
-3. **Execute via bino build**: When you run `bino build`, PRQL queries are compiled and executed directly by DuckDB using the [prql community extension](https://duckdb.org/community_extensions/extensions/prql).
+3. **Execute via bino build**: When you run `bino build`, PRQL queries are compiled and executed directly by DuckDB using the [prql community extension](https://duckdb.org/community_extensions/extensions/prql). PRQL is not available right now: bino runs on DuckDB 2.0, and the prql extension is not published for it yet.
 
 For the best PRQL editing experience, install the [PRQL extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode). Bino will prompt you to install it when it detects PRQL usage in your workspace.
 
