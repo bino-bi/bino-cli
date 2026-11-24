@@ -12,8 +12,8 @@ require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/chromedp/cdproto v0.160.0
-	github.com/chromedp/chromedp v0.23.0
+	github.com/chromedp/cdproto v0.160.8
+	github.com/chromedp/chromedp v0.24.0
 	github.com/digitorus/pdfsign v1.0.0
 	github.com/duckdb/duckdb-go-bindings v0.20000.0
 	github.com/duckdb/duckdb-go/v2 v2.20000.0
@@ -24,7 +24,7 @@ require (
 	github.com/graemephi/goldmark-qjs-katex v0.3.0
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.8.0
-	github.com/klauspost/compress v1.20.4
+	github.com/klauspost/compress v1.20.5
 	github.com/mattn/go-isatty v0.0.24
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pdfcpu/pdfcpu v0.16.4
