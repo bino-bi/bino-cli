@@ -3,7 +3,6 @@
 package daemon
 
 import (
-	"errors"
 	"os"
 	"syscall"
 )
@@ -17,8 +16,7 @@ func processAlive(pid int) bool {
 	if err != nil {
 		return false
 	}
-	// Signal 0 checks existence without affecting the process. EPERM means it
-	// exists but belongs to another user.
-	err = proc.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, syscall.EPERM)
+	// Signal 0 checks existence without affecting the process. EPERM means the
+	// PID belongs to another user, so it cannot be our daemon: a reused PID.
+	return proc.Signal(syscall.Signal(0)) == nil
 }

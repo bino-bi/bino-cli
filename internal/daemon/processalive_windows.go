@@ -3,8 +3,6 @@
 package daemon
 
 import (
-	"errors"
-
 	"golang.org/x/sys/windows"
 )
 
@@ -19,8 +17,9 @@ func processAlive(pid int) bool {
 	}
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid)) //nolint:gosec // G115: a PID fits in uint32
 	if err != nil {
-		// Access denied means the process exists but we may not query it.
-		return errors.Is(err, windows.ERROR_ACCESS_DENIED)
+		// Access denied means a protected or foreign process reused the PID,
+		// so it cannot be our daemon.
+		return false
 	}
 	defer windows.CloseHandle(h) //nolint:errcheck // nothing to do if closing fails
 	var code uint32
