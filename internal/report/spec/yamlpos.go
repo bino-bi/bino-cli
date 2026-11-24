@@ -23,55 +23,20 @@ import (
 // round-trips Head/Line/Foot comments and preserves mapping key order, so only
 // the values the caller changes are rewritten.
 func EditYAMLDocument(content string, position int, patch map[string]any) (full string, edited string, err error) {
-	decoder := yaml.NewDecoder(strings.NewReader(content))
-	var docs []*yaml.Node // DocumentNodes
-	for {
-		var n yaml.Node
-		decErr := decoder.Decode(&n)
-		if decErr != nil {
-			if errors.Is(decErr, io.EOF) {
-				break
-			}
-			return "", "", fmt.Errorf("parse yaml: %w", decErr)
-		}
-		nodeCopy := n
-		docs = append(docs, &nodeCopy)
-	}
-
-	if position < 1 || position > len(docs) {
-		return "", "", fmt.Errorf("document position %d out of range (file has %d document(s))", position, len(docs))
-	}
-
-	target := docs[position-1]
-	if target.Kind != yaml.DocumentNode || len(target.Content) == 0 {
-		return "", "", fmt.Errorf("document %d is empty", position)
-	}
-	root := target.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return "", "", fmt.Errorf("document %d is not a mapping", position)
-	}
-
 	// Apply edits in sorted path order for determinism.
 	paths := make([]string, 0, len(patch))
 	for p := range patch {
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
-	for _, p := range paths {
-		if err := setNodePath(root, p, patch[p]); err != nil {
-			return "", "", fmt.Errorf("set %s: %w", p, err)
+	return rewriteDocument(content, position, func(root *yaml.Node) error {
+		for _, p := range paths {
+			if err := setNodePath(root, p, patch[p]); err != nil {
+				return fmt.Errorf("set %s: %w", p, err)
+			}
 		}
-	}
-
-	full, err = encodeDocuments(docs)
-	if err != nil {
-		return "", "", err
-	}
-	edited, err = encodeDocuments(docs[position-1 : position])
-	if err != nil {
-		return "", "", err
-	}
-	return full, edited, nil
+		return nil
+	})
 }
 
 // RemoveYAMLPaths deletes one or more dotted paths from a single document
@@ -87,30 +52,14 @@ func EditYAMLDocument(content string, position int, patch map[string]any) (full 
 // paths address elements of the same sequence, the higher index is removed
 // first so a leading splice never invalidates a later index.
 func RemoveYAMLPaths(content string, position int, paths []string) (full string, edited string, err error) {
-	docs, err := decodeDocuments(content)
-	if err != nil {
-		return "", "", err
-	}
-	root, err := documentRoot(docs, position)
-	if err != nil {
-		return "", "", err
-	}
-
-	for _, p := range orderRemovals(paths) {
-		if err := removeNodePath(root, p); err != nil {
-			return "", "", fmt.Errorf("remove %s: %w", p, err)
+	return rewriteDocument(content, position, func(root *yaml.Node) error {
+		for _, p := range orderRemovals(paths) {
+			if err := removeNodePath(root, p); err != nil {
+				return fmt.Errorf("remove %s: %w", p, err)
+			}
 		}
-	}
-
-	full, err = encodeDocuments(docs)
-	if err != nil {
-		return "", "", err
-	}
-	edited, err = encodeDocuments(docs[position-1 : position])
-	if err != nil {
-		return "", "", err
-	}
-	return full, edited, nil
+		return nil
+	})
 }
 
 // orderRemovals returns paths sorted so that elements of the same sequence are
@@ -152,49 +101,33 @@ func splitTrailingIndex(path string) (base string, idx int, ok bool) {
 // byte-identical content. It returns the rewritten full content and the edited
 // document on its own (for validation).
 func ReorderYAMLSequence(content string, position int, path string, from, to int) (full string, edited string, err error) {
-	docs, err := decodeDocuments(content)
-	if err != nil {
-		return "", "", err
-	}
-	root, err := documentRoot(docs, position)
-	if err != nil {
-		return "", "", err
-	}
+	return rewriteDocument(content, position, func(root *yaml.Node) error {
+		seq, err := descendPath(root, path)
+		if err != nil {
+			return fmt.Errorf("reorder %s: %w", path, err)
+		}
+		if seq.Kind != yaml.SequenceNode {
+			return fmt.Errorf("reorder %s: not a sequence", path)
+		}
+		n := len(seq.Content)
+		if from < 0 || from >= n {
+			return fmt.Errorf("reorder %s: from index %d out of range (len %d)", path, from, n)
+		}
+		if to < 0 || to >= n {
+			return fmt.Errorf("reorder %s: to index %d out of range (len %d)", path, to, n)
+		}
 
-	seq, err := descendPath(root, path)
-	if err != nil {
-		return "", "", fmt.Errorf("reorder %s: %w", path, err)
-	}
-	if seq.Kind != yaml.SequenceNode {
-		return "", "", fmt.Errorf("reorder %s: not a sequence", path)
-	}
-	n := len(seq.Content)
-	if from < 0 || from >= n {
-		return "", "", fmt.Errorf("reorder %s: from index %d out of range (len %d)", path, from, n)
-	}
-	if to < 0 || to >= n {
-		return "", "", fmt.Errorf("reorder %s: to index %d out of range (len %d)", path, to, n)
-	}
-
-	elem := seq.Content[from]
-	rest := make([]*yaml.Node, 0, n-1)
-	rest = append(rest, seq.Content[:from]...)
-	rest = append(rest, seq.Content[from+1:]...)
-	moved := make([]*yaml.Node, 0, n)
-	moved = append(moved, rest[:to]...)
-	moved = append(moved, elem)
-	moved = append(moved, rest[to:]...)
-	seq.Content = moved
-
-	full, err = encodeDocuments(docs)
-	if err != nil {
-		return "", "", err
-	}
-	edited, err = encodeDocuments(docs[position-1 : position])
-	if err != nil {
-		return "", "", err
-	}
-	return full, edited, nil
+		elem := seq.Content[from]
+		rest := make([]*yaml.Node, 0, n-1)
+		rest = append(rest, seq.Content[:from]...)
+		rest = append(rest, seq.Content[from+1:]...)
+		moved := make([]*yaml.Node, 0, n)
+		moved = append(moved, rest[:to]...)
+		moved = append(moved, elem)
+		moved = append(moved, rest[to:]...)
+		seq.Content = moved
+		return nil
+	})
 }
 
 // AppendYAMLSequence appends value to the end of the sequence at the dotted path
@@ -208,34 +141,18 @@ func ReorderYAMLSequence(content string, position int, path string, from, to int
 // an out-of-range index (so they cannot append past a sequence's end). It is the
 // single engine for the designer's array-append mutations.
 func AppendYAMLSequence(content string, position int, path string, value any) (full string, edited string, err error) {
-	docs, err := decodeDocuments(content)
-	if err != nil {
-		return "", "", err
-	}
-	root, err := documentRoot(docs, position)
-	if err != nil {
-		return "", "", err
-	}
-
-	seq, err := descendOrCreateSequence(root, path)
-	if err != nil {
-		return "", "", fmt.Errorf("append %s: %w", path, err)
-	}
-	elem, err := encodeValueNode(value)
-	if err != nil {
-		return "", "", fmt.Errorf("append %s: %w", path, err)
-	}
-	seq.Content = append(seq.Content, elem)
-
-	full, err = encodeDocuments(docs)
-	if err != nil {
-		return "", "", err
-	}
-	edited, err = encodeDocuments(docs[position-1 : position])
-	if err != nil {
-		return "", "", err
-	}
-	return full, edited, nil
+	return rewriteDocument(content, position, func(root *yaml.Node) error {
+		seq, err := descendOrCreateSequence(root, path)
+		if err != nil {
+			return fmt.Errorf("append %s: %w", path, err)
+		}
+		elem, err := encodeValueNode(value)
+		if err != nil {
+			return fmt.Errorf("append %s: %w", path, err)
+		}
+		seq.Content = append(seq.Content, elem)
+		return nil
+	})
 }
 
 // descendOrCreateSequence walks a dotted path from a mapping root to a sequence
@@ -441,10 +358,10 @@ func joinComment(a, b string) string {
 }
 
 // encodeDocuments re-encodes a slice of DocumentNodes back to YAML text.
-func encodeDocuments(docs []*yaml.Node) (string, error) {
+func encodeDocuments(docs []*yaml.Node, indent int) (string, error) {
 	var buf strings.Builder
 	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
+	enc.SetIndent(indent)
 	for _, d := range docs {
 		if err := enc.Encode(d); err != nil {
 			_ = enc.Close() //nolint:errcheck // best-effort close on the error path; the encode error is returned

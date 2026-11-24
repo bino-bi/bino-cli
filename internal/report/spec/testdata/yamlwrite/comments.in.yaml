@@ -1,0 +1,21 @@
+# File header comment
+
+# Data source for the report
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales # inline on name
+spec:
+  # head on type
+  type: csv
+  path: data/sales.csv
+# trailing comment of the first document
+---
+# head of the second document
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: note
+spec:
+  value: keep # keep me
+# trailing comment of the file

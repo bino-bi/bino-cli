@@ -1,0 +1,18 @@
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+    name: intro
+spec:
+    value: hello
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+    name: t
+spec:
+    dataset: sales
+    columns:
+        - name: region
+          label: Region
+        - name: revenue
+        - name: margin

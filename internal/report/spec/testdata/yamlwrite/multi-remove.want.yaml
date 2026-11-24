@@ -1,0 +1,22 @@
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: a
+spec:
+  value: first
+---
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: b
+  labels:
+    team: finance # owner
+spec:
+  value: second
+---
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+    name: c
+spec:
+    value: third
