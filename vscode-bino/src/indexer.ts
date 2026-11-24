@@ -149,6 +149,8 @@ export class WorkspaceIndexer {
 
     private _isIndexing = false;
     private daemonClient: DaemonClient | undefined;
+    // A bino.toml found below a workspace folder root, used when the upward walk finds none.
+    private subfolderProjectRoot: string | undefined;
 
     /** Returns true if indexing is currently in progress */
     get isIndexing(): boolean {
@@ -224,7 +226,7 @@ export class WorkspaceIndexer {
                 }
             }
         }
-        return undefined;
+        return this.subfolderProjectRoot;
     }
 
     getProjectRootForUri(uri?: vscode.Uri): string | undefined {
@@ -255,7 +257,7 @@ export class WorkspaceIndexer {
             }
         }
 
-        return undefined;
+        return this.subfolderProjectRoot;
     }
 
     /** Get workspace root directory (legacy method, now uses project root detection) */
@@ -267,7 +269,7 @@ export class WorkspaceIndexer {
      * Check if a bino project exists in any workspace folder.
      * Used to determine if the extension should be fully active.
      */
-    hasProjectInWorkspace(): boolean {
+    async hasProjectInWorkspace(): Promise<boolean> {
         const folders = vscode.workspace.workspaceFolders;
         if (!folders) {
             return false;
@@ -277,7 +279,32 @@ export class WorkspaceIndexer {
                 return true;
             }
         }
-        return false;
+        this.subfolderProjectRoot = await this.findSubfolderProjectRoot();
+        return this.subfolderProjectRoot !== undefined;
+    }
+
+    /**
+     * Search sub-folders for bino.toml. Prefers the project that contains the
+     * active editor, else the shallowest one (ties broken by path).
+     */
+    private async findSubfolderProjectRoot(): Promise<string | undefined> {
+        const files = await vscode.workspace.findFiles(`**/${PROJECT_CONFIG_FILE}`, '**/node_modules/**', 20);
+        const roots = files.map(f => path.dirname(f.fsPath));
+        if (roots.length === 0) {
+            return undefined;
+        }
+        const active = vscode.window.activeTextEditor?.document.uri;
+        if (active?.scheme === 'file') {
+            const containing = roots
+                .filter(r => active.fsPath.startsWith(r + path.sep))
+                .sort((a, b) => b.length - a.length);
+            if (containing.length > 0) {
+                return containing[0];
+            }
+        }
+        const depth = (p: string) => p.split(path.sep).length;
+        roots.sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
+        return roots[0];
     }
 
     /** Execute bino lsp-helper command */

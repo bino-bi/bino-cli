@@ -84,6 +84,16 @@ function findDocumentLine(document: vscode.TextDocument, docIndex: number): numb
     return 0;
 }
 
+/** Run a bino command in the integrated terminal. */
+function runInTerminal(args: string): void {
+    const config = vscode.workspace.getConfiguration('bino');
+    const binPath = config.get<string>('binPath');
+    const bino = binPath && binPath.trim() ? binPath : 'bino';
+    const terminal = vscode.window.createTerminal({ name: `Bino: ${args}`, cwd: indexer?.getProjectRootForUri() });
+    terminal.show();
+    terminal.sendText(`${bino} ${args}`);
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     console.log('Bino Reports extension activating...');
 
@@ -95,12 +105,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     indexer = new WorkspaceIndexer(context);
 
     // Check if this is a bino project and set context for UI visibility
-    const hasBinoProject = indexer.hasProjectInWorkspace();
+    const hasBinoProject = await indexer.hasProjectInWorkspace();
     await vscode.commands.executeCommand('setContext', 'bino.projectDetected', hasBinoProject);
+
+    // Onboarding commands must work without a project, so they are registered before the early return.
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.initProject', () => runInTerminal('init')),
+        vscode.commands.registerCommand('bino.checkSetup', async () => {
+            await showSetupCheckResults();
+        }),
+        vscode.commands.registerCommand('bino.openSettings', () => {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'bino');
+        })
+    );
 
     if (!hasBinoProject) {
         console.log('No bino.toml found in workspace, extension features disabled');
         outputChannel.appendLine('No bino.toml found in workspace. Run "bino init" to create a new project.');
+        // The welcome content needs a registered view, else VS Code shows "no data provider".
+        context.subscriptions.push(
+            vscode.window.registerTreeDataProvider('binoGettingStarted', {
+                getTreeItem: (item: vscode.TreeItem) => item,
+                getChildren: () => [],
+            })
+        );
+        // Features are wired once at activation, so a new project needs a window reload.
+        const tomlWatcher = vscode.workspace.createFileSystemWatcher('**/bino.toml', false, true, true);
+        context.subscriptions.push(
+            tomlWatcher,
+            tomlWatcher.onDidCreate(async () => {
+                tomlWatcher.dispose();
+                const choice = await vscode.window.showInformationMessage(
+                    'Bino project created. Reload the window to enable all Bino features.',
+                    'Reload Window'
+                );
+                if (choice === 'Reload Window') {
+                    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+            })
+        );
         return;
     }
 
@@ -466,13 +509,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Setup check command
-    context.subscriptions.push(
-        vscode.commands.registerCommand('bino.checkSetup', async () => {
-            await showSetupCheckResults();
-        })
-    );
-
     // Show columns for current dataset/datasource command
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.showColumnsForCurrentDataset', async () => {
@@ -577,19 +613,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // --- Helper: run a bino command in the integrated terminal ---
-    function runInTerminal(args: string): void {
-        const config = vscode.workspace.getConfiguration('bino');
-        const binPath = config.get<string>('binPath');
-        const bino = binPath && binPath.trim() ? binPath : 'bino';
-        const terminal = vscode.window.createTerminal({ name: `Bino: ${args}`, cwd: indexer?.getProjectRootForUri() });
-        terminal.show();
-        terminal.sendText(`${bino} ${args}`);
-    }
-
     // --- Scaffolding commands (bino add <kind>) ---
     const addCommands: [string, string][] = [
-        ['bino.initProject', 'init'],
         ['bino.addDataset', 'add dataset'],
         ['bino.addDatasource', 'add datasource'],
         ['bino.addConnectionSecret', 'add connectionsecret'],
@@ -684,13 +709,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.showGraphFlat', () => {
             runInTerminal('graph --view flat');
-        })
-    );
-
-    // Open Bino settings
-    context.subscriptions.push(
-        vscode.commands.registerCommand('bino.openSettings', () => {
-            vscode.commands.executeCommand('workbench.action.openSettings', 'bino');
         })
     );
 
