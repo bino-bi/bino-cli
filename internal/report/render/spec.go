@@ -803,6 +803,9 @@ type gridChild struct {
 	// annotationTarget is the page-unique target id of a SmallMultiple panel
 	// that an annotation points at.
 	annotationTarget string
+	// panel is the label of the SmallMultiple panel in this cell: the value
+	// target.panel of an annotation names it with.
+	panel string
 }
 
 // writeCellAttrs writes the attributes bn-grid reads from the child of a cell.

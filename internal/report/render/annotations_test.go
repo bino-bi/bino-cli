@@ -234,7 +234,7 @@ func TestAnnotations_ACardInATreeHasNoTargets(t *testing.T) {
 func TestAnnotations_ATreeNodeWithARefIsATarget(t *testing.T) {
 	tree := `{"kind":"Tree","metadata":{"name":"tr"},"spec":{"edges":[],"nodes":[{"id":"n","kind":"ChartTime","ref":"trend"},{"id":"m","kind":"ChartTime","spec":{"dataset":"sales"}}]}}`
 	out := renderAnnotations(t, ModeBuild, chartDoc, marker2024, annotationTestPage(tree))
-	if !regexp.MustCompile(`<div slot='n' data-bino-annotation-target='t1'>`).MatchString(out) {
+	if !regexp.MustCompile(`<div slot='n' data-bino-annotation-target='t1'[ >]`).MatchString(out) {
 		t.Fatalf("no target on the tree node:\n%s", out)
 	}
 	if strings.Contains(out, "<div slot='m' data-bino-annotation-target") {
@@ -473,5 +473,36 @@ func TestLabelsHideAttr(t *testing.T) {
 	}
 	if got := labelsHideAttr(nil); got != "" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestAnnotations_GridChildAndTreeNodeCarryTheirTarget(t *testing.T) {
+	grid := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"rowHeaders":["r"],"columnHeaders":["a","b"],"children":[` +
+		`{"row":0,"column":0,"kind":"ChartTime","ref":"trend"},` +
+		`{"row":0,"column":1,"kind":"Table","metadata":{"name":"inline_t"},"spec":{"dataset":"sales"}}]}}`
+	tree := `{"kind":"Tree","metadata":{"name":"tr"},"spec":{"edges":[],"nodes":[{"id":"n","kind":"ChartTime","ref":"trend"},{"id":"m","kind":"ChartTime","spec":{"dataset":"sales"}}]}}`
+	// No annotation on the page: a client needs the target before there is one.
+	out := renderAnnotations(t, ModeBuild, chartDoc, annotationTestPage(grid+","+tree))
+	for _, want := range []string{
+		`<div slot='[^']*' data-bino-target-kind='ChartTime' data-bino-target-name='trend'><bn-chart-time`,
+		`<div slot='[^']*' data-bino-target-kind='Table' data-bino-target-name='inline_t'><bn-table`,
+		`<div slot='n' data-bino-target-kind='ChartTime' data-bino-target-name='trend'>`,
+		`<div slot='m'>`, // an inline node cannot be a target
+	} {
+		if !regexp.MustCompile(want).MatchString(out) {
+			t.Errorf("no match for %s in:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, "data-bino-target-kind") != 3 {
+		t.Errorf("want 3 targets in:\n%s", out)
+	}
+}
+
+func TestAnnotations_CardInATreeHasNoTargetAttributes(t *testing.T) {
+	grid := `{"kind":"Grid","spec":{"rowHeaders":["r"],"columnHeaders":["c"],"children":[{"row":0,"column":0,"kind":"ChartTime","ref":"trend"}]}}`
+	tree := `{"kind":"Tree","metadata":{"name":"tr"},"spec":{"nodes":[{"id":"n","kind":"LayoutCard","spec":{"children":[` + grid + `]}}]}}`
+	out := renderAnnotations(t, ModeBuild, chartDoc, annotationTestPage(tree))
+	if !strings.Contains(out, "<bn-grid") || strings.Contains(out, "data-bino-target-") {
+		t.Fatalf("a Grid in a card in a Tree has no targets:\n%s", out)
 	}
 }

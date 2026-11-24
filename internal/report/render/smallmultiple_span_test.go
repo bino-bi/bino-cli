@@ -113,7 +113,7 @@ func TestSmallMultiple_NoSpanAttributesByDefault(t *testing.T) {
 	if got := strings.Join(slotsOf(spanCells(html)), " "); got != "0-0 0-1 1-0 1-1" {
 		t.Errorf("slots = %s", got)
 	}
-	if !strings.Contains(html, "<div slot='0-0'><bn-chart-time") {
+	if !strings.Contains(html, "<div slot='0-0' data-bino-panel='Berlin'><bn-chart-time") {
 		t.Errorf("the cell element changed:\n%s", html)
 	}
 }
@@ -137,7 +137,7 @@ func TestSmallMultiple_OverridesAndItemSpan(t *testing.T) {
 	if total["column-span"] != "2" || total["row-span"] != "" || total["cell-background"] != "rgb(1, 2, 3)" {
 		t.Errorf("Total cell = %v", total)
 	}
-	if len(cells[0].cell) != 0 {
+	if len(cells[0].cell) != 1 || cells[0].cell["data-bino-panel"] != "Berlin" {
 		t.Errorf("Berlin cell has attributes: %v", cells[0].cell)
 	}
 	grid := attrsOf(openTag(t, html, "bn-grid"))

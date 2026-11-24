@@ -124,6 +124,10 @@ type renderCtx struct {
 	// gridPage is the annotation page while a Grid renders: a direct child of
 	// the Grid can be a target.
 	gridPage *annotationPage
+	// pageTargets and gridTargets are true where a component can be an
+	// annotation target, like annotationPage and gridPage but also on a page
+	// without annotations: the target attributes are written on every page.
+	pageTargets, gridTargets bool
 	// annotationData finds the rows behind a component for the point check.
 	annotationData *annotationData
 }
@@ -1411,6 +1415,9 @@ func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 		b.WriteString(html.EscapeString(node.ID))
 		b.WriteString("'")
 		writeAttr(&b, "data-bino-annotation-target", rc.treeAnnotationTarget(node))
+		if rc.gridTargets && treeNodeTargetKey(node) != "" {
+			writeTargetAttrs(&b, node.Kind, node.Ref)
+		}
 		b.WriteString(">")
 		b.WriteString(nodeContent)
 		b.WriteString("</div>")
@@ -1609,12 +1616,20 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 		cells.WriteString(html.EscapeString(gridSlotName(child)))
 		cells.WriteString("'")
 		child.writeCellAttrs(&cells)
+		writeAttr(&cells, "data-bino-panel", child.panel)
 		if child.Kind != "LayoutCard" {
 			target := child.annotationTarget
 			if target == "" {
 				target = rc.gridAnnotationTarget(child)
 			}
 			writeAttr(&cells, "data-bino-annotation-target", target)
+			if childRC.gridTargets {
+				name := child.Ref
+				if name == "" {
+					name = child.Metadata.Name
+				}
+				writeTargetAttrs(&cells, child.Kind, name)
+			}
 		}
 		cells.WriteString(">")
 		cells.WriteString(contents[i])
@@ -1769,6 +1784,16 @@ func writeAttr(b *strings.Builder, name, value string) {
 	b.WriteString("='")
 	b.WriteString(html.EscapeString(value))
 	b.WriteString("'")
+}
+
+// writeTargetAttrs writes what an annotation names a Grid child or a Tree
+// node with: target.kind and target.name.
+func writeTargetAttrs(b *strings.Builder, kind, name string) {
+	if name == "" {
+		return
+	}
+	writeAttr(b, "data-bino-target-kind", kind)
+	writeAttr(b, "data-bino-target-name", name)
 }
 
 // writeSourceAttrs writes data attributes for click-to-source functionality in preview.

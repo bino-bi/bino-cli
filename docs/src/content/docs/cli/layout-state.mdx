@@ -49,6 +49,28 @@ Writes `dist/<artefact>.layout.json` next to each PDF and reports the same findi
 as build warnings - which also land in the [JSON build log](/cli/build-logs/), so
 CI can fail on them.
 
+The file holds the engine's capture (`state`, `sources`, `settled`) and the
+analyzed `findings`, one object per finding with `rule`, `severity`,
+`componentId`, `tag`, `kind`, `name`, `message` and `hint`:
+
+```json
+"findings": [
+  {
+    "rule": "layout-empty-component",
+    "severity": "warning",
+    "componentId": "bn-chart-time[0]",
+    "tag": "bn-chart-time",
+    "kind": "ChartTime",
+    "name": "revenueTrend",
+    "message": "rendered empty - 0 bars rendered",
+    "hint": "check the dataset reference and that its query returns rows"
+  }
+]
+```
+
+`findings` is an empty array when nothing was found. A file without the field
+comes from an older bino, or holds a capture this bino could not analyze.
+
 Without the flag a build still reads the rendered layout and reports content that is lost: `layout-overflow`, content that is cut off, and `layout-component-error`, a component that is not drawn because of an error. It prints one line per rule and component, also when many panels are hit, and writes no file. All other findings need `--layout-state`.
 
 The file has no timestamp, so two builds of an unchanged bundle produce identical

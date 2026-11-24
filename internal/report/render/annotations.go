@@ -150,10 +150,11 @@ func (d *annotationData) rows(binding string) annotation.Rows {
 
 // withAnnotationPage starts the mark collection for a page.
 func (rc *renderCtx) withAnnotationPage() *renderCtx {
-	if len(rc.annotations) == 0 {
-		return rc
-	}
 	c := *rc
+	c.pageTargets = true
+	if len(rc.annotations) == 0 {
+		return &c
+	}
 	page := &annotationPage{
 		docs:    rc.annotations,
 		wanted:  map[string]bool{},
@@ -182,12 +183,13 @@ func (rc *renderCtx) withAnnotationPage() *renderCtx {
 // withoutAnnotationPage ends the mark collection below a card in a Tree. Its
 // children cannot be targets: lint reports them all alike.
 func (rc *renderCtx) withoutAnnotationPage() *renderCtx {
-	if rc.annotationPage == nil && rc.gridPage == nil {
+	if rc.annotationPage == nil && rc.gridPage == nil && !rc.pageTargets && !rc.gridTargets {
 		return rc
 	}
 	c := *rc
 	c.annotationPage = nil
 	c.gridPage = nil
+	c.pageTargets, c.gridTargets = false, false
 	return &c
 }
 
@@ -195,12 +197,13 @@ func (rc *renderCtx) withoutAnnotationPage() *renderCtx {
 // for the direct children of the Grid or the nodes of the Tree: each of them
 // can be a target. A card in a cell or a node stays without targets.
 func (rc *renderCtx) forGrid() *renderCtx {
-	if rc.annotationPage == nil {
+	if rc.annotationPage == nil && !rc.pageTargets {
 		return rc
 	}
 	c := *rc
 	c.annotationPage = nil
 	c.gridPage = rc.annotationPage
+	c.pageTargets, c.gridTargets = false, rc.pageTargets
 	return &c
 }
 
@@ -279,12 +282,13 @@ func (rc *renderCtx) treeAnnotationTarget(node treeNode) string {
 // forSmallMultiple ends the mark collection like withoutAnnotationPage, but
 // keeps the page for the panels: a panel can be a target.
 func (rc *renderCtx) forSmallMultiple() *renderCtx {
-	if rc.annotationPage == nil {
+	if rc.annotationPage == nil && !rc.pageTargets && !rc.gridTargets {
 		return rc
 	}
 	c := *rc
 	c.annotationPage = nil
 	c.gridPage = nil
+	c.pageTargets, c.gridTargets = false, false
 	c.panelPage = rc.annotationPage
 	return &c
 }

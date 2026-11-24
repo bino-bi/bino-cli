@@ -327,6 +327,16 @@ The check does not look at the `filter` of a component, it skips a component tha
 - The presentation view shows annotations like `bino preview`.
 - `metadata.annotations` of any document is an unused free-form map and has nothing to do with this kind.
 
+## Targets in the HTML
+
+A tool that reads the HTML of `bino preview` or of a build can find the targets without an annotation on the page:
+
+- A component on a page or in a card on a page sits in an element with `data-bino-kind` and `data-bino-ref` (a document by `ref`) or `data-bino-name` (an inline child). Its `target` is `kind` from `data-bino-kind` and `name` from `data-bino-ref`, else from `data-bino-name`.
+- A direct child of a `Grid` and a node of a `Tree` that can be a target sit in an element with `data-bino-target-kind` and `data-bino-target-name`. These are `target.kind` and `target.name` as they are. A child that cannot be a target has neither.
+- Each panel of a `SmallMultiple` sits in an element with `data-bino-panel`: the label that `target.panel` takes. `kind` and `name` are those of the `SmallMultiple`.
+
+A document that sits on a page twice has the same target in both places, and the mark goes on both.
+
 ## Attribute reference
 
 | Attribute | Type | Required | Default | Description |

@@ -28,17 +28,23 @@ type layoutStateCapture struct {
 
 	// Findings are the analyzed results, filled by Handle.
 	Findings []layoutstate.Finding
+	analyzed bool
 }
 
 // Handle is the chrome.PDFOptions.OnLayoutState callback.
 func (c *layoutStateCapture) Handle(snapshot []byte) {
 	quiet := c.SnapshotPath == ""
-	if !quiet {
-		if err := c.write(snapshot); err != nil {
-			c.Logger.Warnf("failed to write layout state: %v", err)
-		}
+	c.analyze(snapshot, quiet)
+	if quiet {
+		c.Findings = overflowOnly(c.Findings)
+		return
 	}
+	if err := c.write(snapshot); err != nil {
+		c.Logger.Warnf("failed to write layout state: %v", err)
+	}
+}
 
+func (c *layoutStateCapture) analyze(snapshot []byte, quiet bool) {
 	var snap layoutstate.Snapshot
 	if err := json.Unmarshal(snapshot, &snap); err != nil {
 		if !quiet {
@@ -53,9 +59,7 @@ func (c *layoutStateCapture) Handle(snapshot []byte) {
 		return
 	}
 	c.Findings = layoutstate.Analyze(snap)
-	if quiet {
-		c.Findings = overflowOnly(c.Findings)
-	}
+	c.analyzed = true
 }
 
 // overflowOnly keeps the findings about content that is lost (cut off, or not
@@ -91,6 +95,13 @@ func overflowOnly(findings []layoutstate.Finding) []layoutstate.Finding {
 }
 
 func (c *layoutStateCapture) write(snapshot []byte) error {
+	if c.analyzed {
+		withFindings, err := addFindings(snapshot, c.Findings)
+		if err != nil {
+			return err
+		}
+		snapshot = withFindings
+	}
 	if err := os.MkdirAll(filepath.Dir(c.SnapshotPath), 0o755); err != nil {
 		return fmt.Errorf("create layout state dir: %w", err)
 	}
@@ -98,6 +109,31 @@ func (c *layoutStateCapture) write(snapshot []byte) error {
 		return fmt.Errorf("write %s: %w", c.SnapshotPath, err)
 	}
 	return nil
+}
+
+// addFindings appends the analyzed findings to the capture. The array is
+// always present once analyzed, so a reader can tell "no findings" from a file
+// of an older CLI, which has no findings field at all. The capture fields keep
+// their bytes, so the file stays stable between identical builds.
+func addFindings(snapshot []byte, findings []layoutstate.Finding) ([]byte, error) {
+	var file struct {
+		State    json.RawMessage       `json:"state"`
+		Sources  json.RawMessage       `json:"sources,omitempty"`
+		Settled  json.RawMessage       `json:"settled,omitempty"`
+		Findings []layoutstate.Finding `json:"findings"`
+	}
+	if err := json.Unmarshal(snapshot, &file); err != nil {
+		return nil, fmt.Errorf("read layout state: %w", err)
+	}
+	file.Findings = findings
+	if file.Findings == nil {
+		file.Findings = []layoutstate.Finding{}
+	}
+	out, err := json.Marshal(file)
+	if err != nil {
+		return nil, fmt.Errorf("encode layout state: %w", err)
+	}
+	return out, nil
 }
 
 // Warnings renders the findings as build-log lines, prefixed with the artefact
