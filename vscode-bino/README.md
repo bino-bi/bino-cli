@@ -9,6 +9,7 @@ Enhanced YAML editing for Bino Reports report manifests with intelligent autocom
 - **Go to Definition / Find References / Rename**: Ctrl+Click (Cmd+Click on macOS) on references like `dataset:`, `source:`, `secret:`, `signingProfile:`, `selectedStyle:`, or items in `dependencies:` to jump to their definitions; Shift+F12/F2 work project-wide
 - **Dataset Autocompletion**: When typing `dataset:`, suggests all DataSet names and `$`-prefixed DataSource names from your project
 - **Column Introspection**: When editing `scenarios:`/`variances:` arrays or a `query:`/`prql:` block, suggests real column names from the referenced dataset via DuckDB
+- **SQL and PRQL in YAML**: `query:` and `prql:` blocks are highlighted as SQL and PRQL; inside them the language server completes DuckDB keywords and functions, DataSet and DataSource names after `FROM`/`JOIN`, and jumps to and shows the data of a name after `FROM`/`JOIN`
 - **Reference Completions**: Smart completions for `signingProfile`, `selectedStyle`, and other cross-document references
 - **Kind Completions**: Suggests all valid document kinds when typing `kind:`
 - **Designer**: A schema-driven property-form editor for Table/Chart/Text/Tree/Grid manifests (**Bino: Open Designer**, or **Reopen Editor With... > Bino Designer** on a YAML file)
@@ -35,6 +36,7 @@ extension falls back to discrete `bino lsp-helper` CLI calls.
 - `bino.columnCacheTTL`: Time in milliseconds to cache column introspection results (default: 60 seconds).
 - `bino.previewPort`: Port number for the `bino preview` server (default: 45678).
 - `bino.daemon.enabled`: Enable the persistent background daemon for faster indexing, validation, and data introspection (default: enabled).
+- `bino.lsp.queryDiagnostics`: On save, run each DataSet query with DuckDB (`LIMIT 0`) and show parse and bind errors on the query line (default: off).
 - `bino.wizard.sampleRowLimit`: Max sample rows the DataSource wizard fetches when introspecting a source (default: 100).
 
 ## Commands

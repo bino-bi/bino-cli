@@ -84,14 +84,26 @@ export async function startLanguageClient(
         ],
         outputChannel,
         // Opt in to bino/indexChanged, the push that keeps the project index current.
-        initializationOptions: { indexChanged: true },
+        initializationOptions: { indexChanged: true, queryDiagnostics: queryDiagnosticsSetting() },
     };
 
     client = new LanguageClient('bino', 'bino Language Server', serverOptions, clientOptions);
     await client.start();
     context.subscriptions.push({ dispose: () => void stopLanguageClient() });
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+        if (client && e.affectsConfiguration('bino.lsp.queryDiagnostics')) {
+            // An older server ignores the setting; this notification is harmless there.
+            void client.sendNotification('workspace/didChangeConfiguration', {
+                settings: { bino: { queryDiagnostics: queryDiagnosticsSetting() } },
+            });
+        }
+    }));
     outputChannel.appendLine('[LSP] bino language server started');
     return true;
+}
+
+function queryDiagnosticsSetting(): boolean {
+    return vscode.workspace.getConfiguration('bino').get<boolean>('lsp.queryDiagnostics') ?? false;
 }
 
 /** The running language client, if any. */

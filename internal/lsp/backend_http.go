@@ -137,6 +137,23 @@ func (b *HTTPBackend) Columns(ctx context.Context, name string) ([]string, error
 	return r.Columns, nil
 }
 
+func (b *HTTPBackend) Sample(ctx context.Context, name string, limit int) (DatasetSample, error) {
+	var r struct {
+		Kind    string           `json:"kind"`
+		Columns []string         `json:"columns"`
+		Types   []string         `json:"types"`
+		Rows    []map[string]any `json:"rows"`
+		Error   string           `json:"error"`
+	}
+	if err := b.getJSON(ctx, "/rows?name="+url.QueryEscape(name)+"&limit="+strconv.Itoa(limit), &r); err != nil {
+		return DatasetSample{}, err
+	}
+	if r.Error != "" {
+		return DatasetSample{}, fmt.Errorf("%s", r.Error)
+	}
+	return DatasetSample{Kind: r.Kind, Columns: r.Columns, Types: r.Types, Rows: r.Rows}, nil
+}
+
 func (b *HTTPBackend) GraphDeps(ctx context.Context, kind, name, direction string, maxDepth int) (GraphResult, error) {
 	q := url.Values{}
 	q.Set("kind", kind)

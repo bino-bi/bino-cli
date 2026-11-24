@@ -40,6 +40,8 @@ type Server struct {
 	// indexNotifications records the client's opt-in to bino/indexChanged.
 	// Atomic: the project watcher reads it from its own goroutine.
 	indexNotifications atomic.Bool
+	// queryDiagnostics enables the on-save DuckDB check of query blocks.
+	queryDiagnostics atomic.Bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -61,6 +63,11 @@ type Server struct {
 	// findings that ValidateDraft never sees).
 	draftDiags   map[string][]protocol.Diagnostic
 	projectDiags map[string][]protocol.Diagnostic
+	// queryDiags holds the DuckDB errors of the last on-save query check.
+	queryDiags map[string][]protocol.Diagnostic
+
+	data   dataCache
+	checks queryChecks
 }
 
 // NewServer constructs a Server over the given backend. phase2 advertises the
@@ -165,7 +172,8 @@ func (s *Server) publishFile(path string, ver int32) {
 	s.mu.RLock()
 	draft, hasDraft := s.draftDiags[path]
 	project := s.projectDiags[path]
-	merged := make([]protocol.Diagnostic, 0, len(draft)+len(project))
+	query := s.queryDiags[path]
+	merged := make([]protocol.Diagnostic, 0, len(draft)+len(project)+len(query))
 	merged = append(merged, draft...)
 	for _, d := range project {
 		if hasDraft && draftCoveredCode(d) {
@@ -173,6 +181,7 @@ func (s *Server) publishFile(path string, ver int32) {
 		}
 		merged = append(merged, d)
 	}
+	merged = append(merged, query...)
 	s.mu.RUnlock()
 	s.publishDiagnostics(uri.File(path), ver, merged)
 }
@@ -259,6 +268,8 @@ func (s *Server) onProjectChange() {
 	s.nameIdx = nil
 	s.lock = nil
 	s.mu.Unlock()
+	s.data.invalidate()
+	s.checks.projectChanged()
 	s.notifyIndexChange()
 	go s.refreshProjectDiagnostics()
 	if s.analyzer == nil {
@@ -408,6 +419,7 @@ func (s *Server) Initialize(_ context.Context, params *protocol.InitializeParams
 	if params != nil {
 		s.snippetSupport = clientSnippetSupport(params.Capabilities)
 		s.indexNotifications.Store(wantsIndexNotifications(params.InitializationOptions))
+		s.queryDiagnostics.Store(wantsQueryDiagnostics(params.InitializationOptions))
 	}
 	resolve := true
 	caps := protocol.ServerCapabilities{

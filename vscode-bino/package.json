@@ -77,6 +77,23 @@
         "label": "Bino"
       }
     ],
+    "grammars": [
+      {
+        "scopeName": "bino.query.injection",
+        "path": "./syntaxes/bino-query.injection.json",
+        "injectTo": [
+          "source.yaml"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.sql": "sql",
+          "meta.embedded.line.sql": "sql"
+        }
+      },
+      {
+        "scopeName": "source.prql.bino",
+        "path": "./syntaxes/prql.tmLanguage.json"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -745,6 +762,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable persistent background daemon for faster indexing, validation, and data introspection. The daemon shares a single DuckDB session across operations."
+        },
+        "bino.lsp.queryDiagnostics": {
+          "type": "boolean",
+          "default": false,
+          "description": "Check the queries of a DataSet with DuckDB when you save the file, and show parse and bind errors on the query lines. Runs each query with LIMIT 0, so it reads no rows, but it may still open remote sources."
         },
         "bino.wizard.sampleRowLimit": {
           "type": "number",

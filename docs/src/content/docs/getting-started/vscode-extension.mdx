@@ -424,6 +424,7 @@ All settings live under the **Bino Reports** section in VS Code Settings.
 | `bino.validateOnSave`        | boolean | true    | Fallback validation on save when the daemon isn't running (see 6.2).         |
 | `bino.previewPort`           | number  | 45678   | Port number for the `bino preview` server.                                   |
 | `bino.daemon.enabled`        | boolean | true    | Enable the persistent background daemon for faster indexing/validation/data. |
+| `bino.lsp.queryDiagnostics`  | boolean | false   | On save, check DataSet queries with DuckDB and show errors on the query line. |
 | `bino.wizard.sampleRowLimit` | number  | 100     | Max sample rows the DataSource wizard fetches when introspecting a source.   |
 
 Changes to `bino.binPath` and `bino.previewPort` apply at once: the language server and a running preview restart. A change to `bino.daemon.enabled` needs a window reload.
