@@ -203,6 +203,11 @@ type packagePlan struct {
 	bodies       map[string][]byte
 	attestations []registry.Attestation
 	warning      string // a signature warning under require = "warn"
+
+	// pin replaces the package's signer pin when repin is set; nil removes
+	// it. Without repin the pin stays as it is.
+	pin   *registry.Signer
+	repin bool
 }
 
 // signatureCheck carries what judging a package's signatures needs: the
@@ -218,9 +223,15 @@ type signatureCheck struct {
 // and records the verified signer in its entry. It runs after every file was
 // verified, so the manifest digest the signature must cover is computed from
 // content this CLI checked itself. A single-document package cannot be
-// signed and is judged as unsigned.
+// signed and is judged as unsigned. The pin comes from the lock's pin table,
+// not from the package's entry, so it holds even for a package that left the
+// closure and came back.
 func checkSignatures(ctx context.Context, client *registry.Client, sc signatureCheck, plan *packagePlan) error {
 	e := &plan.entry
+	var recorded []registry.BundleTime
+	if old := sc.lock.Get(e.Name); old != nil && old.Version == e.Version && old.Digest == e.Digest {
+		recorded = old.VerifiedAt
+	}
 	var check registry.SignatureCheck
 	if e.IsTree() {
 		scope, base, err := registry.ParseName(e.Name)
@@ -235,20 +246,18 @@ func checkSignatures(ctx context.Context, client *registry.Client, sc signatureC
 		if err != nil {
 			return err
 		}
-		if check, err = registry.VerifyAttestations(e.Name, e.Version, digest, atts, sc.policy); err != nil {
+		if check, err = registry.VerifyAttestations(e.Name, e.Version, digest, atts, sc.policy, recorded); err != nil {
 			return err
 		}
 		plan.attestations = atts
 	}
-	var pinned *registry.Signer
-	if old := sc.lock.Get(e.Name); old != nil {
-		pinned = old.Signer
-	}
-	d, err := sc.policy.Judge(e.Name, e.Version, check, pinned, sc.accept[e.Name])
+	d, err := sc.policy.Judge(e.Name, e.Version, check, sc.lock.Pin(e.Name), sc.accept[e.Name])
 	if err != nil {
 		return err
 	}
 	e.Signer = d.Signer
+	e.VerifiedAt = check.Times
+	plan.pin, plan.repin = d.Pin, d.Repin
 	plan.warning = d.Warning
 	return nil
 }
@@ -279,6 +288,15 @@ func fetchPackage(ctx context.Context, p registryProject, client *registry.Clien
 	if r.Format == registry.FormatTree {
 		entry.Kinds = r.Kinds
 		entry.Files = r.FileEntries()
+		// The lock records the digest; it must be the one of the file list
+		// this CLI verifies, not only what the registry says it is.
+		digest, _, err := registry.ManifestDigest(entry.Files)
+		if err != nil {
+			return packagePlan{}, fmt.Errorf("%s@%s: %w", r.Name, r.Version, err)
+		}
+		if digest != r.Digest {
+			return packagePlan{}, fmt.Errorf("%s@%s: the registry reports digest %s, but its file list has digest %s", r.Name, r.Version, r.Digest, digest)
+		}
 	}
 	plan := packagePlan{entry: entry, bodies: map[string][]byte{}}
 
@@ -429,7 +447,7 @@ func treeRootDocument(projectRoot, name string, files []registry.FileEntry) stri
 }
 
 // materialize writes a verified closure to disk and rewrites bino.lock to
-// exactly that closure.
+// exactly that closure. Signer pins are kept for packages that leave it.
 //
 // Order matters. Every package was verified into memory first, so this
 // function cannot fail on content. It then removes the files a package no
@@ -484,6 +502,9 @@ func materialize(p registryProject, plans []packagePlan, writeLock bool) error {
 			return RuntimeError(err)
 		}
 		lock.Upsert(pl.entry)
+		if pl.repin {
+			lock.SetPin(pl.entry.Name, pl.pin)
+		}
 	}
 	if !writeLock {
 		return nil
@@ -521,7 +542,8 @@ func pruneDepartedFiles(projectRoot string, old *registry.Entry, next registry.E
 // registrySync materializes a resolved closure: it verifies every package into
 // memory first (a failure writes nothing), then writes files, rewrites
 // bino.lock to exactly the closure, and sweeps packages that left it. Signer
-// pins are read from oldLock; accept names the packages whose pin is waived.
+// pins are read from oldLock's pin table; accept names the packages whose pin
+// is waived.
 func registrySync(ctx context.Context, p registryProject, client *registry.Client, oldLock *registry.Lockfile, plan []registry.Resolved, accept map[string]bool) ([]packagePlan, error) {
 	policy, err := p.trustPolicy()
 	if err != nil {

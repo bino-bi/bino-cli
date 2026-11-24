@@ -24,6 +24,7 @@ import (
 	protocommon "github.com/sigstore/protobuf-specs/gen/pb-go/common/v1"
 	protodsse "github.com/sigstore/protobuf-specs/gen/pb-go/dsse"
 	protorekor "github.com/sigstore/protobuf-specs/gen/pb-go/rekor/v1"
+	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/sign"
 	"github.com/sigstore/sigstore-go/pkg/testing/ca"
 	"github.com/sigstore/sigstore-go/pkg/tlog"
@@ -70,6 +71,9 @@ func NewKeyless(t testing.TB) *Keyless {
 	t.Cleanup(registry.SetKeylessTrustForTesting(vs, false))
 	return &Keyless{vs: vs}
 }
+
+// Material is the virtual Sigstore's trust material.
+func (k *Keyless) Material() root.TrustedMaterial { return k.vs }
 
 // Sign returns a v0.3 bundle over payload for an email identity, carrying a
 // Rekor entry with inclusion proof and signed entry timestamp.
@@ -210,24 +214,31 @@ func (c *CA) Fingerprint() string { return registry.CertFingerprint(c.cert) }
 // identity that this CA issues.
 func (c *CA) Sign(t testing.TB, identity string, payload []byte) json.RawMessage {
 	t.Helper()
+	return c.SignValid(t, identity, payload, time.Now().Add(-time.Minute), time.Now().Add(time.Hour))
+}
+
+// SignValid is Sign with a leaf valid from notBefore to notAfter.
+func (c *CA) SignValid(t testing.TB, identity string, payload []byte, notBefore, notAfter time.Time) json.RawMessage {
+	t.Helper()
 	kp, err := sign.NewEphemeralKeypair(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return signDSSE(t, payload, kp, sign.BundleOptions{CertificateProvider: leafProvider{ca: c, identity: identity}})
+	return signDSSE(t, payload, kp, sign.BundleOptions{CertificateProvider: leafProvider{ca: c, identity: identity, notBefore: notBefore, notAfter: notAfter}})
 }
 
 type leafProvider struct {
-	ca       *CA
-	identity string
+	ca                  *CA
+	identity            string
+	notBefore, notAfter time.Time
 }
 
 func (p leafProvider) GetCertificate(_ context.Context, kp sign.Keypair, _ *sign.CertificateProviderOptions) ([]byte, error) {
 	tmpl := &x509.Certificate{
 		SerialNumber:   big.NewInt(time.Now().UnixNano()),
 		EmailAddresses: []string{p.identity},
-		NotBefore:      time.Now().Add(-time.Minute),
-		NotAfter:       time.Now().Add(time.Hour),
+		NotBefore:      p.notBefore,
+		NotAfter:       p.notAfter,
 		KeyUsage:       x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:    []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
 	}

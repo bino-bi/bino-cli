@@ -150,7 +150,8 @@ the files the version ships. A single-document package lists exactly one.`,
 			}
 			for _, a := range res.Attestations {
 				// The registry's own summary; add, update and install verify the bundles.
-				fmt.Printf("Signed:       %s by %s (%s, as reported by the registry)\n", a.Kind, a.Signer, a.RootKind)
+				fmt.Printf("Signed:       %s by %s (%s, as reported by the registry)\n",
+					registry.Printable(a.Kind), registry.Printable(a.Signer), registry.Printable(a.RootKind))
 			}
 			fmt.Printf("Files:        %d\n", len(res.Files))
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -200,7 +201,7 @@ bino.lock pins and the [trust] policy.`,
 				status := verifyPackage(p.Root, e)
 				if status == "OK" {
 					var warning string
-					status, warning = verifyPackageSignature(p.Root, policy, e)
+					status, warning = verifyPackageSignature(p.Root, policy, lock.Pin(e.Name), e)
 					if warning != "" {
 						warnings = append(warnings, warning)
 					}
@@ -281,28 +282,17 @@ func verifyPackage(projectRoot string, e registry.Entry) string {
 // verifyPackageSignature re-checks the attestations stored for a locked
 // package, offline, against the signer the lock pins and the trust policy.
 // It returns a status for the table and, under require = "warn", a warning.
-func verifyPackageSignature(projectRoot string, policy *registry.TrustPolicy, e registry.Entry) (status, warning string) {
-	version, atts, err := registry.ReadAttestations(projectRoot, e.Name)
-	if err != nil {
+func verifyPackageSignature(projectRoot string, policy *registry.TrustPolicy, pinned *registry.Signer, e registry.Entry) (status, warning string) {
+	check, found, err := registry.StoredSignatures(projectRoot, e, policy)
+	switch {
+	case errors.Is(err, registry.ErrNotCanonical):
+		return "INVALID LOCK", ""
+	case err != nil:
 		return "INVALID SIGNATURE", ""
-	}
-	if version != e.Version {
-		atts = nil // stored for another version: as good as none
-	}
-	if e.Signer != nil && len(atts) == 0 {
+	case e.Signer != nil && !found:
 		return "SIGNATURE MISSING", ""
 	}
-	var check registry.SignatureCheck
-	if e.IsTree() && len(atts) > 0 {
-		digest, _, err := registry.ManifestDigest(e.Files)
-		if err != nil {
-			return "INVALID LOCK", ""
-		}
-		if check, err = registry.VerifyAttestations(e.Name, e.Version, digest, atts, policy); err != nil {
-			return "INVALID SIGNATURE", ""
-		}
-	}
-	d, err := policy.Judge(e.Name, e.Version, check, e.Signer, false)
+	d, err := policy.Judge(e.Name, e.Version, check, pinned, false)
 	switch {
 	case errors.Is(err, registry.ErrSignerChanged):
 		return "SIGNER MISMATCH", ""

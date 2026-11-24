@@ -78,6 +78,8 @@ bino registry remove <package>...
 Removes packages from `bino.toml`'s `[dependencies]` table, then deletes every
 locked package no longer reachable from the remaining declarations. Works
 offline. A transitive dependency still required by another package is kept.
+The signer pins of removed packages stay in `bino.lock`; see
+[`trust accept`](#bino-registry-trust-accept).
 
 ## bino registry list
 
@@ -141,16 +143,19 @@ policy rejects the package). Exits non-zero on any failure.
 bino registry trust accept <package[@version|@tag]>
 ```
 
-Once `bino.lock` records who signed a package, a version signed by someone
-else, or not signed at all, fails at every `[trust]` require level. If the
-change is expected, this command resolves the package, verifies its signature,
-and pins the new signer in `bino.lock`. It prints the old and the new signer.
-The trust policy still applies; only the pin is waived.
+Once `bino.lock` pins who signed a package, a version signed by someone
+else, or not signed at all, fails at every `[trust]` require level. The pin
+stays when the package leaves `bino.lock`, so a package that comes back is held
+to it too. If the change is expected, this command resolves the package,
+verifies its signature, and pins the new signer in `bino.lock`. It prints the
+old and the new signer. The trust policy still applies; only the pin is waived.
 
 Without a version, a declared dependency is re-resolved like
 `bino registry update <package>`, and a transitive one through the declared
 dependencies that pull it in. With a version or tag, a declared dependency
-moves to it like `bino registry add`.
+moves to it like `bino registry add`. A package that is pinned but neither
+declared nor locked cannot be resolved on its own: its pin is removed, and the
+next `add` or `update` that brings it back pins the signer it verifies.
 
 ```bash
 bino registry update

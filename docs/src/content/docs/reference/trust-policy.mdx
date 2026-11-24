@@ -51,6 +51,19 @@ A signature is always verified when the registry serves one, at every level.
 A broken bundle, a signature that does not match, or a statement for another
 package, version or digest always fails.
 
+Some signatures bino cannot check at all. They are not counted as invalid,
+only as not there:
+
+- a key or CA that no `[trust]` rule for the package provides,
+- a company certificate that was not valid at the time bino checks it at
+  (see [Offline verification](#offline-verification)),
+- a keyless signature from a Sigstore CA or transparency log that bino's
+  built-in trust root does not know yet.
+
+So an expired extra signature does not fail a package that another signature
+satisfies. A forged one does: a bad signature from a key or CA bino can check
+always fails.
+
 A registry without signature support serves no signatures, so its packages
 are unsigned: `require = "signed"` fails closed against it. Packages published
 as a single document cannot be signed and are always unsigned.
@@ -130,37 +143,70 @@ cover, or add a second requirement for a scope it does. It cannot remove or
 replace a project rule: a rule naming another signer for the same scope means
 the package needs both signatures, not either.
 
-A layer that cannot be used (an unknown `require` value, a rule with no or two
-signer kinds, a missing key or CA file) makes the command fail instead of
-trusting less than you wrote.
+A layer that cannot be used (an unknown `require` value, a key bino does not
+know in `[trust]`, a rule with no or two signer kinds, a missing key or CA
+file) makes the command fail instead of trusting less than you wrote. A typo
+such as `requires = "signed"` or `[[trust.signers]]` is an error, not an empty
+policy. The `BINO_TRUST_POLICY` file holds only the policy, so every key in it
+must be inside `[trust]`; a `require` without the `[trust]` header fails too.
 
 ## Signers in `bino.lock`
 
-When a signed version is locked, `bino.lock` records its signer next to the
-digest:
+When a signed version is locked, `bino.lock` records its signer in the package
+entry, and pins it in a separate `[[signer_pin]]` table:
 
 ```toml
 [[package]]
 name = '@acme/kit'
 version = '1.2.0'
 digest = 'sha256:...'
-signer = {kind = 'keyless', issuer = 'https://token.actions.githubusercontent.com', identity = 'https://github.com/acme/reports/.github/workflows/publish.yml@refs/tags/v1.2.0', repository = 'https://github.com/acme/reports', workflow = 'https://github.com/acme/reports/.github/workflows/publish.yml'}
+signer = {kind = 'keyless', issuer = 'https://token.actions.githubusercontent.com', identity = 'https://github.com/acme/reports/.github/workflows/publish.yml@refs/tags/v1.2.0', repository = 'https://github.com/acme/reports', repository_id = '123456', owner_id = '7890', workflow = 'https://github.com/acme/reports/.github/workflows/publish.yml'}
+
+[[signer_pin]]
+package = '@acme/kit'
+signer = {kind = 'keyless', issuer = 'https://token.actions.githubusercontent.com', identity = 'https://github.com/acme/reports/.github/workflows/publish.yml@refs/tags/v1.0.0', repository = 'https://github.com/acme/reports', repository_id = '123456', owner_id = '7890', workflow = 'https://github.com/acme/reports/.github/workflows/publish.yml'}
 ```
 
-| `kind`    | Identifies the signer by                                                         |
-| --------- | -------------------------------------------------------------------------------- |
-| `keyless` | `issuer` and `identity`, or `issuer`, `repository` and `workflow` for CI signers |
-| `x509`    | `root` (the CA fingerprint) and `identity`                                       |
-| `key`     | `key` (the key fingerprint)                                                      |
+The `signer` of a package entry is the record of that version. The
+`[[signer_pin]]` is what every later version must match.
+
+| `kind`    | Identifies the signer by                                                                                       |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| `keyless` | `issuer` and `identity`, or for CI signers `issuer`, `repository`, `workflow`, `repository_id` and `owner_id` |
+| `x509`    | `root` (the CA fingerprint) and `identity`                                                                     |
+| `key`     | `key` (the key fingerprint)                                                                                    |
 
 For a CI signer, `identity` is informative only; the ref in it changes with
-every release.
+every release. `repository_id` and `owner_id` are the numeric IDs the forge
+gave the repository and its owner, when the certificate carries them. A
+deleted and re-registered owner name gets new IDs, so it is not the same
+signer.
 
 From then on, a version of that package signed by someone else, or not signed
 at all, fails at every `require` level, also `off`. If the change is expected,
 run [`bino registry trust accept <package>`](/cli/registry/#bino-registry-trust-accept),
 which prints the old and the new signer and pins the new one. The policy still
 applies after that.
+
+The pin stays when the package leaves `bino.lock`, after `bino registry remove`
+or because the packages that depended on it no longer do. A registry that
+drops a dependency and serves it again later, signed by someone else or not at
+all, still meets the pin. For a package that is pinned but neither declared
+nor locked, `trust accept` removes the pin, and the next `add` or `update` that
+brings the package back pins the signer it verifies.
+
+Which signer is pinned the first time:
+
+- When a `[[trust.signer]]` rule covers the package, the signer that satisfies
+  it. When no verified signer satisfies it (possible under `off` and `warn`),
+  nothing is pinned.
+- When no rule covers the package, the verified signer whose lock encoding
+  sorts first. The choice depends only on the signatures, never on what the
+  registry says about them.
+
+`verified_at` in a package entry records when bino first verified each
+company certificate signature that carries no signed time (see below), keyed
+by the bundle's sha256.
 
 The lock format with signers is version 3. A version 2 lock still loads and is
 upgraded the next time bino writes it.
@@ -173,14 +219,23 @@ built into bino; the transparency log proof travels in the signature bundle.
 The signatures are also stored under `.bino/registry/.attestations/`, so
 `bino registry verify` re-checks them with no network at all.
 
-The built-in trust root is updated with bino releases. A certificate from a
-company CA is checked at the time a transparency log or timestamp authority in
-the bundle proves; without one, it must be valid when bino verifies it.
+The built-in trust root is updated with bino releases. A keyless signature
+from a Sigstore CA or transparency log newer than the root of your bino cannot
+be checked and counts as not there, until you update bino.
+
+A certificate from a company CA is checked at the time a transparency log or
+timestamp authority in the bundle proves. Without one, it is checked at the
+time bino first verified that bundle, which `bino.lock` records in
+`verified_at`. So a version stays installable after its signing certificate
+expires. A bundle bino has not verified before, for example one the registry
+serves in place of the locked one, is checked at the current time, and an
+expired certificate then counts as not there.
 
 ## Lint rules
 
 - [`registry-unsigned-dependency`](/appendix/lint-rules/#registry-unsigned-dependency):
   under `require = "signed"`, a package in `bino.lock` that records no signer.
 - [`registry-signer-mismatch`](/appendix/lint-rules/#registry-signer-mismatch):
-  a locked signer that no `[trust]` rule covering the package accepts, for
-  example after the policy changed.
+  a locked package whose signers do not satisfy every `[trust]` rule that
+  covers it, for example after the policy changed, and a `[trust]` policy that
+  cannot be loaded.

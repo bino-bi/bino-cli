@@ -55,5 +55,6 @@ func LoadGlobalConfig() (GlobalConfig, error) {
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return GlobalConfig{}, fmt.Errorf("parse %s: %w", path, err)
 	}
+	cfg.Trust.Err = pathutil.UnknownTrustKeys(data, false)
 	return cfg, nil
 }

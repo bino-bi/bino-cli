@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -15,9 +16,10 @@ func newRegistryTrustCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "trust",
 		Short: "Manage the package signers pinned in bino.lock",
-		Long: `Once bino.lock records who signed a package, a version signed by someone
+		Long: `Once bino.lock pins who signed a package, a version signed by someone
 else, or not signed at all, is refused at every [trust] require level. The
-subcommands here are how a human accepts such a change.`,
+pin stays when the package leaves bino.lock, so a package that comes back is
+held to it too. The subcommands here are how a human accepts such a change.`,
 	}
 	cmd.AddCommand(newRegistryTrustAcceptCommand())
 	return cmd
@@ -34,7 +36,12 @@ this only waives the pin.
 Without a version, a declared dependency is re-resolved like
 'bino registry update <package>', and a transitive one through the direct
 dependencies that pull it in. With a version or tag, a declared dependency is
-moved to it like 'bino registry add'.`,
+moved to it like 'bino registry add'.
+
+A package that is pinned but neither declared nor locked (it was removed, or
+left the closure) cannot be resolved on its own: its pin is removed instead,
+and the next 'bino registry add' or 'update' that brings it back pins the
+signer it verifies.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := registryProjectSetup()
@@ -42,6 +49,11 @@ moved to it like 'bino registry add'.`,
 				return err
 			}
 			name, before, after, res, err := registryTrustAccept(cmd.Context(), p, args[0])
+			if errors.Is(err, errPinDropped) {
+				p.Out.List("old signer: " + signerText(before))
+				p.Out.Success(fmt.Sprintf("Removed the signer pin of %s from %s; the next add or update that brings it back pins its signer", name, registry.LockfileName))
+				return nil
+			}
 			if err != nil {
 				return err
 			}
@@ -68,8 +80,13 @@ func signerText(s *registry.Signer) string {
 	return s.String()
 }
 
+// errPinDropped reports that trust accept removed the pin of a package it
+// cannot resolve, instead of pinning a new signer.
+var errPinDropped = errors.New("signer pin removed")
+
 // registryTrustAccept re-resolves one package with its signer pin waived and
-// returns the signer the lock recorded before and after.
+// returns the signer the lock pinned before and after. For a package that is
+// only pinned, it removes the pin and returns errPinDropped.
 func registryTrustAccept(ctx context.Context, p registryProject, arg string) (name string, before, after *registry.Signer, res mcp.RegistryMutationResult, err error) {
 	spec, err := registry.ParseSpec(arg)
 	if err != nil {
@@ -81,11 +98,22 @@ func registryTrustAccept(ctx context.Context, p registryProject, arg string) (na
 	}
 	_, declared := p.Cfg.Dependencies[spec.Name]
 	old := lock.Get(spec.Name)
+	before = lock.Pin(spec.Name)
 	if old == nil && !declared {
-		return "", nil, nil, res, ConfigErrorf("%s is neither declared in bino.toml nor locked in %s", spec.Name, registry.LockfileName)
-	}
-	if old != nil {
-		before = old.Signer
+		if before == nil {
+			return "", nil, nil, res, ConfigErrorf("%s is neither declared in bino.toml nor locked or pinned in %s", spec.Name, registry.LockfileName)
+		}
+		if spec.Ref != "" {
+			return "", nil, nil, res, ConfigErrorf("%s is only pinned: accept it without a version to remove the pin", spec.Name)
+		}
+		if err := lock.CheckWritable(); err != nil {
+			return "", nil, nil, res, ConfigError(err)
+		}
+		lock.SetPin(spec.Name, nil)
+		if err := registry.SaveLockfile(p.Root, lock); err != nil {
+			return "", nil, nil, res, RuntimeError(err)
+		}
+		return spec.Name, before, nil, res, errPinDropped
 	}
 	accept := map[string]bool{spec.Name: true}
 	switch {
@@ -109,10 +137,7 @@ func registryTrustAccept(ctx context.Context, p registryProject, arg string) (na
 	if err != nil {
 		return "", nil, nil, res, ConfigError(err)
 	}
-	if e := lock.Get(spec.Name); e != nil {
-		after = e.Signer
-	}
-	return spec.Name, before, after, res, nil
+	return spec.Name, before, lock.Pin(spec.Name), res, nil
 }
 
 // directDependents returns the direct dependencies whose locked closure

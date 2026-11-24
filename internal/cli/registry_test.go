@@ -58,6 +58,10 @@ type fakePackage struct {
 	attestations  []registry.Attestation
 	noAttestRoute bool
 
+	// claimedDigest, when set, is the version digest the v2 resolve route
+	// reports instead of the tree's real one.
+	claimedDigest string
+
 	// fileDownloads counts every served file of this package, so a test can
 	// assert that a warm store costs no bandwidth.
 	fileDownloads atomic.Int64
@@ -223,6 +227,9 @@ func registerFakeV2Routes(t *testing.T, mux *http.ServeMux, packages map[string]
 		}}
 		if len(pkg.tree) > 0 {
 			digest = pkg.manifestDigest(t)
+			if pkg.claimedDigest != "" {
+				digest = pkg.claimedDigest
+			}
 			files = files[:0]
 			for i, e := range pkg.treeEntries(t) {
 				files = append(files, map[string]any{

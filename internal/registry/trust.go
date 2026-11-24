@@ -8,11 +8,13 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -114,6 +116,9 @@ func LoadTrustPolicy(projectRoot string, project pathutil.TrustConfig) (*TrustPo
 		if err := toml.Unmarshal(data, &file); err != nil {
 			return nil, fmt.Errorf("%w: parse %s: %w", ErrTrustConfig, envPath, err)
 		}
+		// The file holds a policy and nothing else, so every key must be
+		// one bino knows: a misspelled table would otherwise be no policy.
+		file.Trust.Err = pathutil.UnknownTrustKeys(data, true)
 		if err := p.addLayer(envPath, file.Trust); err != nil {
 			return nil, err
 		}
@@ -122,6 +127,9 @@ func LoadTrustPolicy(projectRoot string, project pathutil.TrustConfig) (*TrustPo
 }
 
 func (p *TrustPolicy) addLayer(source string, cfg pathutil.TrustConfig) error {
+	if cfg.Err != nil {
+		return fmt.Errorf("%w: %s: %w", ErrTrustConfig, source, cfg.Err)
+	}
 	level, err := requireRank(cfg.Require)
 	if err != nil {
 		return fmt.Errorf("%w: %s: %w", ErrTrustConfig, source, err)
@@ -372,23 +380,6 @@ func (p *TrustPolicy) Evaluate(pkg string, signers []Signer) (covered, trusted b
 	return covered, trusted, matched
 }
 
-// MatchesAny reports whether s satisfies at least one layer's rule for pkg.
-// Lint uses it on the one signer the lock records, which cannot show every
-// layer's requirement at once.
-func (p *TrustPolicy) MatchesAny(pkg string, s Signer) (covered, ok bool) {
-	for _, layer := range p.layers {
-		r, has := layer.first(pkg)
-		if !has {
-			continue
-		}
-		covered = true
-		if r.matches(s) {
-			return true, true
-		}
-	}
-	return covered, false
-}
-
 func (l trustLayer) first(pkg string) (trustRule, bool) {
 	for _, r := range l.rules {
 		if r.covers(pkg) {
@@ -426,20 +417,35 @@ func (p *TrustPolicy) anchors(pkg string) (roots []trustRule, keys []trustRule) 
 }
 
 // TrustDecision is the outcome of judging one package version's signatures.
+// Signer is recorded in the version's lock entry. When Repin is set, Pin
+// replaces the package's signer pin, and a nil Pin removes it.
 type TrustDecision struct {
-	Signer  *Signer // the signer bino.lock pins; nil when none verified
-	Warning string  // set when require = "warn" does not accept the package
+	Signer  *Signer
+	Pin     *Signer
+	Repin   bool
+	Warning string // set when require = "warn" does not accept the package
 }
 
 // Judge applies the lock pin and the policy to a version's verified
-// signatures. pinned is the signer the lock records for the package, nil when
-// it records none. acceptChange waives the pin, which is what 'bino registry
-// trust accept' does; the policy still applies.
+// signatures. pinned is the signer the lock pins for the package, nil when it
+// pins none. acceptChange waives the pin, which is what 'bino registry trust
+// accept' does; the policy still applies.
 //
 // A pinned package whose new version lacks the pinned signer fails at every
 // require level: the lock is the user's record of who released it before.
+//
+// A new pin is the signer that satisfied the policy. A signer the policy
+// covers but rejects is never pinned, so a registry cannot pin its own
+// identity under require = "off" or "warn". With no rule for the package, the
+// verified signer that sorts first is pinned: the choice depends only on the
+// signatures, never on how the registry labels them.
 func (p *TrustPolicy) Judge(pkg, version string, check SignatureCheck, pinned *Signer, acceptChange bool) (TrustDecision, error) {
 	signers := check.Signers()
+	sortSigners(signers)
+	var first *Signer
+	if len(signers) > 0 {
+		first = &signers[0]
+	}
 	var kept *Signer
 	if pinned != nil {
 		for i := range signers {
@@ -450,8 +456,11 @@ func (p *TrustPolicy) Judge(pkg, version string, check SignatureCheck, pinned *S
 		}
 		if kept == nil && !acceptChange {
 			now := "is unsigned"
-			if len(signers) > 0 {
-				now = "is signed by " + signers[0].String()
+			switch {
+			case first != nil:
+				now = "is signed by " + first.String()
+			case check.Unverifiable > 0:
+				now = "is signed with a key or CA no [trust] rule provides, or with a certificate bino cannot check"
 			}
 			return TrustDecision{}, fmt.Errorf("%w: %s was signed by %s, but %s %s; run 'bino registry trust accept %s' if the change is expected",
 				ErrSignerChanged, pkg, pinned.String(), version, now, pkg)
@@ -459,37 +468,33 @@ func (p *TrustPolicy) Judge(pkg, version string, check SignatureCheck, pinned *S
 	}
 
 	covered, trusted, matched := p.Evaluate(pkg, signers)
-	d := TrustDecision{Signer: kept}
-	if d.Signer == nil {
-		d.Signer = matched
-	}
-	if d.Signer == nil && len(signers) > 0 {
-		d.Signer = &signers[0]
-		for i, v := range check.Verified {
-			if v.Kind == "publish" {
-				d.Signer = &signers[i]
-				break
-			}
+	d := TrustDecision{Signer: firstOf(kept, matched, first)}
+	if pinned == nil || acceptChange {
+		d.Repin = true
+		switch {
+		case kept != nil:
+			d.Pin = kept
+		case !covered:
+			d.Pin = first
+		case trusted:
+			d.Pin = matched
 		}
 	}
-	if d.Signer != nil {
-		s := *d.Signer
-		d.Signer = &s
-	}
+	d.Signer, d.Pin = copySigner(d.Signer), copySigner(d.Pin)
 	if trusted {
 		return d, nil
 	}
 
 	var why string
 	switch {
-	case len(signers) == 0 && check.Unverifiable == 0:
+	case first == nil && check.Unverifiable == 0:
 		why = "is not signed"
-	case len(signers) == 0:
-		why = "is signed, but with a key or CA no [trust] signer rule for it provides"
+	case first == nil:
+		why = "is signed, but with a key or CA no [trust] signer rule for it provides, or with a certificate bino cannot check"
 	case !covered:
-		why = "is signed by " + signers[0].String() + ", but no [trust] signer rule covers it"
+		why = "is signed by " + first.String() + ", but no [trust] signer rule covers it"
 	default:
-		why = "is signed by " + signers[0].String() + ", which does not satisfy the [trust] signer rules for it"
+		why = "is signed by " + first.String() + ", which does not satisfy the [trust] signer rules for it"
 	}
 	msg := fmt.Sprintf("%s@%s %s", pkg, version, why)
 	switch p.Require {
@@ -499,4 +504,31 @@ func (p *TrustPolicy) Judge(pkg, version string, check SignatureCheck, pinned *S
 		d.Warning = msg
 	}
 	return d, nil
+}
+
+// sortSigners orders signers by their JSON encoding, which is the same for
+// the same signer on every run.
+func sortSigners(signers []Signer) {
+	key := func(s Signer) string {
+		b, _ := json.Marshal(s) //nolint:errcheck // a struct of strings always encodes
+		return string(b)
+	}
+	sort.SliceStable(signers, func(i, j int) bool { return key(signers[i]) < key(signers[j]) })
+}
+
+func firstOf(signers ...*Signer) *Signer {
+	for _, s := range signers {
+		if s != nil {
+			return s
+		}
+	}
+	return nil
+}
+
+func copySigner(s *Signer) *Signer {
+	if s == nil {
+		return nil
+	}
+	c := *s
+	return &c
 }

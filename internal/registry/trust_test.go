@@ -4,8 +4,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/registry"
 	"bino.bi/bino/internal/registry/attesttest"
 )
@@ -167,4 +169,95 @@ func TestTrustWorkflowRule(t *testing.T) {
 	if _, ok, _ := policy.Evaluate(testPkg, []registry.Signer{ci(repo, repo+"/.github/workflows/other.yml")}); ok {
 		t.Error("another workflow of the repository was accepted")
 	}
+}
+
+func checkOf(signers ...registry.Signer) registry.SignatureCheck {
+	var c registry.SignatureCheck
+	for _, s := range signers {
+		c.Verified = append(c.Verified, registry.VerifiedSignature{Signer: s})
+	}
+	return c
+}
+
+func TestJudgeNewPins(t *testing.T) {
+	isolateTrust(t)
+	alice, bob := keylessSigner("alice@example.com"), keylessSigner("bob@example.com")
+
+	open := policyFor(t, t.TempDir(), "")
+	for _, order := range [][]registry.Signer{{alice, bob}, {bob, alice}} {
+		d, err := open.Judge(testPkg, testVersion, checkOf(order...), nil, false)
+		if err != nil || !d.Repin || d.Pin == nil || d.Pin.Identity != "alice@example.com" {
+			t.Errorf("no rule, signers %v: d = %+v, err = %v; want alice pinned whatever the order", order, d, err)
+		}
+	}
+
+	ruled := policyFor(t, t.TempDir(), keylessRule("@acme/*", "bob@example.com"))
+	d, err := ruled.Judge(testPkg, testVersion, checkOf(alice, bob), nil, false)
+	if err != nil || d.Pin == nil || d.Pin.Identity != "bob@example.com" {
+		t.Errorf("rule for bob: d = %+v, err = %v; want the signer the rule accepts pinned", d, err)
+	}
+	d, err = ruled.Judge(testPkg, testVersion, checkOf(alice), nil, false)
+	if err != nil || !d.Repin || d.Pin != nil {
+		t.Errorf("rule rejects the only signer under off: d = %+v, err = %v; want no pin", d, err)
+	}
+}
+
+func TestJudgePinnedAnchorTheRulesDoNotProvide(t *testing.T) {
+	isolateTrust(t)
+	policy := policyFor(t, t.TempDir(), "")
+	pin := registry.Signer{Kind: registry.SignerX509, Root: "SHA256:abc", Identity: "release@acme.example"}
+	_, err := policy.Judge(testPkg, testVersion, registry.SignatureCheck{Unverifiable: 1}, &pin, false)
+	if !errors.Is(err, registry.ErrSignerChanged) || !strings.Contains(err.Error(), "key or CA no [trust] rule provides") || strings.Contains(err.Error(), "unsigned") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSignerSameComparesForgeIDs(t *testing.T) {
+	ci := registry.Signer{Kind: registry.SignerKeyless, Issuer: testIssuer, Repository: "https://github.com/acme/reports",
+		Workflow: "https://github.com/acme/reports/.github/workflows/publish.yml", RepositoryID: "1", OwnerID: "2"}
+	reborn := ci
+	reborn.OwnerID = "3"
+	if !ci.Same(ci) || ci.Same(reborn) {
+		t.Error("a re-registered owner with the same name counts as the same signer")
+	}
+}
+
+func TestPrintableStripsControlCharacters(t *testing.T) {
+	s := registry.Signer{Kind: registry.SignerKeyless, Issuer: testIssuer, Identity: "alice\x1b[2J\u202e@example.com\n"}
+	if got := s.String(); strings.ContainsAny(got, "\x1b\u202e\n") {
+		t.Errorf("String() = %q", got)
+	}
+}
+
+// A misspelled [trust] key would be a policy that silently trusts less, so
+// it fails the policy wherever it is written.
+func TestTrustUnknownKeysFail(t *testing.T) {
+	t.Run("project", func(t *testing.T) {
+		isolateTrust(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("[future]\nx = 1\n[trust]\nrequires = \"signed\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := pathutil.LoadProjectConfig(dir)
+		if err != nil {
+			t.Fatalf("an unknown key in [trust] fails the whole bino.toml: %v", err)
+		}
+		if _, err := registry.LoadTrustPolicy(dir, cfg.Trust); !errors.Is(err, registry.ErrTrustConfig) || !strings.Contains(err.Error(), "trust.requires") {
+			t.Fatalf("err = %v, want ErrTrustConfig naming trust.requires", err)
+		}
+	})
+	t.Run("global", func(t *testing.T) {
+		isolateTrust(t)
+		writeGlobal(t, "[future]\nx = 1\n[[trust.signers]]\nscope = \"@acme/*\"\n")
+		if _, err := registry.LoadTrustPolicy(t.TempDir(), pathutil.TrustConfig{}); !errors.Is(err, registry.ErrTrustConfig) || !strings.Contains(err.Error(), "trust.signers") {
+			t.Fatalf("err = %v, want ErrTrustConfig naming trust.signers", err)
+		}
+	})
+	t.Run("env file", func(t *testing.T) {
+		isolateTrust(t)
+		writeEnvPolicy(t, "require = \"signed\"\n")
+		if _, err := registry.LoadTrustPolicy(t.TempDir(), pathutil.TrustConfig{}); !errors.Is(err, registry.ErrTrustConfig) || !strings.Contains(err.Error(), "require") {
+			t.Fatalf("err = %v, want ErrTrustConfig for a require outside [trust]", err)
+		}
+	})
 }

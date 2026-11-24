@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -18,7 +19,8 @@ const LockfileName = "bino.lock"
 // Version 2 records a package as a file tree: a kinds set and a per-file list
 // replace the singular kind, and the entry digest is the tree's manifest
 // digest. Version 3 adds the signer a package's signature was verified
-// against. Older locks are read and upgraded in memory on load.
+// against and the signer pins. Older locks are read and upgraded in memory on
+// load.
 const CurrentLockfileVersion = 3
 
 // ErrMalformedLockfile reports a bino.lock that exists but cannot be parsed.
@@ -42,9 +44,15 @@ type Entry struct {
 	Digest  string `toml:"digest"`        // "sha256:<hex>": the document digest, or a tree's manifest digest
 
 	// Signer is who signed the locked version, as verified when it was
-	// locked. Once set, a version without this signer is refused until
-	// 'bino registry trust accept' records the new one. Nil: unsigned.
+	// locked. It is the record of this version; the pin that later versions
+	// must match is kept apart, in Lockfile.SignerPins. Nil: no verified
+	// signature.
 	Signer *Signer `toml:"signer,omitempty,inline"`
+
+	// VerifiedAt records when this CLI first verified each bundle that
+	// carries no signed time, so re-verifying the same bundle checks its
+	// certificate at that time instead of now.
+	VerifiedAt []BundleTime `toml:"verified_at,omitempty,inline"`
 
 	Format string `toml:"format"` // "document" | "tree"
 	Kind   string `toml:"kind"`   // the primary kind; also the only kind of a v1 package
@@ -91,6 +99,22 @@ func (e Entry) TreeFiles() []FileEntry {
 	return files
 }
 
+// BundleTime is the time a bundle, named by BundleDigest, was first verified.
+type BundleTime struct {
+	Bundle string    `toml:"bundle" json:"bundle"`
+	At     time.Time `toml:"at" json:"at"`
+}
+
+// SignerPin is the signer a package must keep. It lives outside the package
+// entries, so it survives the package leaving the closure: a registry that
+// drops a dependency and later serves it again, signed by someone else or not
+// at all, still meets the pin. Only 'bino registry trust accept' and
+// 'trust forget' change or remove one.
+type SignerPin struct {
+	Package string `toml:"package"`
+	Signer  Signer `toml:"signer,inline"`
+}
+
 // ResourceEntry records one bundled resource of a locked package.
 type ResourceEntry struct {
 	Name        string `toml:"name"`
@@ -103,8 +127,9 @@ func (e Entry) IsPinned() bool { return e.Tag == "" }
 
 // Lockfile is the parsed bino.lock.
 type Lockfile struct {
-	LockfileVersion int     `toml:"lockfile_version"`
-	Packages        []Entry `toml:"package,omitempty"`
+	LockfileVersion int         `toml:"lockfile_version"`
+	Packages        []Entry     `toml:"package,omitempty"`
+	SignerPins      []SignerPin `toml:"signer_pin,omitempty"`
 }
 
 // LoadLockfile reads <projectRoot>/bino.lock. A missing file yields an empty,
@@ -158,6 +183,7 @@ func SaveLockfile(projectRoot string, lf *Lockfile) error {
 		return err
 	}
 	sort.Slice(lf.Packages, func(i, j int) bool { return lf.Packages[i].Name < lf.Packages[j].Name })
+	sort.Slice(lf.SignerPins, func(i, j int) bool { return lf.SignerPins[i].Package < lf.SignerPins[j].Package })
 	for i := range lf.Packages {
 		sort.Strings(lf.Packages[i].Dependencies)
 		sort.Strings(lf.Packages[i].Kinds)
@@ -206,4 +232,32 @@ func (lf *Lockfile) Remove(name string) bool {
 		}
 	}
 	return false
+}
+
+// Pin returns the signer pinned for name, or nil.
+func (lf *Lockfile) Pin(name string) *Signer {
+	for i := range lf.SignerPins {
+		if lf.SignerPins[i].Package == name {
+			s := lf.SignerPins[i].Signer
+			return &s
+		}
+	}
+	return nil
+}
+
+// SetPin pins s for name, replacing any earlier pin. A nil s removes the pin.
+func (lf *Lockfile) SetPin(name string, s *Signer) {
+	for i := range lf.SignerPins {
+		if lf.SignerPins[i].Package == name {
+			if s == nil {
+				lf.SignerPins = append(lf.SignerPins[:i], lf.SignerPins[i+1:]...)
+			} else {
+				lf.SignerPins[i].Signer = *s
+			}
+			return
+		}
+	}
+	if s != nil {
+		lf.SignerPins = append(lf.SignerPins, SignerPin{Package: name, Signer: *s})
+	}
 }

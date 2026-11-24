@@ -2,6 +2,8 @@ package pathutil
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -109,6 +111,37 @@ type RegistryConfig struct {
 type TrustConfig struct {
 	Require string              `toml:"require,omitempty"` // "off" | "warn" | "signed"
 	Signers []TrustSignerConfig `toml:"signer,omitempty"`
+
+	// Err is set by the loader when the table has keys bino does not know.
+	// It is kept here rather than failing the load, so only the commands that
+	// apply the policy fail: a typo must not silently weaken it.
+	Err error `toml:"-"`
+}
+
+// UnknownTrustKeys reports the keys of a TOML document that TrustConfig does
+// not know: those under [trust], or with wholeFile every key but [trust]
+// itself, for a file that holds nothing else.
+func UnknownTrustKeys(data []byte, wholeFile bool) error {
+	var probe struct {
+		Trust TrustConfig `toml:"trust"`
+	}
+	dec := toml.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	var sme *toml.StrictMissingError
+	if !errors.As(dec.Decode(&probe), &sme) {
+		return nil
+	}
+	var keys []string
+	for _, e := range sme.Errors {
+		k := e.Key()
+		if wholeFile || (len(k) > 0 && k[0] == "trust") {
+			keys = append(keys, strings.Join(k, "."))
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return fmt.Errorf("unknown key(s): %s", strings.Join(keys, ", "))
 }
 
 // TrustSignerConfig is one [[trust.signer]] rule. Exactly one signer kind is
@@ -372,6 +405,7 @@ func LoadProjectConfig(projectRoot string) (*ProjectConfig, error) {
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", configPath, err)
 	}
+	cfg.Trust.Err = UnknownTrustKeys(data, false)
 
 	return &cfg, nil
 }

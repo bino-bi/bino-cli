@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"bino.bi/bino/internal/registry"
 	"bino.bi/bino/internal/registry/attesttest"
@@ -297,7 +298,7 @@ func TestRegistryV2LockUpgradesToV3(t *testing.T) {
 	data, _ := os.ReadFile(lockPath)
 	var v2 []string
 	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "signer = ") {
+		if strings.HasPrefix(line, "signer = ") || strings.HasPrefix(line, "[[signer_pin]]") || strings.HasPrefix(line, "package = ") {
 			continue
 		}
 		v2 = append(v2, strings.Replace(line, "lockfile_version = 3", "lockfile_version = 2", 1))
@@ -332,10 +333,33 @@ func TestRegistryVerifyCatchesASwappedStoredSignature(t *testing.T) {
 	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
 		t.Fatalf("add: %v", err)
 	}
+	status := func() string {
+		t.Helper()
+		p, err := registryProjectFor(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		policy, err := p.trustPolicy()
+		if err != nil {
+			t.Fatal(err)
+		}
+		lock, err := registry.LoadLockfile(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, _ := verifyPackageSignature(dir, policy, lock.Pin("@acme/kit"), *lock.Get("@acme/kit"))
+		return s
+	}
+	if got := status(); got != "OK" {
+		t.Fatalf("status before the swap = %q, want OK", got)
+	}
 	st := attesttest.Statement(t, "@acme/kit", "1.0.0", kit.manifestDigest(t))
 	swapped := []registry.Attestation{attesttest.Attestation("publish", "keyless", kl.Sign(t, "mallory@example.com", trustIssuer, st))}
 	if err := registry.WriteAttestations(dir, "@acme/kit", "1.0.0", swapped); err != nil {
 		t.Fatal(err)
+	}
+	if got := status(); got != "SIGNER MISMATCH" {
+		t.Errorf("status with another signer's signature = %q, want SIGNER MISMATCH", got)
 	}
 	if err := runRegistry(t, "verify"); err == nil {
 		t.Fatal("verify passed with a stored signature by another signer")
@@ -343,8 +367,175 @@ func TestRegistryVerifyCatchesASwappedStoredSignature(t *testing.T) {
 	if err := registry.RemoveAttestations(dir, "@acme/kit"); err != nil {
 		t.Fatal(err)
 	}
+	if got := status(); got != "SIGNATURE MISSING" {
+		t.Errorf("status without the stored signature = %q, want SIGNATURE MISSING", got)
+	}
 	if err := runRegistry(t, "verify"); err == nil {
 		t.Fatal("verify passed with the pinned signature missing")
+	}
+}
+
+// treePackage is a one-document tree package named name.
+func treePackage(name, version string, deps ...string) *fakePackage {
+	_, base, _ := registry.ParseName(name)
+	doc := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: \"" + name + "\"\nspec:\n  value: " + version + "\n"
+	return &fakePackage{tag: "latest", version: version, kind: "Text", kinds: []string{"Text"}, dependencies: deps,
+		tree: []fakeTreeFile{{path: base + ".yaml", body: []byte(doc)}}}
+}
+
+func signAs(t *testing.T, kl *attesttest.Keyless, name string, pkg *fakePackage, identity string) {
+	t.Helper()
+	st := attesttest.Statement(t, name, pkg.version, pkg.manifestDigest(t))
+	pkg.attestations = []registry.Attestation{attesttest.Attestation("publish", "keyless", kl.Sign(t, identity, trustIssuer, st))}
+}
+
+func pinOf(t *testing.T, dir, name string) *registry.Signer {
+	t.Helper()
+	lock, err := registry.LoadLockfile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lock.Pin(name)
+}
+
+// A registry that drops a pinned dependency from its parent and later brings
+// it back unsigned must still meet the pin: it survives the package leaving
+// bino.lock.
+func TestRegistryPinSurvivesALeavingDependency(t *testing.T) {
+	isolateTrustHome(t)
+	kl := attesttest.NewKeyless(t)
+	lib := treePackage("@acme/lib", "1.0.0")
+	signAs(t, kl, "@acme/lib", lib, "alice@example.com")
+	packages := map[string]*fakePackage{
+		"@acme/app": treePackage("@acme/app", "1.0.0", "@acme/lib"),
+		"@acme/lib": lib,
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	dir := newRegistryTestProject(t, srv.URL)
+	if err := runRegistry(t, "add", "@acme/app"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if pin := pinOf(t, dir, "@acme/lib"); pin == nil || pin.Identity != "alice@example.com" {
+		t.Fatalf("pin of @acme/lib = %+v", pin)
+	}
+
+	packages["@acme/app"] = treePackage("@acme/app", "2.0.0") // drops the dependency
+	if err := runRegistry(t, "update"); err != nil {
+		t.Fatalf("update without the dependency: %v", err)
+	}
+	lock, _ := registry.LoadLockfile(dir)
+	if lock.Get("@acme/lib") != nil {
+		t.Fatal("@acme/lib is still locked")
+	}
+	if pin := lock.Pin("@acme/lib"); pin == nil {
+		t.Fatal("the pin of @acme/lib left with the package")
+	}
+
+	packages["@acme/app"] = treePackage("@acme/app", "3.0.0", "@acme/lib")
+	packages["@acme/lib"] = treePackage("@acme/lib", "2.0.0") // unsigned
+	if err := runRegistry(t, "update"); !errors.Is(err, registry.ErrSignerChanged) {
+		t.Fatalf("update bringing back an unsigned @acme/lib: err = %v, want ErrSignerChanged", err)
+	}
+}
+
+func TestRegistryPinSurvivesRemoveAndAdd(t *testing.T) {
+	isolateTrustHome(t)
+	kl := attesttest.NewKeyless(t)
+	kit := signedKit("1.0.0")
+	publish(t, kit, "keyless", func(p []byte) json.RawMessage { return kl.Sign(t, "alice@example.com", trustIssuer, p) })
+	packages := map[string]*fakePackage{"@acme/kit": kit}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	dir := newRegistryTestProject(t, srv.URL)
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if err := runRegistry(t, "remove", "@acme/kit"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	stored, err := registry.AttestationsPath(dir, "@acme/kit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stored); !os.IsNotExist(err) {
+		t.Errorf("remove left the stored attestations behind: %v", err)
+	}
+	if pinOf(t, dir, "@acme/kit") == nil {
+		t.Fatal("remove dropped the pin")
+	}
+
+	packages["@acme/kit"] = signedKit("2.0.0") // unsigned
+	if err := runRegistry(t, "add", "@acme/kit"); !errors.Is(err, registry.ErrSignerChanged) {
+		t.Fatalf("add after remove: err = %v, want ErrSignerChanged", err)
+	}
+	p, err := registryProjectFor(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, before, _, _, err := registryTrustAccept(context.Background(), p, "@acme/kit"); !errors.Is(err, errPinDropped) || before == nil {
+		t.Fatalf("trust accept of a pin-only package: before %+v, err = %v", before, err)
+	}
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add after accepting: %v", err)
+	}
+}
+
+// A signer that a covering rule rejects is not pinned under off, so a
+// registry cannot pin its own identity on the first add.
+func TestRegistryRejectedSignerIsNotPinned(t *testing.T) {
+	isolateTrustHome(t)
+	kl := attesttest.NewKeyless(t)
+	kit := signedKit("1.0.0")
+	publish(t, kit, "keyless", func(p []byte) json.RawMessage { return kl.Sign(t, "mallory@example.com", trustIssuer, p) })
+	packages := map[string]*fakePackage{"@acme/kit": kit}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	dir := newRegistryTestProject(t, srv.URL)
+	appendTrust(t, dir, "[[trust.signer]]\nscope = \"@acme/*\"\noidc-issuer = \""+trustIssuer+"\"\nidentity = \"alice@example.com\"\n")
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if pin := pinOf(t, dir, "@acme/kit"); pin != nil {
+		t.Fatalf("a rejected signer was pinned: %+v", pin)
+	}
+	next := signedKit("2.0.0")
+	publish(t, next, "keyless", func(p []byte) json.RawMessage { return kl.Sign(t, "alice@example.com", trustIssuer, p) })
+	packages["@acme/kit"] = next
+	if err := runRegistry(t, "update"); err != nil {
+		t.Fatalf("update to the genuine signer: %v", err)
+	}
+	if pin := pinOf(t, dir, "@acme/kit"); pin == nil || pin.Identity != "alice@example.com" {
+		t.Fatalf("pin after the genuine release = %+v", pin)
+	}
+}
+
+func TestRegistryRefusesAClaimedDigestOtherThanTheFiles(t *testing.T) {
+	isolateTrustHome(t)
+	kit := signedKit("1.0.0")
+	kit.claimedDigest = "sha256:" + strings.Repeat("0", 64)
+	srv, _, _ := fakeRegistryServer(t, map[string]*fakePackage{"@acme/kit": kit})
+	dir := newRegistryTestProject(t, srv.URL)
+	if err := runRegistry(t, "add", "@acme/kit"); err == nil || !strings.Contains(err.Error(), "its file list has digest") {
+		t.Fatalf("add: err = %v, want a digest mismatch", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, registry.LockfileName)); !os.IsNotExist(err) {
+		t.Error("a digest mismatch still wrote bino.lock")
+	}
+}
+
+// A registry that stops serving attestations makes a pinned package look
+// unsigned, which the pin refuses.
+func TestRegistryPinnedPackageOnARegistryWithoutAttestations(t *testing.T) {
+	isolateTrustHome(t)
+	kl := attesttest.NewKeyless(t)
+	kit := signedKit("1.0.0")
+	publish(t, kit, "keyless", func(p []byte) json.RawMessage { return kl.Sign(t, "alice@example.com", trustIssuer, p) })
+	srv, _, _ := fakeRegistryServer(t, map[string]*fakePackage{"@acme/kit": kit})
+	newRegistryTestProject(t, srv.URL)
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	kit.noAttestRoute = true
+	if err := runRegistry(t, "install"); !errors.Is(err, registry.ErrSignerChanged) {
+		t.Fatalf("install: err = %v, want ErrSignerChanged", err)
 	}
 }
 
@@ -379,5 +570,93 @@ func TestRegistryTrustLintRules(t *testing.T) {
 	}
 	if !strings.Contains(found["registry-signer-mismatch"], "@acme/kit") {
 		t.Errorf("registry-signer-mismatch = %q", found["registry-signer-mismatch"])
+	}
+}
+
+func lintFindings(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	found := map[string]string{}
+	for _, f := range lint.NewProjectRunner(dir).Run(context.Background(), nil) {
+		if strings.HasPrefix(f.RuleID, "registry-") {
+			found[f.RuleID] = f.Message
+		}
+	}
+	return found
+}
+
+// Lint judges the stored signatures like install does: every layer's rule
+// must be met, by any of them.
+func TestRegistryTrustLintNeedsEveryLayer(t *testing.T) {
+	isolateTrustHome(t)
+	kl := attesttest.NewKeyless(t)
+	kit := signedKit("1.0.0")
+	st := attesttest.Statement(t, "@acme/kit", "1.0.0", kit.manifestDigest(t))
+	kit.attestations = []registry.Attestation{
+		attesttest.Attestation("publish", "keyless", kl.Sign(t, "alice@example.com", trustIssuer, st)),
+		attesttest.Attestation("approval", "keyless", kl.Sign(t, "bob@example.com", trustIssuer, st)),
+	}
+	srv, _, _ := fakeRegistryServer(t, map[string]*fakePackage{"@acme/kit": kit})
+	dir := newRegistryTestProject(t, srv.URL)
+	rule := func(identity string) string {
+		return "[[trust.signer]]\nscope = \"@acme/*\"\noidc-issuer = \"" + trustIssuer + "\"\nidentity = \"" + identity + "\"\n"
+	}
+	appendTrust(t, dir, "[trust]\n"+rule("alice@example.com"))
+	policy := filepath.Join(t.TempDir(), "policy.toml")
+	if err := os.WriteFile(policy, []byte("[trust]\n"+rule("bob@example.com")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(registry.EnvTrustPolicy, policy)
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if found := lintFindings(t, dir); found["registry-signer-mismatch"] != "" {
+		t.Errorf("both layers are met, but lint reports %q", found["registry-signer-mismatch"])
+	}
+
+	if err := os.WriteFile(policy, []byte("[trust]\n"+rule("carol@example.com")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if found := lintFindings(t, dir); !strings.Contains(found["registry-signer-mismatch"], "@acme/kit") {
+		t.Errorf("the CI layer is not met, but registry-signer-mismatch = %q", found["registry-signer-mismatch"])
+	}
+
+	if err := os.WriteFile(policy, []byte("[trust]\nrequires = \"signed\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if found := lintFindings(t, dir); !strings.Contains(found["registry-signer-mismatch"], "requires") {
+		t.Errorf("a broken policy is not reported: registry-signer-mismatch = %q", found["registry-signer-mismatch"])
+	}
+}
+
+// A company certificate without a signed time is re-checked at the time the
+// lock records for its bundle, not at the current time.
+func TestRegistryInstallChecksAtTheRecordedTime(t *testing.T) {
+	isolateTrustHome(t)
+	company := attesttest.NewCA(t)
+	kit := signedKit("1.0.0")
+	publish(t, kit, "x509", func(p []byte) json.RawMessage { return company.Sign(t, "release@acme.example", p) })
+	srv, _, _ := fakeRegistryServer(t, map[string]*fakePackage{"@acme/kit": kit})
+	dir := newRegistryTestProject(t, srv.URL)
+	if err := os.MkdirAll(filepath.Join(dir, "trust"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	company.WriteRoot(t, filepath.Join(dir, "trust", "ca.pem"))
+	appendTrust(t, dir, "[[trust.signer]]\nscope = \"@acme/*\"\nx509-root = \"trust/ca.pem\"\n")
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	e := lockedKit(t, dir)
+	if len(e.VerifiedAt) != 1 || e.VerifiedAt[0].Bundle != registry.BundleDigest(kit.attestations[0].Bundle) {
+		t.Fatalf("verified_at = %+v, want the bundle's first verification", e.VerifiedAt)
+	}
+	// Move the recorded time to before the leaf was issued: install must
+	// check at that time, where the certificate is not valid.
+	lock, _ := registry.LoadLockfile(dir)
+	lock.Get("@acme/kit").VerifiedAt[0].At = e.VerifiedAt[0].At.Add(-2 * time.Hour)
+	if err := registry.SaveLockfile(dir, lock); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRegistry(t, "install"); !errors.Is(err, registry.ErrSignerChanged) {
+		t.Fatalf("install: err = %v, want the bundle checked at the recorded time", err)
 	}
 }

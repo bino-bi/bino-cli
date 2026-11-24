@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/sigstore/sigstore-go/pkg/root"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/registry"
@@ -105,7 +107,7 @@ func TestSignatureMatrix(t *testing.T) {
 		for _, level := range []string{registry.RequireOff, registry.RequireWarn, registry.RequireSigned} {
 			policy := policyFor(t, dir, "[trust]\nrequire = \""+level+"\"\n[[trust.signer]]\nscope = \"@acme/*\"\n"+fx.rule+"\n")
 			judge := func(atts []registry.Attestation) (registry.TrustDecision, error) {
-				check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy)
+				check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy, nil)
 				if err != nil {
 					return registry.TrustDecision{}, err
 				}
@@ -188,15 +190,114 @@ func swapPayload(t *testing.T, bundle json.RawMessage, statement []byte) json.Ra
 func TestSignatureMalformedBundleAlwaysFails(t *testing.T) {
 	isolateTrust(t)
 	policy := policyFor(t, t.TempDir(), "")
-	for name, raw := range map[string]string{
-		"not json":  `{`,
-		"no bundle": ``,
-		"v0.1":      `{"mediaType":"application/vnd.dev.sigstore.bundle+json;version=0.1"}`,
+	for name, tc := range map[string]struct{ raw, want string }{
+		"not json":  {`{`, "decode bundle"},
+		"no bundle": {``, "no bundle"},
+		"v0.1":      {`{"mediaType":"application/vnd.dev.sigstore.bundle+json;version=0.1"}`, "older than v0.2"},
 	} {
-		atts := []registry.Attestation{{Kind: "publish", Bundle: json.RawMessage(raw)}}
-		if _, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy); !errors.Is(err, registry.ErrInvalidSignature) {
-			t.Errorf("%s: err = %v, want ErrInvalidSignature", name, err)
+		atts := []registry.Attestation{{Kind: "publish", Bundle: json.RawMessage(tc.raw)}}
+		_, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy, nil)
+		if !errors.Is(err, registry.ErrInvalidSignature) || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want ErrInvalidSignature about %q", name, err, tc.want)
 		}
+	}
+}
+
+func withMediaType(t *testing.T, raw json.RawMessage, mediaType string) json.RawMessage {
+	t.Helper()
+	var b map[string]any
+	if err := json.Unmarshal(raw, &b); err != nil {
+		t.Fatal(err)
+	}
+	b["mediaType"] = mediaType
+	out, _ := json.Marshal(b)
+	return out
+}
+
+func TestSignatureV02BundleIsAccepted(t *testing.T) {
+	isolateTrust(t)
+	dir := t.TempDir()
+	key := attesttest.NewKey(t)
+	key.WritePublicKey(t, filepath.Join(dir, "key.pub"))
+	policy := policyFor(t, dir, "[[trust.signer]]\nscope = \"@acme/*\"\nkey-file = \"key.pub\"\n")
+	b := withMediaType(t, key.Sign(t, attesttest.Statement(t, testPkg, testVersion, testDigest)), "application/vnd.dev.sigstore.bundle+json;version=0.2")
+	check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, []registry.Attestation{attesttest.Attestation("publish", "key", b)}, policy, nil)
+	if err != nil || len(check.Verified) != 1 {
+		t.Fatalf("check = %+v, err = %v", check, err)
+	}
+}
+
+func TestSignatureStatementForAnotherPackage(t *testing.T) {
+	isolateTrust(t)
+	kl := attesttest.NewKeyless(t)
+	policy := policyFor(t, t.TempDir(), "")
+	st := attesttest.Statement(t, "@acme/other", testVersion, testDigest)
+	atts := []registry.Attestation{attesttest.Attestation("publish", "keyless", kl.Sign(t, "alice@example.com", testIssuer, st))}
+	if _, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy, nil); !errors.Is(err, registry.ErrInvalidSignature) {
+		t.Fatalf("err = %v, want ErrInvalidSignature", err)
+	}
+}
+
+// A company certificate with no signed time is checked at the time bino
+// first verified it. Once it has expired, a bundle bino has not seen before
+// cannot be checked, which is not a forgery: another signature can still
+// satisfy the policy.
+func TestSignatureCertificateWithoutSignedTime(t *testing.T) {
+	isolateTrust(t)
+	dir := t.TempDir()
+	company := attesttest.NewCA(t)
+	company.WriteRoot(t, filepath.Join(dir, "ca.pem"))
+	kl := attesttest.NewKeyless(t)
+	policy := policyFor(t, dir, "[[trust.signer]]\nscope = \"@acme/kit\"\noidc-issuer = \""+testIssuer+"\"\nidentity = \"alice@example.com\"\n"+
+		"[[trust.signer]]\nscope = \"@acme/*\"\nx509-root = \"ca.pem\"\n")
+	st := attesttest.Statement(t, testPkg, testVersion, testDigest)
+	now := time.Now()
+
+	fresh := attesttest.Attestation("approval", "x509", company.Sign(t, "release@acme.example", st))
+	check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, []registry.Attestation{fresh}, policy, nil)
+	if err != nil || len(check.Verified) != 1 || len(check.Times) != 1 || check.Times[0].Bundle != registry.BundleDigest(fresh.Bundle) {
+		t.Fatalf("fresh certificate: check = %+v, err = %v", check, err)
+	}
+
+	expired := attesttest.Attestation("approval", "x509", company.SignValid(t, "release@acme.example", st, now.Add(-58*time.Minute), now.Add(-40*time.Minute)))
+	publish := attesttest.Attestation("publish", "keyless", kl.Sign(t, "alice@example.com", testIssuer, st))
+	check, err = registry.VerifyAttestations(testPkg, testVersion, testDigest, []registry.Attestation{publish, expired}, policy, nil)
+	if err != nil || len(check.Verified) != 1 || check.Unverifiable != 1 {
+		t.Fatalf("expired certificate beside a valid signature: check = %+v, err = %v", check, err)
+	}
+	if _, trusted, _ := policy.Evaluate(testPkg, check.Signers()); !trusted {
+		t.Error("the valid signature alone does not satisfy the policy")
+	}
+
+	at := now.Add(-50 * time.Minute).UTC().Truncate(time.Second)
+	recorded := []registry.BundleTime{{Bundle: registry.BundleDigest(expired.Bundle), At: at}}
+	check, err = registry.VerifyAttestations(testPkg, testVersion, testDigest, []registry.Attestation{expired}, policy, recorded)
+	if err != nil || len(check.Verified) != 1 || check.Verified[0].Signer.Kind != registry.SignerX509 || len(check.Times) != 1 || !check.Times[0].At.Equal(at) {
+		t.Fatalf("expired certificate at its recorded time: check = %+v, err = %v", check, err)
+	}
+
+	forged := attesttest.Attestation("approval", "x509", swapPayload(t, company.Sign(t, "release@acme.example", st), st))
+	if _, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, []registry.Attestation{publish, forged}, policy, nil); !errors.Is(err, registry.ErrInvalidSignature) {
+		t.Fatalf("forged certificate signature beside a valid one: err = %v, want ErrInvalidSignature", err)
+	}
+}
+
+// hiddenLogs is trust material that knows no transparency log, like a
+// built-in root older than the log that signed a bundle.
+type hiddenLogs struct{ root.TrustedMaterial }
+
+func (hiddenLogs) RekorLogs() map[string]*root.TransparencyLog { return nil }
+
+func TestSignatureFromAnUnknownLogIsUnverifiable(t *testing.T) {
+	isolateTrust(t)
+	kl := attesttest.NewKeyless(t)
+	t.Cleanup(registry.SetKeylessTrustForTesting(hiddenLogs{kl.Material()}, false))
+	policy := policyFor(t, t.TempDir(), "")
+	st := attesttest.Statement(t, testPkg, testVersion, testDigest)
+	atts := []registry.Attestation{attesttest.Attestation("publish", "keyless", kl.Sign(t, "alice@example.com", testIssuer, st))}
+	check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy, nil)
+	if err != nil || len(check.Verified) != 0 || check.Unverifiable != 1 {
+		t.Fatalf("check = %+v, err = %v; want one unverifiable bundle", check, err)
 	}
 }
 
@@ -208,7 +309,7 @@ func TestSignatureAnchorsAreScoped(t *testing.T) {
 	// The key is trusted for @other only, so it cannot vouch for @acme/kit.
 	policy := policyFor(t, dir, "[[trust.signer]]\nscope = \"@other/*\"\nkey-file = \"key.pub\"\n")
 	atts := []registry.Attestation{attesttest.Attestation("publish", "key", key.Sign(t, attesttest.Statement(t, testPkg, testVersion, testDigest)))}
-	check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy)
+	check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy, nil)
 	if err != nil || len(check.Verified) != 0 || check.Unverifiable != 1 {
 		t.Fatalf("check = %+v, err = %v; want one unverifiable bundle", check, err)
 	}
@@ -221,7 +322,7 @@ func TestJudgePin(t *testing.T) {
 	st := attesttest.Statement(t, testPkg, testVersion, testDigest)
 	verify := func(identity string) registry.SignatureCheck {
 		atts := []registry.Attestation{attesttest.Attestation("publish", "keyless", kl.Sign(t, identity, testIssuer, st))}
-		check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy)
+		check, err := registry.VerifyAttestations(testPkg, testVersion, testDigest, atts, policy, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

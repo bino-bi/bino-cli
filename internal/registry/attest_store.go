@@ -90,3 +90,23 @@ func RemoveAttestations(projectRoot, name string) error {
 	pruneEmptyParents(filepath.Dir(abs), filepath.Join(StoreDir(projectRoot), attestationsDir))
 	return nil
 }
+
+// StoredSignatures verifies the attestations stored for a locked package
+// offline, at the times the lock records. found is false when none are
+// stored for the locked version. A manifest that cannot be digested is
+// ErrNotCanonical.
+func StoredSignatures(projectRoot string, e Entry, policy *TrustPolicy) (check SignatureCheck, found bool, err error) {
+	version, atts, err := ReadAttestations(projectRoot, e.Name)
+	if err != nil {
+		return check, false, err
+	}
+	if version != e.Version || len(atts) == 0 || !e.IsTree() {
+		return check, false, nil // stored for another version: as good as none
+	}
+	digest, _, err := ManifestDigest(e.Files)
+	if err != nil {
+		return check, false, err
+	}
+	check, err = VerifyAttestations(e.Name, e.Version, digest, atts, policy, e.VerifiedAt)
+	return check, err == nil, err
+}
