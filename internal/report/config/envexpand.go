@@ -44,6 +44,22 @@ func ChainLookup(lookups ...LookupFunc) LookupFunc {
 	}
 }
 
+// VarRefs returns the submatch byte offsets of every ${VAR} and
+// ${VAR:default} reference in s that ExpandVars would expand: [start, end,
+// name start, name end, default start, default end] (the default pair is -1
+// without a colon). Escaped \${VAR} sequences are skipped.
+func VarRefs(s string) [][]int {
+	all := envVarPattern.FindAllStringSubmatchIndex(s, -1)
+	out := all[:0]
+	for _, m := range all {
+		if m[0] > 0 && s[m[0]-1] == '\\' {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // ExpandEnvVars replaces environment variable references in the input string.
 //
 // Supported syntax:

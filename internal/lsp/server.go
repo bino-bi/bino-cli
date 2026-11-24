@@ -50,6 +50,7 @@ type Server struct {
 	schema  *walk.Model
 	index   []IndexDoc
 	nameIdx *reportspec.NameIndex
+	navGen  uint64 // bumped by updateNav; a full build started earlier is not cached
 	lock    *registry.Lockfile
 
 	// draftDiags and projectDiags are merged per-file before publishing, since
@@ -184,7 +185,7 @@ func draftCoveredCode(d protocol.Diagnostic) bool {
 		return false
 	}
 	switch string(code) {
-	case "schema-validation", "validation-error", "yaml-syntax":
+	case "schema-validation", codeMissingProperty, "validation-error", "yaml-syntax":
 		return true
 	}
 	return false
@@ -268,12 +269,40 @@ func (s *Server) onProjectChange() {
 	}
 }
 
-// invalidateNav drops the cached name index so the next navigation request
-// rebuilds it over the current buffers (called on buffer edits).
-func (s *Server) invalidateNav() {
+// updateNav replaces one file's entries in the cached name index after a
+// buffer edit, open or close, instead of rebuilding the whole project from
+// disk. The content is what a full rebuild would read for the file.
+func (s *Server) updateNav(ctx context.Context, path string) {
+	s.mu.RLock()
+	built := s.nameIdx != nil
+	s.mu.RUnlock()
+	inIndex := false
+	if built {
+		for _, d := range s.getIndex(ctx) {
+			if d.File == path {
+				inIndex = true
+				break
+			}
+		}
+	}
 	s.mu.Lock()
-	s.nameIdx = nil
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	s.navGen++
+	if s.nameIdx == nil || path == "" {
+		return
+	}
+	content, ok := "", false
+	for _, doc := range s.docs.All() {
+		if doc.Path == path && isBinoBuffer(doc.Text) {
+			content, ok = doc.Text, true
+		}
+	}
+	if !ok && inIndex {
+		if b, err := os.ReadFile(path); err == nil {
+			content, ok = string(b), true
+		}
+	}
+	s.nameIdx = s.nameIdx.WithFile(path, content, ok)
 }
 
 // resolve maps a document position to a PositionContext over the live buffer.
@@ -291,6 +320,7 @@ func (s *Server) resolve(u uri.URI, pos protocol.Position) (reportspec.PositionC
 func (s *Server) getNameIndex(ctx context.Context) *reportspec.NameIndex {
 	s.mu.RLock()
 	ni := s.nameIdx
+	gen := s.navGen
 	s.mu.RUnlock()
 	if ni != nil {
 		return ni
@@ -311,7 +341,11 @@ func (s *Server) getNameIndex(ctx context.Context) *reportspec.NameIndex {
 	}
 	ni, _ = reportspec.BuildNameIndex(files) //nolint:errcheck // BuildNameIndex never returns a non-nil error
 	s.mu.Lock()
-	s.nameIdx = ni
+	// An edit during the build is not in ni: leave the cache empty so the next
+	// request rebuilds.
+	if s.navGen == gen {
+		s.nameIdx = ni
+	}
 	s.mu.Unlock()
 	return ni
 }
@@ -377,9 +411,11 @@ func (s *Server) Initialize(_ context.Context, params *protocol.InitializeParams
 	}
 	resolve := true
 	caps := protocol.ServerCapabilities{
-		TextDocumentSync:   protocol.TextDocumentSyncKindFull,
-		HoverProvider:      protocol.Boolean(true),
-		CompletionProvider: &protocol.CompletionOptions{TriggerCharacters: []string{":", "$", "@"}, ResolveProvider: &resolve},
+		TextDocumentSync:     protocol.TextDocumentSyncKindFull,
+		HoverProvider:        protocol.Boolean(true),
+		CompletionProvider:   &protocol.CompletionOptions{TriggerCharacters: []string{":", "$", "@"}, ResolveProvider: &resolve},
+		InlayHintProvider:    protocol.Boolean(true),
+		DocumentLinkProvider: &protocol.DocumentLinkOptions{},
 	}
 	if s.phase2 {
 		caps.DefinitionProvider = protocol.Boolean(true)

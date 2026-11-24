@@ -49,18 +49,70 @@ func BuildNameIndex(files map[string]string) (*NameIndex, error) {
 		files:  files,
 	}
 	for file, content := range files {
-		nodes, err := ParseYAMLNodes(content)
-		if err != nil {
-			continue
-		}
-		for docIdx, root := range nodes {
-			if root == nil || root.Kind != yaml.MappingNode {
-				continue
-			}
-			idx.indexDocument(file, docIdx, root, docEndLine(nodes, docIdx))
-		}
+		idx.indexFile(file, content)
 	}
 	return idx, nil
+}
+
+func (idx *NameIndex) indexFile(file, content string) {
+	nodes, err := ParseYAMLNodes(content)
+	if err != nil {
+		return
+	}
+	for docIdx, root := range nodes {
+		if root == nil || root.Kind != yaml.MappingNode {
+			continue
+		}
+		idx.indexDocument(file, docIdx, root, docEndLine(nodes, docIdx))
+	}
+}
+
+// WithFile returns a copy of the index with one file's entries replaced by
+// those of content (present=false drops the file). Only that file is parsed,
+// so an edit does not rebuild the whole project. The receiver is not changed,
+// so readers holding it stay consistent.
+func (idx *NameIndex) WithFile(file, content string, present bool) *NameIndex {
+	next := &NameIndex{
+		defs:   make(map[string]SymbolDef, len(idx.defs)),
+		byName: make(map[string][]SymbolDef, len(idx.byName)),
+		files:  make(map[string]string, len(idx.files)+1),
+	}
+	for f, c := range idx.files {
+		if f != file {
+			next.files[f] = c
+		}
+	}
+	for k, d := range idx.defs {
+		if d.File != file {
+			next.defs[k] = d
+		}
+	}
+	for name, defs := range idx.byName {
+		for _, d := range defs {
+			if d.File != file {
+				next.byName[name] = append(next.byName[name], d)
+				// A duplicate name in another file takes over a dropped definition.
+				if key := d.Kind + "\x00" + d.Name; next.defs[key].File == "" {
+					next.defs[key] = d
+				}
+			}
+		}
+	}
+	for _, r := range idx.refs {
+		if r.File != file {
+			next.refs = append(next.refs, r)
+		}
+	}
+	for _, q := range idx.queries {
+		if q.file != file {
+			next.queries = append(next.queries, q)
+		}
+	}
+	if present {
+		next.files[file] = content
+		next.indexFile(file, content)
+	}
+	return next
 }
 
 func (idx *NameIndex) indexDocument(file string, docIdx int, root *yaml.Node, endLine int) {
