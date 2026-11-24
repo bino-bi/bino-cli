@@ -179,3 +179,58 @@ func TestRename_RefusesUneditableQueryScalar(t *testing.T) {
 		t.Fatalf("err = %v, want a refusal naming /proj/ds.yaml:6", err)
 	}
 }
+
+func TestRename_KeepsColumnAliasesAndSharedFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "q.sql"), []byte("SELECT * FROM sales\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dsDoc := `apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: totals
+spec:
+  query: |
+    SELECT region, SUM(amount) AS sales FROM orders
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: d1
+spec:
+  query:
+    $file: q.sql
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: d2
+spec:
+  query:
+    $file: ./q.sql
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: d3
+spec:
+  query:
+    $file: ${SQL_DIR}/x.sql
+`
+	s := newTestServer()
+	srcURI := uri.File(filepath.Join(dir, "src.yaml"))
+	dsURI := uri.File(filepath.Join(dir, "ds.yaml"))
+	s.docs.Set(srcURI, srcDoc, 1)
+	s.docs.Set(dsURI, dsDoc, 1)
+
+	edit, err := renameAt(s, srcURI, 3, 9, "revenue")
+	if err != nil {
+		t.Fatalf("an unreadable query file must not block the rename: %v", err)
+	}
+	if got := applyEdits(dsDoc, edit.Changes[dsURI]); got != dsDoc {
+		t.Errorf("the column alias was rewritten:\n%s", got)
+	}
+	if n := len(edit.Changes[uri.File(filepath.Join(dir, "q.sql"))]); n != 1 {
+		t.Errorf("q.sql got %d edits, want 1", n)
+	}
+}
