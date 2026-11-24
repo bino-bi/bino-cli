@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -1143,5 +1144,73 @@ func TestRegistryInstallReusesAWarmStore(t *testing.T) {
 		if n := pkg.fileDownloads.Load(); n != 0 {
 			t.Errorf("%s re-downloaded %d file(s) into a warm store", name, n)
 		}
+	}
+}
+
+// An older bino drops the fields of a newer lock it does not know, so it may
+// install from that lock but must not rewrite it.
+func TestRegistryNewerLockInstallsButRefusesWrites(t *testing.T) {
+	xBody, xDigest := fakeDoc(t, "@acme/x", "Text")
+	yBody, yDigest := fakeDoc(t, "@acme/y", "Text")
+	packages := map[string]*fakePackage{
+		"@acme/x": {tag: "latest", version: "1.0.0", kind: "Text", body: xBody, digest: xDigest},
+		"@acme/y": {tag: "latest", version: "1.0.0", kind: "Text", body: yBody, digest: yDigest},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	dir := newRegistryTestProject(t, srv.URL)
+	if err := runRegistry(t, "add", "@acme/x"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	lockPath := filepath.Join(dir, registry.LockfileName)
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer := strings.Replace(string(data), "lockfile_version = 2", "lockfile_version = 3", 1)
+	newer = strings.Replace(newer, "direct = true", "direct = true\nfuture_field = 'kept'", 1)
+	if newer == string(data) || !strings.Contains(newer, "future_field") {
+		t.Fatalf("could not turn the lock into a v3 lock:\n%s", data)
+	}
+	if err := os.WriteFile(lockPath, []byte(newer), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tomlBefore, _ := os.ReadFile(filepath.Join(dir, "bino.toml"))
+	assertLockUnchanged := func(step string) {
+		t.Helper()
+		got, err := os.ReadFile(lockPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != newer {
+			t.Errorf("%s rewrote the v3 lock:\n%s", step, got)
+		}
+	}
+
+	if err := os.RemoveAll(filepath.Join(dir, ".bino")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRegistry(t, "install"); err != nil {
+		t.Fatalf("install from a v3 lock: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, ".bino", "registry", "acme", "x", "x.yml")); err != nil || string(got) != string(xBody) {
+		t.Errorf("install did not materialize @acme/x: %v", err)
+	}
+	assertLockUnchanged("install")
+
+	for _, args := range [][]string{{"add", "@acme/y"}, {"update"}, {"remove", "@acme/x"}} {
+		err := runRegistry(t, args...)
+		if !errors.Is(err, registry.ErrNewerLockfile) || !strings.Contains(err.Error(), "upgrade bino") {
+			t.Fatalf("%s: err = %v, want a newer-lock refusal", args[0], err)
+		}
+		assertLockUnchanged(args[0])
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".bino", "registry", "acme", "y")); !os.IsNotExist(err) {
+		t.Error("refused add still materialized @acme/y")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".bino", "registry", "acme", "x", "x.yml")); err != nil {
+		t.Error("refused remove still deleted @acme/x")
+	}
+	if tomlAfter, _ := os.ReadFile(filepath.Join(dir, "bino.toml")); string(tomlAfter) != string(tomlBefore) {
+		t.Errorf("refused commands changed bino.toml:\n%s", tomlAfter)
 	}
 }

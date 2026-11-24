@@ -65,6 +65,9 @@ func registryRemove(p registryProject, args []string) (mcp.RegistryMutationResul
 	if err != nil {
 		return mcp.RegistryMutationResult{}, ConfigError(err)
 	}
+	if err := lock.CheckWritable(); err != nil {
+		return mcp.RegistryMutationResult{}, ConfigError(err)
+	}
 
 	// Mark-and-sweep from the remaining declared roots over the
 	// lock's recorded dependency edges.
