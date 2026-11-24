@@ -333,11 +333,7 @@ func withRevealSource(doc []byte) []byte {
 	if idx == -1 {
 		return doc
 	}
-	updated := make([]byte, 0, len(doc)+len(revealSourceScript))
-	updated = append(updated, doc[:idx]...)
-	updated = append(updated, revealSourceScript...)
-	updated = append(updated, doc[idx:]...)
-	return updated
+	return slices.Concat(doc[:idx], []byte(revealSourceScript), doc[idx:])
 }
 
 // cssLengthPattern accepts the margin lengths the preview mirrors into CSS
