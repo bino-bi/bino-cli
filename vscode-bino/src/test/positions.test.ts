@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { BinoDocumentsResult, QueryBlock, blockContainsLine, blockText } from '../binoDocuments';
+import { BinoDocumentsResult, QueryBlock, blockContainsLine, blockText, hasBinoApiVersion } from '../binoDocuments';
 import { prqlBlockAt } from '../prql';
 
 const range = (sl: number, sc: number, el: number, ec: number) => ({
@@ -139,5 +139,22 @@ suite('positions: language server', function () {
 
         lenses = await lensesOf(doc, l => linesOf(l, 'bino.previewRows').length === 3);
         assert.deepStrictEqual(linesOf(lenses, 'bino.previewRows'), [0, 7, 17]);
+    });
+});
+
+suite('hasBinoApiVersion (fallback without the language server)', () => {
+    test('finds a bino apiVersion in any document, quoted or not', () => {
+        assert.strictEqual(hasBinoApiVersion('apiVersion: bino.bi/v1alpha1\nkind: Table\n'), true);
+        assert.strictEqual(hasBinoApiVersion('apiVersion: "bino.bi/v1alpha1"\n'), true);
+        assert.strictEqual(hasBinoApiVersion('a: 1\n---\nkind: Table\napiVersion: \'bino.bi/v1alpha1\'\n'), true);
+    });
+
+    test('rejects other YAML, comments, nested keys and broken text', () => {
+        assert.strictEqual(hasBinoApiVersion('apiVersion: apps/v1\nkind: Deployment\n'), false);
+        assert.strictEqual(hasBinoApiVersion('# apiVersion: bino.bi/v1alpha1\nfoo: bar\n'), false);
+        assert.strictEqual(hasBinoApiVersion('meta:\n  apiVersion: bino.bi/v1alpha1\n'), false);
+        assert.strictEqual(hasBinoApiVersion('- apiVersion: bino.bi/v1alpha1\n'), false);
+        assert.strictEqual(hasBinoApiVersion(''), false);
+        assert.strictEqual(hasBinoApiVersion('apiVersion: [unclosed\n'), false);
     });
 });

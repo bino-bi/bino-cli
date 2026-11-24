@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { parseAllDocuments, isMap } from 'yaml';
 import { getLanguageClient } from './languageClient';
 
 /** JSON-RPC "method not found": the server predates a custom request. */
@@ -79,6 +80,24 @@ export async function getBinoDocuments(document: vscode.TextDocument): Promise<B
         cache.set(key, { version, result });
     }
     return result;
+}
+
+/**
+ * Local guess for when the language server cannot answer: some document of the
+ * text has an apiVersion starting with bino.bi/.
+ */
+export function hasBinoApiVersion(text: string): boolean {
+    try {
+        return parseAllDocuments(text).some(doc => {
+            if (!isMap(doc.contents)) {
+                return false;
+            }
+            const apiVersion: unknown = doc.contents.get('apiVersion');
+            return typeof apiVersion === 'string' && apiVersion.startsWith('bino.bi/');
+        });
+    } catch {
+        return false;
+    }
 }
 
 /** The cached outline when it matches the buffer's current version. */

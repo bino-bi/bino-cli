@@ -6,7 +6,7 @@ import { DaemonClient } from './daemonClient';
 import { setRenderEmbeddableKinds } from './embeddable';
 import { getBinoPath } from './bino';
 import { getLanguageClient } from './languageClient';
-import { getBinoDocuments, METHOD_NOT_FOUND, warnOutdatedBino } from './binoDocuments';
+import { getBinoDocuments, hasBinoApiVersion, METHOD_NOT_FOUND, warnOutdatedBino } from './binoDocuments';
 
 /** Language server request and push for the project index. */
 const INDEX_REQUEST = 'bino/index';
@@ -842,9 +842,13 @@ export class WorkspaceIndexer {
         return JSON.parse(output);
     }
 
-    /** Whether the language server treats the buffer as a Bino manifest. */
+    /**
+     * Whether the language server treats the buffer as a Bino manifest. Falls
+     * back to a local apiVersion check while the server is not up or too old.
+     */
     async isBinoDocument(document: vscode.TextDocument): Promise<boolean> {
-        return (await getBinoDocuments(document))?.isBino ?? false;
+        const outline = await getBinoDocuments(document);
+        return outline ? outline.isBino : hasBinoApiVersion(document.getText());
     }
 
     /**

@@ -355,6 +355,11 @@ export class TreeEditorProvider implements vscode.CustomTextEditorProvider {
         }
     }
 
+    /** Re-render every open tree, e.g. after the language server or the backend schema arrived. */
+    refreshAll(): void {
+        for (const session of this.sessions) { void this.forwardSync(session); }
+    }
+
     dispose(): void {
         for (const session of this.sessions) { session.panel.dispose(); }
     }
