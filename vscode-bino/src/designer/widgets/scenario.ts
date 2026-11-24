@@ -1,3 +1,4 @@
+import { FieldDef } from '../../schemaResolver';
 import { DesignerWidget, WidgetContext, WidgetHandle } from './registry';
 import { availableSlots, INHERITED_LITERALS, isInheritedLiteral } from '../ibcs';
 import { esc, widgetShell } from './widgetHtml';
@@ -6,14 +7,13 @@ import { esc, widgetShell } from './widgetHtml';
 export type ScenarioValue = string | string[];
 
 /**
- * Kinds carrying a cross-component `scenarios` / `variances` field. The scenario
- * and variance widgets claim it on any of these (Table + both chart kinds).
+ * True for a top-level spec field in the IBCS list form (a string literal or an
+ * array). The fields come from the kind's schema, so every kind that declares
+ * `scenarios` / `variances` matches, plugin kinds included. An enum such as
+ * ChartBullet's `variances: auto|none` is not a list and keeps the enum select.
  */
-const SCENARIO_KINDS = new Set(['Table', 'ChartStructure', 'ChartTime']);
-
-/** True for the kinds whose `scenarios` field this family of widgets owns. */
-export function isScenarioKind(kind: string): boolean {
-    return SCENARIO_KINDS.has(kind);
+export function isScenarioListField(field: FieldDef): boolean {
+    return field.path.length === 1 && !field.enumValues?.length;
 }
 
 /**
@@ -24,7 +24,7 @@ export function isScenarioKind(kind: string): boolean {
  */
 export const scenarioWidget: DesignerWidget<ScenarioValue> = {
     id: 'scenario',
-    match: ({ kind, field }) => isScenarioKind(kind) && field.key === 'scenarios',
+    match: ({ field }) => field.key === 'scenarios' && isScenarioListField(field),
     render: (ctx: WidgetContext<ScenarioValue>): WidgetHandle => {
         const slots = availableSlots(ctx.binding?.columns);
         const value = ctx.value;

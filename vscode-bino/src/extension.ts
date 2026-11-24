@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as cp from 'child_process';
 import { WorkspaceIndexer, LSPDocument, DatasetCandidate, LSPGraphNode, GraphDirection } from './indexer';
-import { BinoTreeProvider, BinoTreeItem, InlineChild } from './tree';
+import { BinoTreeProvider, BinoTreeItem, InlineChild, kindIcon } from './tree';
 import { BinoValidator } from './validation';
 import { BinoPreviewManager } from './preview';
 import { showSetupCheckResults } from './setup';
@@ -17,11 +18,11 @@ import { AddElementCommand } from './addElement';
 import { TreeTableEditorManager } from './treeTableEditor';
 import { DesignerPanel } from './designer/designerPanel';
 import { PreviewTreeProvider } from './previewTree';
-import { ActionsTreeProvider } from './actionsTree';
 import { EnvironmentTreeProvider } from './environmentTree';
 import { DependenciesTreeProvider } from './dependenciesTree';
 import { registerRegistryCommands } from './registryCommands';
 import { DaemonClient } from './daemonClient';
+import { loadBackendSchema, SchemaSource } from './schemaResolver';
 
 let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
@@ -84,14 +85,75 @@ function findDocumentLine(document: vscode.TextDocument, docIndex: number): numb
     return 0;
 }
 
-/** Run a bino command in the integrated terminal. */
+let binoTerminal: vscode.Terminal | undefined;
+let binoTerminalCwd: string | undefined;
+
+/** The configured bino binary, or `bino` from PATH. */
+function binoPath(): string {
+    const binPath = vscode.workspace.getConfiguration('bino').get<string>('binPath');
+    return binPath && binPath.trim() ? binPath.trim() : 'bino';
+}
+
+/** Quote a program path for the user's default terminal shell. */
+function quoteProgram(program: string): string {
+    if (/^[\w@%+=:,./\\-]+$/.test(program)) {
+        return program;
+    }
+    const shell = path.basename(vscode.env.shell || '').toLowerCase();
+    if (shell.startsWith('pwsh') || shell.startsWith('powershell')) {
+        return `& '${program.replace(/'/g, "''")}'`;
+    }
+    if (shell.startsWith('cmd')) {
+        return `"${program}"`;
+    }
+    return `'${program.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Run a bino command in the shared "Bino" terminal. */
 function runInTerminal(args: string): void {
-    const config = vscode.workspace.getConfiguration('bino');
-    const binPath = config.get<string>('binPath');
-    const bino = binPath && binPath.trim() ? binPath : 'bino';
-    const terminal = vscode.window.createTerminal({ name: `Bino: ${args}`, cwd: indexer?.getProjectRootForUri() });
-    terminal.show();
-    terminal.sendText(`${bino} ${args}`);
+    const cwd = indexer?.getProjectRootForUri();
+    // A terminal keeps its start directory, so a different project root needs a new one.
+    if (!binoTerminal || binoTerminal.exitStatus !== undefined || binoTerminalCwd !== cwd) {
+        binoTerminal = vscode.window.createTerminal({ name: 'Bino', cwd });
+        binoTerminalCwd = cwd;
+    }
+    binoTerminal.show();
+    binoTerminal.sendText(`${quoteProgram(binoPath())} ${args}`);
+}
+
+/** Run bino without a shell and return stdout, or undefined on any failure. */
+function execBinoOutput(args: string[], cwd: string | undefined): Promise<string | undefined> {
+    return new Promise(resolve => {
+        cp.execFile(binoPath(), args, { cwd, timeout: 30_000, maxBuffer: 20 * 1024 * 1024, encoding: 'utf8' },
+            (err, stdout) => resolve(err ? undefined : stdout));
+    });
+}
+
+/**
+ * The merged schema and kind list: the daemon first, then `bino schema` (which
+ * also loads the project's plugins) and the indexer's kind list.
+ */
+function backendSchemaSource(cwd: string | undefined): SchemaSource {
+    return {
+        getSchema: async () =>
+            (daemonClient?.isConnected ? await daemonClient.getSchema() : undefined) ?? execBinoOutput(['schema'], cwd),
+        getKinds: async () => {
+            const served = daemonClient?.isConnected ? await daemonClient.getKinds() : undefined;
+            if (served && !served.error && Array.isArray(served.kinds)) {
+                return served.kinds;
+            }
+            return indexer?.getKindInfos();
+        },
+    };
+}
+
+/** The `bino add` subcommands, read from cobra's completion so it matches the installed binary. */
+async function listAddSubcommands(cwd: string | undefined): Promise<Set<string>> {
+    const out = await execBinoOutput(['__complete', 'add', ''], cwd);
+    const names = (out ?? '').split('\n')
+        .filter(line => line && !line.startsWith(':'))
+        .map(line => line.split('\t')[0].trim());
+    return new Set(names);
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -292,19 +354,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     });
     context.subscriptions.push(treeView);
 
+    // Replace the bundled schema with the backend's merged one (plugin kinds included).
+    const reloadSchema = () => loadBackendSchema(backendSchemaSource(indexer?.getProjectRootForUri()))
+        .then(loaded => {
+            outputChannel.appendLine(loaded ? 'Loaded the schema from bino' : 'Using the bundled schema: bino did not serve one');
+            if (loaded) {
+                treeProvider.refresh();
+            }
+        });
+    void daemonReady.then(() => {
+        void reloadSchema();
+        // A new daemon connection (e.g. after a restart) may serve other plugin kinds.
+        if (daemonClient) {
+            context.subscriptions.push(daemonClient.onStatusChange(status => {
+                if (status === 'connected') {
+                    void reloadSchema();
+                }
+            }));
+        }
+    });
+    // Plugins are declared in bino.toml.
+    const schemaTomlWatcher = vscode.workspace.createFileSystemWatcher('**/bino.toml', false, false, true);
+    context.subscriptions.push(
+        schemaTomlWatcher,
+        schemaTomlWatcher.onDidCreate(() => void reloadSchema()),
+        schemaTomlWatcher.onDidChange(() => void reloadSchema()),
+    );
+
     // Register Preview & Build tree
     const previewTreeProvider = new PreviewTreeProvider(previewManager);
     context.subscriptions.push(
         vscode.window.createTreeView('binoPreview', {
             treeDataProvider: previewTreeProvider,
-        })
-    );
-
-    // Register Scaffolding tree
-    const actionsTreeProvider = new ActionsTreeProvider();
-    context.subscriptions.push(
-        vscode.window.createTreeView('binoActions', {
-            treeDataProvider: actionsTreeProvider,
         })
     );
 
@@ -561,9 +642,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const addElement = new AddElementCommand(
             indexer,
             wizardManager,
-            getIconForKind,
+            kindIcon,
             context.extensionPath,
             (kind: string) => runInTerminal(`add ${kind.toLowerCase()}`),
+            () => listAddSubcommands(indexer?.getProjectRootForUri()),
         );
         context.subscriptions.push(
             vscode.commands.registerCommand('bino.addElement', () => addElement.run())
@@ -623,36 +705,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await showGraphForTreeItem(indexer, item, 'in');
         })
     );
-
-    // --- Scaffolding commands (bino add <kind>) ---
-    const addCommands: [string, string][] = [
-        ['bino.addDataset', 'add dataset'],
-        ['bino.addDatasource', 'add datasource'],
-        ['bino.addConnectionSecret', 'add connectionsecret'],
-        ['bino.addLayoutPage', 'add layoutpage'],
-        ['bino.addLayoutCard', 'add layoutcard'],
-        ['bino.addTable', 'add table'],
-        ['bino.addText', 'add text'],
-        ['bino.addChartStructure', 'add chartstructure'],
-        ['bino.addChartTime', 'add charttime'],
-        ['bino.addChartScatter', 'add chartscatter'],
-        ['bino.addChartBubble', 'add chartbubble'],
-        ['bino.addChartBullet', 'add chartbullet'],
-        ['bino.addAnnotation', 'add annotation'],
-        ['bino.addAnnotationList', 'add annotationlist'],
-        ['bino.addReportArtefact', 'add reportartefact'],
-        ['bino.addLiveReportArtefact', 'add livereportartefact'],
-        ['bino.addSigningProfile', 'add signingprofile'],
-        ['bino.addAsset', 'add asset'],
-        ['bino.addComponentStyle', 'add componentstyle'],
-        ['bino.addInternationalization', 'add internationalization'],
-        ['bino.addScalingGroup', 'add scalinggroup'],
-    ];
-    for (const [cmdId, binoArgs] of addCommands) {
-        context.subscriptions.push(
-            vscode.commands.registerCommand(cmdId, () => runInTerminal(binoArgs))
-        );
-    }
 
     // Cache clean commands (run via child_process, not terminal)
     context.subscriptions.push(
@@ -947,7 +999,7 @@ async function showGraphForTreeItem(
         }
 
         return {
-            label: `$(${getIconForKind(node.kind)}) ${node.name}`,
+            label: `$(${kindIcon(node.kind)}) ${node.name}`,
             description,
             detail: `[${prefix}] ${node.kind}`,
             node
@@ -1015,41 +1067,6 @@ async function showGraphForTreeItem(
 /**
  * Get VS Code icon ID for a document kind.
  */
-function getIconForKind(kind: string): string {
-    switch (kind) {
-        case 'DataSource':
-            return 'database';
-        case 'DataSet':
-            return 'table';
-        case 'ReportArtefact':
-            return 'file-pdf';
-        case 'LiveReportArtefact':
-            return 'browser';
-        case 'LayoutPage':
-            return 'layout';
-        case 'LayoutCard':
-            return 'credit-card';
-        case 'Component':
-            return 'symbol-method';
-        case 'Table':
-            return 'list-flat';
-        case 'Text':
-            return 'symbol-text';
-        case 'ChartStructure':
-        case 'ChartTime':
-        case 'ChartScatter':
-        case 'ChartBubble':
-        case 'ChartBullet':
-            return 'graph';
-        case 'Annotation':
-            return 'comment';
-        case 'AnnotationList':
-            return 'list-ordered';
-        default:
-            return 'file-code';
-    }
-}
-
 /**
  * Show columns for the current dataset/datasource at the cursor position.
  * If multiple candidates are found, shows a disambiguation QuickPick first.

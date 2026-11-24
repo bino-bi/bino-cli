@@ -1,0 +1,91 @@
+import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
+import { SchemaResolver, SchemaSource, loadBackendSchema, resetBackendSchema, getKindCategory } from '../schemaResolver';
+import { isScenarioListField } from '../designer/widgets/scenario';
+import { buildScaffoldSnippet } from '../addElement';
+import type { KindInfo } from '../indexer';
+
+// out/test -> the extension root, which holds schema/document.schema.json.
+const extensionPath = path.resolve(__dirname, '..', '..');
+const PLUGIN_KIND = 'SciInterval';
+
+/** The bundled schema with one plugin kind merged in, the way the backend serves it. */
+function mergedSchemaWithPluginKind(): string {
+    const schema = JSON.parse(fs.readFileSync(path.join(extensionPath, 'schema', 'document.schema.json'), 'utf8'));
+    schema.properties.kind.enum.push(PLUGIN_KIND);
+    schema.$defs.sciIntervalSpec = {
+        type: 'object',
+        properties: {
+            dataset: { type: 'string' },
+            level: { type: 'number', description: 'Confidence level' },
+        },
+        required: ['level'],
+    };
+    schema.allOf.push({
+        if: { properties: { kind: { const: PLUGIN_KIND } } },
+        then: { properties: { spec: { $ref: '#/$defs/sciIntervalSpec' } } },
+    });
+    return JSON.stringify(schema);
+}
+
+function stubSource(schema: string | undefined, kinds: KindInfo[] | undefined): SchemaSource {
+    return { getSchema: async () => schema, getKinds: async () => kinds };
+}
+
+suite('SchemaResolver backend schema', () => {
+    teardown(() => resetBackendSchema());
+
+    test('uses backend kinds and fields, plugin kinds included', async () => {
+        const resolver = new SchemaResolver(extensionPath);
+        assert.ok(resolver.load());
+        assert.deepStrictEqual(resolver.getFieldsForKind(PLUGIN_KIND), []);
+
+        const kinds: KindInfo[] = [
+            { name: 'Table', category: 'embeddable', embeddable: true },
+            { name: PLUGIN_KIND, category: 'embeddable', embeddable: false },
+        ];
+        assert.ok(await loadBackendSchema(stubSource(mergedSchemaWithPluginKind(), kinds)));
+
+        // A resolver created before the backend answered picks up the new schema.
+        assert.deepStrictEqual(resolver.getFieldsForKind(PLUGIN_KIND).map(f => f.key).sort(), ['dataset', 'level']);
+        assert.ok(resolver.getKindEnum().includes(PLUGIN_KIND));
+        assert.strictEqual(getKindCategory(PLUGIN_KIND), 'embeddable');
+
+        const infos = resolver.getKindInfos();
+        assert.strictEqual(infos.find(k => k.name === PLUGIN_KIND)?.category, 'embeddable');
+        // Kinds only the schema knows still appear.
+        assert.ok(infos.some(k => k.name === 'ScreenshotArtefact'));
+    });
+
+    test('keeps the bundled schema when the backend serves nothing', async () => {
+        assert.strictEqual(await loadBackendSchema(stubSource(undefined, undefined)), false);
+        assert.strictEqual(await loadBackendSchema(stubSource('not json', [])), false);
+        const resolver = new SchemaResolver(extensionPath);
+        assert.ok(resolver.load());
+        assert.ok(resolver.getKindEnum().includes('Table'));
+        assert.ok(!resolver.getKindEnum().includes(PLUGIN_KIND));
+        assert.ok(resolver.getLayoutChildKinds().includes('Tree'));
+    });
+
+    test('scenario widgets claim list fields only, not ChartBullet variances', () => {
+        const resolver = new SchemaResolver(extensionPath);
+        resolver.load();
+        const field = (kind: string, key: string) => resolver.getFieldsForKind(kind).find(f => f.key === key);
+        assert.ok(isScenarioListField(field('Table', 'scenarios')!));
+        assert.ok(isScenarioListField(field('ChartStructure', 'variances')!));
+        assert.ok(!isScenarioListField(field('ChartBullet', 'variances')!));
+    });
+
+    test('scaffold snippet lists required fields and given values', () => {
+        const resolver = new SchemaResolver(extensionPath);
+        resolver.load();
+        const fields = resolver.getFieldsForKind('Tree');
+        const snippet = buildScaffoldSnippet(resolver.getApiVersion()!, 'Tree', 'tree_1', fields, { dataset: 'sales' }).value;
+        assert.ok(snippet.startsWith('apiVersion: bino.bi/v1alpha1\nkind: Tree\nmetadata:\n  name: ${1:tree_1}\nspec:'));
+        assert.ok(snippet.includes('dataset: ${2:"sales"}'));
+        for (const f of fields.filter(f => f.required)) {
+            assert.ok(snippet.includes(`\n  ${f.key}: `), `missing required ${f.key}`);
+        }
+    });
+});

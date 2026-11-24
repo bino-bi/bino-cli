@@ -4,6 +4,55 @@ import * as fs from 'fs';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { BinoValidator } from './validation';
 import { isEmbeddableKind } from './embeddable';
+import { getKindCategory } from './schemaResolver';
+
+/** Codicon per built-in kind. Other kinds (plugins) get their category's icon. */
+const KIND_ICONS: Record<string, string> = {
+    DataSource: 'database',
+    DataSet: 'table',
+    ConnectionSecret: 'lock',
+    ReportArtefact: 'file-pdf',
+    LiveReportArtefact: 'browser',
+    DocumentArtefact: 'markdown',
+    ScreenshotArtefact: 'device-camera',
+    SigningProfile: 'key',
+    Asset: 'file-media',
+    LayoutPage: 'layout',
+    LayoutCard: 'credit-card',
+    Component: 'symbol-method',
+    Table: 'list-flat',
+    Text: 'symbol-text',
+    ChartStructure: 'graph',
+    ChartTime: 'graph',
+    ChartScatter: 'graph',
+    ChartBubble: 'graph',
+    ChartBullet: 'graph',
+    Tree: 'type-hierarchy',
+    Grid: 'symbol-array',
+    SmallMultiple: 'multiple-windows',
+    Annotation: 'comment',
+    AnnotationList: 'list-ordered',
+    ComponentStyle: 'paintcan',
+    RuleSet: 'checklist',
+    ScalingGroup: 'symbol-ruler',
+    Internationalization: 'globe',
+};
+
+const CATEGORY_ICONS: Record<string, string> = {
+    artefact: 'file',
+    data: 'database',
+    layout: 'layout',
+    embeddable: 'graph',
+    config: 'settings-gear',
+};
+
+/** Display order of the backend's capability categories in the Documents tree. */
+const CATEGORY_ORDER = ['artefact', 'data', 'layout', 'embeddable', 'config'];
+
+/** The codicon id for a manifest kind. */
+export function kindIcon(kind: string): string {
+    return KIND_ICONS[kind] ?? CATEGORY_ICONS[getKindCategory(kind) ?? ''] ?? 'file-code';
+}
 
 /**
  * Represents an inline child component within a LayoutPage or LayoutCard.
@@ -91,50 +140,7 @@ export class BinoTreeItem extends vscode.TreeItem {
     }
 
     private getDocumentIcon(kind: string): vscode.ThemeIcon {
-        switch (kind) {
-            case 'DataSource':
-                return new vscode.ThemeIcon('database');
-            case 'DataSet':
-                return new vscode.ThemeIcon('table');
-            case 'ReportArtefact':
-                return new vscode.ThemeIcon('file-pdf');
-            case 'LiveReportArtefact':
-                return new vscode.ThemeIcon('browser');
-            case 'DocumentArtefact':
-                return new vscode.ThemeIcon('markdown');
-            case 'SigningProfile':
-                return new vscode.ThemeIcon('key');
-            case 'Asset':
-                return new vscode.ThemeIcon('file-media');
-            case 'LayoutPage':
-                return new vscode.ThemeIcon('layout');
-            case 'LayoutCard':
-                return new vscode.ThemeIcon('credit-card');
-            case 'Table':
-                return new vscode.ThemeIcon('list-flat');
-            case 'Text':
-                return new vscode.ThemeIcon('symbol-text');
-            case 'ChartStructure':
-            case 'ChartTime':
-            case 'ChartScatter':
-            case 'ChartBubble':
-            case 'ChartBullet':
-                return new vscode.ThemeIcon('graph');
-            case 'Annotation':
-                return new vscode.ThemeIcon('comment');
-            case 'AnnotationList':
-                return new vscode.ThemeIcon('list-ordered');
-            case 'ComponentStyle':
-                return new vscode.ThemeIcon('paintcan');
-            case 'ScalingGroup':
-                return new vscode.ThemeIcon('symbol-ruler');
-            case 'Internationalization':
-                return new vscode.ThemeIcon('globe');
-            case 'ConnectionSecret':
-                return new vscode.ThemeIcon('lock');
-            default:
-                return new vscode.ThemeIcon('file-code');
-        }
+        return new vscode.ThemeIcon(kindIcon(kind));
     }
 
     private getKindIcon(kind: string): vscode.ThemeIcon {
@@ -233,40 +239,12 @@ export class BinoTreeProvider implements vscode.TreeDataProvider<BinoTreeItem> {
             kindCounts.set(doc.kind, (kindCounts.get(doc.kind) || 0) + 1);
         }
 
-        // Sort kinds by priority order for better UX
-        const kindOrder = [
-            'ReportArtefact',
-            'LiveReportArtefact',
-            'DocumentArtefact',
-            'DataSource',
-            'DataSet',
-            'LayoutPage',
-            'LayoutCard',
-            'Table',
-            'Text',
-            'ChartStructure',
-            'ChartTime',
-            'ChartScatter',
-            'ChartBubble',
-            'ChartBullet',
-            'Annotation',
-            'AnnotationList',
-            'Asset',
-            'ComponentStyle',
-            'ScalingGroup',
-            'Internationalization',
-            'SigningProfile',
-            'ConnectionSecret'
-        ];
-
-        const sortedKinds = Array.from(kindCounts.keys()).sort((a, b) => {
-            const aIndex = kindOrder.indexOf(a);
-            const bIndex = kindOrder.indexOf(b);
-            if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-            if (aIndex === -1) return 1;
-            if (bIndex === -1) return -1;
-            return aIndex - bIndex;
-        });
+        // Group by the backend's capability category, then by name.
+        const rank = (kind: string) => {
+            const i = CATEGORY_ORDER.indexOf(getKindCategory(kind) ?? '');
+            return i === -1 ? CATEGORY_ORDER.length : i;
+        };
+        const sortedKinds = Array.from(kindCounts.keys()).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 
         return sortedKinds.map(kind => {
             const count = kindCounts.get(kind) || 0;

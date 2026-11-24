@@ -62,11 +62,6 @@
           "when": "bino.projectDetected"
         },
         {
-          "id": "binoActions",
-          "name": "Scaffolding",
-          "when": "bino.projectDetected"
-        },
-        {
           "id": "binoDependencies",
           "name": "Dependencies",
           "when": "bino.projectDetected"
@@ -87,15 +82,9 @@
     "commands": [
       {
         "command": "bino.registrySearch",
-        "title": "Search Registry…",
+        "title": "Add Dependency from Registry…",
         "category": "Bino",
         "icon": "$(search)"
-      },
-      {
-        "command": "bino.registryAddDependency",
-        "title": "Add Dependency…",
-        "category": "Bino",
-        "icon": "$(add)"
       },
       {
         "command": "bino.registryInstall",
@@ -322,111 +311,6 @@
         "category": "Bino"
       },
       {
-        "command": "bino.addDataset",
-        "title": "Add DataSet",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addDatasource",
-        "title": "Add DataSource",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addConnectionSecret",
-        "title": "Add ConnectionSecret",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addLayoutPage",
-        "title": "Add LayoutPage",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addLayoutCard",
-        "title": "Add LayoutCard",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addTable",
-        "title": "Add Table",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addText",
-        "title": "Add Text",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addChartStructure",
-        "title": "Add ChartStructure",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addChartTime",
-        "title": "Add ChartTime",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addChartScatter",
-        "title": "Add ChartScatter",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addChartBubble",
-        "title": "Add ChartBubble",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addChartBullet",
-        "title": "Add ChartBullet",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addAnnotation",
-        "title": "Add Annotation",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addAnnotationList",
-        "title": "Add AnnotationList",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addReportArtefact",
-        "title": "Add ReportArtefact",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addLiveReportArtefact",
-        "title": "Add LiveReportArtefact",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addSigningProfile",
-        "title": "Add SigningProfile",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addAsset",
-        "title": "Add Asset",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addComponentStyle",
-        "title": "Add ComponentStyle",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addInternationalization",
-        "title": "Add Internationalization",
-        "category": "Bino"
-      },
-      {
-        "command": "bino.addScalingGroup",
-        "title": "Add ScalingGroup",
-        "category": "Bino"
-      },
-      {
         "command": "bino.cacheClean",
         "title": "Clean Cache",
         "category": "Bino"
@@ -514,10 +398,6 @@
           "when": "bino.projectDetected"
         },
         {
-          "command": "bino.registryAddDependency",
-          "when": "bino.projectDetected"
-        },
-        {
           "command": "bino.registryInstall",
           "when": "bino.projectDetected"
         },
@@ -576,90 +456,6 @@
         {
           "command": "bino.openInDesigner",
           "when": "bino.projectDetected"
-        },
-        {
-          "command": "bino.addDataset",
-          "when": "false"
-        },
-        {
-          "command": "bino.addDatasource",
-          "when": "false"
-        },
-        {
-          "command": "bino.addConnectionSecret",
-          "when": "false"
-        },
-        {
-          "command": "bino.addLayoutPage",
-          "when": "false"
-        },
-        {
-          "command": "bino.addLayoutCard",
-          "when": "false"
-        },
-        {
-          "command": "bino.addTable",
-          "when": "false"
-        },
-        {
-          "command": "bino.addText",
-          "when": "false"
-        },
-        {
-          "command": "bino.addChartStructure",
-          "when": "false"
-        },
-        {
-          "command": "bino.addChartTime",
-          "when": "false"
-        },
-        {
-          "command": "bino.addChartScatter",
-          "when": "false"
-        },
-        {
-          "command": "bino.addChartBubble",
-          "when": "false"
-        },
-        {
-          "command": "bino.addChartBullet",
-          "when": "false"
-        },
-        {
-          "command": "bino.addAnnotation",
-          "when": "false"
-        },
-        {
-          "command": "bino.addAnnotationList",
-          "when": "false"
-        },
-        {
-          "command": "bino.addReportArtefact",
-          "when": "false"
-        },
-        {
-          "command": "bino.addLiveReportArtefact",
-          "when": "false"
-        },
-        {
-          "command": "bino.addSigningProfile",
-          "when": "false"
-        },
-        {
-          "command": "bino.addAsset",
-          "when": "false"
-        },
-        {
-          "command": "bino.addComponentStyle",
-          "when": "false"
-        },
-        {
-          "command": "bino.addInternationalization",
-          "when": "false"
-        },
-        {
-          "command": "bino.addScalingGroup",
-          "when": "false"
         },
         {
           "command": "bino.restartDaemon",
@@ -749,13 +545,18 @@
           "group": "use@3"
         },
         {
+          "command": "bino.registryInstall",
+          "when": "view == binoDependencies && viewItem == binoPackageNotInstalled",
+          "group": "manage@0"
+        },
+        {
           "command": "bino.registryUpdatePackage",
-          "when": "view == binoDependencies && viewItem == binoPackage",
+          "when": "view == binoDependencies && viewItem =~ /^binoPackage(NotInstalled)?$/",
           "group": "manage@1"
         },
         {
           "command": "bino.registryRemovePackage",
-          "when": "view == binoDependencies && viewItem == binoPackage",
+          "when": "view == binoDependencies && viewItem =~ /^binoPackage(NotInstalled)?$/",
           "group": "manage@2"
         }
       ],

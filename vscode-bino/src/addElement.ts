@@ -59,6 +59,7 @@ export class AddElementCommand {
         private readonly getIcon: (kind: string) => string,
         extensionPath: string,
         private readonly runAdd: (kind: string) => void,
+        private readonly addSubcommands: () => Promise<Set<string>>,
     ) {
         this.authoring = new AuthoringClient(indexer);
         this.schema = new SchemaResolver(extensionPath);
@@ -67,7 +68,7 @@ export class AddElementCommand {
 
     /** Show the palette and route the chosen kind to its create path. */
     async run(): Promise<void> {
-        const kinds = await this.indexer.getKindInfos();
+        const kinds = this.schema.getKindInfos(await this.indexer.getKindInfos());
         if (kinds.length === 0) {
             vscode.window.showWarningMessage('Bino: could not load the manifest kind list.');
             return;
@@ -136,14 +137,10 @@ export class AddElementCommand {
         // Kinds whose schema requires an object/array field the scalar form cannot
         // fill (e.g. LayoutPage.children, SigningProfile.certificate, Asset.source)
         // can't be completed by the guided form, so the form+create would always
-        // fail with schema diagnostics. Route them to `bino add <kind>` - the
-        // interactive CLI scaffolder - as the escape hatch instead.
+        // fail with schema diagnostics. Take the escape hatch instead.
         const fields = this.schemaLoaded ? this.schema.getFieldsForKind(kind) : [];
         if (this.needsGuidedWidgets(fields)) {
-            vscode.window.showInformationMessage(
-                `Bino: ${kind} needs the interactive wizard - running \`bino add ${kind.toLowerCase()}\` in the terminal.`
-            );
-            this.runAdd(kind);
+            await this.fallback(kind, `${kind} needs more than the guided form`, fields);
             return;
         }
 
@@ -214,18 +211,36 @@ export class AddElementCommand {
         if (!result.ok) {
             // The guided form couldn't produce a schema-valid spec - typically a
             // conditional requirement the flat field list can't express (e.g.
-            // ConnectionSecret type:postgres needs a `postgres` object). Fall back
-            // to `bino add <kind>` rather than dead-ending on the diagnostics.
-            vscode.window.showWarningMessage(
-                `Bino: could not create ${kind} (${formatEditDiagnostics(result)}) - continuing with \`bino add ${kind.toLowerCase()}\` in the terminal.`
-            );
-            this.runAdd(kind);
+            // ConnectionSecret type:postgres needs a `postgres` object). Take the
+            // escape hatch rather than dead-ending on the diagnostics.
+            await this.fallback(kind, `could not create ${kind} (${formatEditDiagnostics(result)})`, fields, name, spec);
             return;
         }
 
         await this.indexer.refreshIndex();
         await this.openCreatedFile(result.file);
         vscode.window.showInformationMessage(`Bino: created ${result.file}`);
+    }
+
+    /**
+     * The escape hatch when the guided form can't create a kind: the interactive
+     * `bino add <kind>` wizard where the binary has one, else a schema-driven
+     * scaffold in a new editor.
+     */
+    private async fallback(kind: string, reason: string, fields: FieldDef[], name?: string, spec: Record<string, unknown> = {}): Promise<void> {
+        const sub = kind.toLowerCase();
+        if ((await this.addSubcommands()).has(sub)) {
+            vscode.window.showInformationMessage(`Bino: ${reason} - running \`bino add ${sub}\` in the terminal.`);
+            this.runAdd(kind);
+            return;
+        }
+        const apiVersion = this.schema.getApiVersion() ?? 'bino.bi/v1alpha1';
+        const existing = new Set(this.indexer.getDocuments([kind]).map(d => d.name));
+        const snippet = buildScaffoldSnippet(apiVersion, kind, name ?? this.suggestName(kind, existing), fields, spec);
+        const doc = await vscode.workspace.openTextDocument({ language: 'yaml', content: '' });
+        const editor = await vscode.window.showTextDocument(doc, { preview: false });
+        await editor.insertSnippet(snippet);
+        vscode.window.showInformationMessage(`Bino: ${reason} - fill in the ${kind} scaffold and save it in the project.`);
     }
 
     /** Prompt for a unique metadata.name for the new manifest. */
@@ -386,4 +401,46 @@ export class AddElementCommand {
             // watcher), the success toast still names it.
         }
     }
+}
+
+/**
+ * A minimal manifest for `kind` as a snippet: the envelope, then every required
+ * spec field (plus the values already given) with a tabstop to fill in.
+ */
+export function buildScaffoldSnippet(
+    apiVersion: string,
+    kind: string,
+    name: string,
+    fields: FieldDef[],
+    values: Record<string, unknown> = {},
+): vscode.SnippetString {
+    const snippet = new vscode.SnippetString();
+    snippet.appendText(`apiVersion: ${apiVersion}\nkind: ${kind}\nmetadata:\n  name: `);
+    snippet.appendPlaceholder(name);
+    const keys = [...new Set([...Object.keys(values), ...fields.filter(f => f.required).map(f => f.key)])];
+    if (keys.length === 0) {
+        snippet.appendText('\nspec: {}\n');
+        return snippet;
+    }
+    snippet.appendText('\nspec:');
+    for (const key of keys) {
+        snippet.appendText(`\n  ${key}: `);
+        const field = fields.find(f => f.key === key);
+        if (key in values) {
+            // JSON is valid YAML, so strings, numbers, arrays and objects all round-trip.
+            snippet.appendPlaceholder(JSON.stringify(values[key]));
+        } else if (field?.enumValues?.length) {
+            snippet.appendChoice(field.enumValues.map(String));
+        } else if (field?.type === 'object') {
+            snippet.appendPlaceholder('{}');
+        } else if (field?.type === 'array') {
+            snippet.appendPlaceholder('[]');
+        } else if (field?.defaultValue !== undefined) {
+            snippet.appendPlaceholder(JSON.stringify(field.defaultValue));
+        } else {
+            snippet.appendTabstop();
+        }
+    }
+    snippet.appendText('\n');
+    return snippet;
 }

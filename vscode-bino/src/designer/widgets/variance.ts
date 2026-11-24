@@ -1,7 +1,7 @@
 import { DesignerWidget, WidgetContext, WidgetHandle } from './registry';
 import { SENTIMENTS, parseVarianceToken, varianceMeaning } from '../ibcs';
 import { esc, jsonAttr, widgetShell } from './widgetHtml';
-import { isScenarioKind } from './scenario';
+import { isScenarioListField } from './scenario';
 
 /** A variance field: an inherited literal string, or an array of variance tokens. */
 export type VarianceValue = string | string[];
@@ -24,7 +24,7 @@ function chosenScenarios(spec: Record<string, unknown> | undefined): string[] {
  */
 export const varianceWidget: DesignerWidget<VarianceValue> = {
     id: 'variance',
-    match: ({ kind, field }) => isScenarioKind(kind) && field.key === 'variances',
+    match: ({ field }) => field.key === 'variances' && isScenarioListField(field),
     render: (ctx: WidgetContext<VarianceValue>): WidgetHandle => {
         const value = ctx.value;
         const tokens = Array.isArray(value) ? value : [];
