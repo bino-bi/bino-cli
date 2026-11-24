@@ -123,7 +123,9 @@ jobs:
 
       - name: Package extension
         working-directory: vscode-bino
-        run: vsce package --out vscode-bino.vsix
+        run: |
+          npm version --no-git-tag-version --allow-same-version "${{ needs.resolve-tag.outputs.version }}"
+          vsce package --out vscode-bino.vsix
 
       - name: Upload VS Code extension artifact
         uses: actions/upload-artifact@v7
@@ -135,7 +137,18 @@ jobs:
         working-directory: vscode-bino
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: vsce publish -p "$VSCE_PAT" ${{ needs.resolve-tag.outputs.version }}
+        run: vsce publish -p "$VSCE_PAT" --packagePath vscode-bino.vsix
+
+      - name: Publish to Open VSX
+        working-directory: vscode-bino
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "::warning::OVSX_PAT is not set, skipping Open VSX"
+            exit 0
+          fi
+          npx --yes ovsx publish vscode-bino.vsix -p "$OVSX_PAT"
 
   # Build binaries for each platform (CGO required for duckdb-go).
   # macOS and Linux use the default duckdb-go-bindings (extensions installed at runtime).
