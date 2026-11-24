@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"os"
-	"strings"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
@@ -79,7 +78,8 @@ func errorSource(err error) (file string, position int) {
 }
 
 // documentStartLine is the 1-based line of the first content line of the
-// position-th YAML document in file, or 0 when it cannot be found.
+// position-th YAML document in file, or 0 when it cannot be found. Documents
+// are counted like the loader does, so empty ones are skipped.
 func documentStartLine(file string, position int) int {
 	if file == "" || position <= 0 {
 		return 0
@@ -88,25 +88,12 @@ func documentStartLine(file string, position int) int {
 	if err != nil {
 		return 0
 	}
-	doc, inDoc := 1, false
-	for i, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(line, "---") && (len(trimmed) == 3 || strings.HasPrefix(strings.TrimSpace(line[3:]), "#")) {
-			if inDoc {
-				doc++
-				inDoc = false
-			}
-			continue
-		}
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		if !inDoc && doc == position {
-			return i + 1
-		}
-		inDoc = true
+	nodes, _ := spec.ParseYAMLNodes(string(data)) //nolint:errcheck // the documents before a parse error are enough
+	nodes = spec.ManifestNodes(nodes)
+	if position > len(nodes) {
+		return 0
 	}
-	return 0
+	return nodes[position-1].Line
 }
 
 // logGeneratedJSON names every built PDF with its path, so a caller can open it.

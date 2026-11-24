@@ -60,6 +60,20 @@ func TestDocumentStartLine(t *testing.T) {
 	}
 }
 
+// "{}" and comment-only documents are not loader positions.
+func TestDocumentStartLineSkipsEmptyDocuments(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "report.yaml")
+	content := "{}\n---\n# only a comment\n---\n" + twoDocs
+	if err := os.WriteFile(file, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for pos, want := range map[int]int{1: 7, 2: 13, 3: 0} {
+		if got := documentStartLine(file, pos); got != want {
+			t.Errorf("documentStartLine(%d) = %d, want %d", pos, got, want)
+		}
+	}
+}
+
 func TestLogErrorJSONPointsAtInnermostDocument(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "report.yaml")
 	if err := os.WriteFile(file, []byte(twoDocs), 0o600); err != nil {

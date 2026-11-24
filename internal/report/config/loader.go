@@ -503,6 +503,7 @@ func validationError(err error, path string, index int, expanded string) error {
 
 	// Parse YAML nodes to resolve line/column positions
 	nodes, parseErr := spec.ParseYAMLNodes(expanded)
+	nodes = spec.ManifestNodes(nodes)
 	if parseErr == nil && index-1 >= 0 && index-1 < len(nodes) {
 		docNode := nodes[index-1]
 		for i := range schemaErr.Errors {
