@@ -14,22 +14,24 @@ Enhanced YAML editing for Bino Reports report manifests with intelligent autocom
 - **Designer**: A schema-driven property-form editor for Table/Chart/Text/Tree/Grid manifests (**Bino: Open Designer**, or **Reopen Editor With... > Bino Designer** on a YAML file)
 - **DataSource Wizard**: Scaffolds a DataSource + DataSet pair from a file or database connection (**Bino: New DataSource from File/Database…**)
 - **Tree/Table Editor & Rows Preview**: A grid editor for `Tree`-kind manifests, plus a live 100-row data sample for any DataSource/DataSet
+- **Build Tasks**: `bino build` runs as a `bino` task (**Terminal > Run Build Task**, or **Bino: Build Report**). Errors with a file and line go to the Problems panel, and a finished build offers **Open PDF**
+- **Get Started walkthrough**: Install bino, create a project, add a DataSource and start the preview
 - **PRQL Integration**: When editing `spec.prql` blocks in DataSet manifests, right-click to open a dedicated PRQL editor or SQL preview (requires the [PRQL extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode))
 
 The extension talks to `bino lsp` for all live editor intelligence, and to an optional
-persistent `bino daemon` (see `bino.daemon.enabled`) shared by the LSP, preview, build, and
+persistent `bino daemon` (see `bino.daemon.enabled`) shared by the LSP, preview, and
 data-introspection features so they stay warm across requests. With no daemon running, the
 extension falls back to discrete `bino lsp-helper` CLI calls.
 
 ## Requirements
 
 - [RedHat YAML Extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) (optional; adds a YAML formatter)
-- `bino` CLI must be installed and available in PATH (or configured via `bino.binPath`)
+- `bino` CLI must be installed and available in PATH (or configured via `bino.binPath`). When it is missing or older than the extension, **Download bino** fetches the latest release from GitHub, checks its SHA-256 checksum and keeps it in the extension's storage
 - [PRQL Extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode) (optional, for enhanced PRQL editing)
 
 ## Extension Settings
 
-- `bino.binPath`: Path to the bino CLI executable. If not set, uses 'bino' from PATH.
+- `bino.binPath`: Path to the bino CLI executable. If not set, uses 'bino' from PATH, then a bino downloaded by the extension.
 - `bino.columnCacheTTL`: Time in milliseconds to cache column introspection results (default: 60 seconds).
 - `bino.previewPort`: Port number for the `bino preview` server (default: 45678).
 - `bino.daemon.enabled`: Enable the persistent background daemon for faster indexing, validation, and data introspection (default: enabled).

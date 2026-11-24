@@ -27,6 +27,8 @@ import { registerMcpProvider } from './mcpProvider';
 import { loadBackendSchema, SchemaSource } from './schemaResolver';
 import { daemonVersionMismatch, getBinoPath, installedBinoVersion, runBino } from './bino';
 import { BinoStatusBar } from './statusBar';
+import { BINO_INSTALLED_CONTEXT, detectBino, downloadBinoCommand, loadManagedBino } from './binoDownload';
+import { BinoTaskProvider, BUILD_KINDS } from './tasks';
 
 let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
@@ -168,6 +170,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // bino runs the workspace's YAML and SQL, so nothing starts before the workspace is trusted.
     const trusted = vscode.workspace.isTrusted;
+    loadManagedBino(context);
+    if (trusted) {
+        void detectBino(context);
+    }
 
     // Check if this is a bino project and set context for UI visibility
     const hasBinoProject = await indexer.hasProjectInWorkspace();
@@ -183,6 +189,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('bino.checkSetup', async () => {
             if (requireTrust()) {
                 await showSetupCheckResults();
+                await vscode.commands.executeCommand('setContext', BINO_INSTALLED_CONTEXT, (await installedBinoVersion()) !== undefined);
+            }
+        }),
+        vscode.commands.registerCommand('bino.downloadBino', async () => {
+            if (requireTrust()) {
+                await downloadBinoCommand(context, outputChannel);
             }
         }),
         vscode.commands.registerCommand('bino.openSettings', () => {
@@ -199,7 +211,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             })
         );
         // Commands contributed for a project would otherwise fail with "command not found".
-        const own = new Set(['bino.initProject', 'bino.checkSetup', 'bino.openSettings']);
+        const own = new Set(['bino.initProject', 'bino.checkSetup', 'bino.downloadBino', 'bino.openSettings']);
         const contributed: { command: string }[] = context.extension.packageJSON?.contributes?.commands ?? [];
         const stubs = contributed
             .filter(c => !own.has(c.command))
@@ -209,6 +221,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             ...stubs,
             vscode.workspace.onDidGrantWorkspaceTrust(async () => {
                 stubs.forEach(d => d.dispose());
+                void detectBino(context);
                 await vscode.commands.executeCommand('setContext', 'bino.projectDetected', true);
                 await activateProject(context, outputChannel);
             })
@@ -688,11 +701,12 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         })
     );
 
-    // Build command
+    // Builds run as `bino` tasks: terminal output, Problems entries and "Open PDF".
+    const taskProvider = new BinoTaskProvider(indexer, outputChannel);
     context.subscriptions.push(
-        vscode.commands.registerCommand('bino.build', async () => {
-            await previewManager?.runBuild();
-        })
+        taskProvider,
+        vscode.tasks.registerTaskProvider('bino', taskProvider),
+        vscode.commands.registerCommand('bino.build', () => taskProvider.runBuild())
     );
 
     // Show columns for current dataset/datasource command
@@ -831,7 +845,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     // Build specific artefact - QuickPick from indexed ReportArtefact names
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.buildArtefact', async () => {
-            const artefacts = indexer?.getDocuments(['ReportArtefact', 'LiveReportArtefact', 'DocumentArtefact']) ?? [];
+            const artefacts = indexer?.getDocuments(BUILD_KINDS) ?? [];
             if (artefacts.length === 0) {
                 vscode.window.showInformationMessage('No artefacts found in workspace');
                 return;
@@ -842,7 +856,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
                 title: 'Bino: Build Artefact',
             });
             if (picked) {
-                await previewManager?.runBuild(picked.label);
+                await taskProvider.runBuild(picked.label);
             }
         })
     );

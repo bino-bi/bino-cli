@@ -91,3 +91,25 @@ func TestJSONLogger_DebugGatedOnVerbose(t *testing.T) {
 		t.Errorf("entry = %+v, want debug/shown", entry)
 	}
 }
+
+func TestJSONLoggerRecordFields(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	l := NewJSON(&stdout, &stderr, false).Channel("build").(*JSONLogger)
+	l.Record("info", "Generated r", map[string]any{"path": "/out/r.pdf", "msg": "ignored"})
+	l.Record("error", "boom", map[string]any{"line": 3})
+
+	var info map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &info); err != nil {
+		t.Fatalf("stdout is not one JSON line: %q", stdout.String())
+	}
+	if info["msg"] != "Generated r" || info["path"] != "/out/r.pdf" || info["channel"] != "build" || info["level"] != "info" {
+		t.Errorf("info record = %v", info)
+	}
+	var errRec map[string]any
+	if err := json.Unmarshal(stderr.Bytes(), &errRec); err != nil {
+		t.Fatalf("stderr is not one JSON line: %q", stderr.String())
+	}
+	if errRec["line"] != float64(3) || errRec["level"] != "error" {
+		t.Errorf("error record = %v", errRec)
+	}
+}

@@ -36,6 +36,10 @@ func run() int {
 			handleCtx = ctx
 		}
 		msg, code := cli.FormatError(handleCtx, err)
+		if jl, ok := app.JSONLogger(); ok {
+			cli.LogErrorJSON(jl, err)
+			return code
+		}
 		fmt.Fprintf(os.Stderr, "bino: %s\n", msg)
 		return code
 	}

@@ -536,7 +536,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 				}
 				err = fmt.Errorf("%w\n  datasource %s: %w", err, diag.Datasource, diag.Err)
 			}
-			return results, warnings, fmt.Errorf("dataset %s: %w", job.doc.Name, err)
+			return results, warnings, config.WithSource(job.doc, fmt.Errorf("dataset %s: %w", job.doc.Name, err))
 		}
 		warnings = append(warnings, execWarnings...)
 

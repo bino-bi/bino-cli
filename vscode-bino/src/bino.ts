@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /** Where to install bino. */
 export const INSTALL_DOCS_URL = 'https://cli.bino.bi/getting-started/installation/';
@@ -20,10 +22,41 @@ export function resolveBinPath(
     return 'bino';
 }
 
-/** The bino executable to run: bino.binPath, or `bino` on PATH. */
+let managedBinoPath: string | undefined;
+
+/** Use a bino the extension downloaded when bino.binPath is empty and PATH has none. */
+export function setManagedBinoPath(binary: string | undefined): void {
+    managedBinoPath = binary;
+}
+
+/** Whether an executable named `name` is on PATH. */
+export function isOnPath(name: string, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): boolean {
+    const exts = platform === 'win32' ? (env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean) : [''];
+    for (const dir of (env.PATH ?? env.Path ?? '').split(path.delimiter)) {
+        if (!dir) {
+            continue;
+        }
+        for (const ext of exts) {
+            try {
+                if (fs.statSync(path.join(dir, name + ext)).isFile()) {
+                    return true;
+                }
+            } catch {
+                // not in this directory
+            }
+        }
+    }
+    return false;
+}
+
+/** The bino executable to run: bino.binPath, `bino` on PATH, or the downloaded one. */
 export function getBinoPath(): string {
     const setting = vscode.workspace.getConfiguration('bino').inspect<string>('binPath');
-    return resolveBinPath(setting, vscode.workspace.isTrusted);
+    const configured = resolveBinPath(setting, vscode.workspace.isTrusted);
+    if (configured !== 'bino' || !managedBinoPath || isOnPath('bino')) {
+        return configured;
+    }
+    return managedBinoPath;
 }
 
 export interface RunOptions {
@@ -51,6 +84,11 @@ export function runBino(args: string[], options: RunOptions = {}): Promise<strin
             }
         );
     });
+}
+
+/** Start bino without a shell for output that streams (a build). */
+export function spawnBino(args: string[], cwd: string | undefined): cp.ChildProcessWithoutNullStreams {
+    return cp.spawn(getBinoPath(), args, { cwd, env: { ...process.env, BINO_DISABLE_UPDATE_CHECK: '1', NO_COLOR: '1' } });
 }
 
 /** The version in `bino version` output ("bino 0.104.0 (commit ..., built ...)"). */
