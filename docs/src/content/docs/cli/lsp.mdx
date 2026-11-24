@@ -38,6 +38,10 @@ Flags:
 
 ## Editor features
 
+The server answers only for bino buffers. Other YAML files the editor sends (CI, Compose,
+Kubernetes) get no completion, hover or diagnostics. A project's `bino.toml` is handled too, see
+below.
+
 **Completion** - IBCS scenario slots (`ac1-4 / pp1-4 / fc1-4 / pl1-4`) filtered to the columns the
 bound dataset actually emits, a guided builder for the variance grammar
 `d{base}_{compare}_{pos|neg|neu|op|opinv}`, the live `kind:` list, schema-driven fields and enum values,
@@ -54,13 +58,30 @@ you're editing; lint findings, missing `${VAR}` environment variables, and engin
 for the whole project, refreshed whenever a file changes on disk (for example on save) - all with
 precise line/column, even for files you don't currently have open. Optionally (off by default), on
 save each inline SQL DataSet query runs with `LIMIT 0`, and DuckDB parse and bind errors show on the
-query line.
+query line. This reads no rows, but it may open remote sources.
 
 **Navigation & refactor** - Go to Definition / Find All References / Go to Implementation across the
-project (also from a name after `FROM` / `JOIN` in a query), project-wide Rename of a DataSet / DataSource / component (and every reference), document
+project (also from a name after `FROM` / `JOIN` in a query), project-wide Rename of a DataSet / DataSource / component (and every reference, including its name in the SQL of DataSets that read it), document
 outline and workspace symbol search, and quick-fixes: add a missing `${VAR}` to `.env`, insert a
 missing required field, add a DataSource the query reads to `spec.dependencies`, or scaffold the
 manifest a dangling reference points to.
+
+**Inlay hints** - after each `${NAME}`, the value it resolves to: a param default of the document,
+the environment, or `bino.toml` `[build.env]`, in the order the build reads them. Unset names get
+no hint, and values of secret-looking names are masked.
+
+**Document links** - file paths in `$file`, `localPath`, `path`, `file` and `stylesheet` link to
+the file, resolved against the manifest's folder. Only existing files are linked.
+
+**bino.toml** - syntax errors, wrong value types and keys the build ignores, as you type; completion
+of table names after `[` and of the keys of the current table.
+
+### Capabilities
+
+The server advertises full text sync, completion (trigger characters `:`, `$`, `@`, with resolve),
+hover, inlay hints and document links. With `--phase2` (the default) it also advertises definition,
+references, implementation, document and workspace symbols, rename (with prepare) and quick-fix
+code actions.
 
 ## Custom requests
 
@@ -68,10 +89,11 @@ Besides the standard methods, the server answers two requests that editor integr
 Clients that do not call them see no difference.
 
 - `bino/documents` with `{ "textDocument": { "uri": "..." } }` - the bino manifests of an open
-  buffer, read from its current (unsaved) text: `isBino`, and per manifest its `kind`, `name`,
-  `position` (1-based document number in the file), `range`, and the `range` and `language` of an
-  inline DataSet `query:` or `prql:` block.
-- `bino/index` - the project index (`kind`, `name`, `file`, `position` of every manifest).
+  buffer, read from its current (unsaved) text: `isBino`, the buffer `version`, and in `documents`
+  per manifest its `kind`, `name`, `position` (1-based document number in the file), `range`, and
+  in `blocks` the `field`, `language` and `range` of an inline DataSet `query:` or `prql:` block.
+- `bino/index` - the project index: `documents` with `kind`, `name`, `file` and `position` of
+  every manifest.
 
 A client that passes `{ "indexChanged": true }` as `initializationOptions` also gets a
 `bino/indexChanged` notification whenever the project index changes on disk.
@@ -82,7 +104,8 @@ turns it off again (or on).
 
 ## Generic editor setup
 
-Any LSP client can launch `bino lsp` over stdio for `yaml` documents. For Neovim
+Any LSP client can launch `bino lsp` over stdio for `yaml` documents (and `bino.toml`, if you
+want its checks). For Neovim
 (`nvim-lspconfig`-style):
 
 ```lua
@@ -98,7 +121,11 @@ directory.
 
 ## VS Code
 
-The [bino VS Code extension](/getting-started/installation) is a thin language client: it spawns
-`bino lsp` automatically and (when its daemon is enabled) makes that daemon the single heavy
-instance the server proxies to. Syntax highlighting and folding come from VS Code's built-in YAML support. No configuration is needed beyond
-having a recent `bino` on your `PATH` (or `bino.binPath` set).
+The [bino VS Code extension](/getting-started/vscode-extension/) is a thin language client: it
+spawns `bino lsp --work-dir <project>` for YAML files and `bino.toml`, and (when its daemon is
+enabled) makes that daemon the single heavy instance the server proxies to. It opts in to
+`bino/indexChanged`, and maps the `bino.lsp.queryDiagnostics` setting to the `queryDiagnostics`
+option. YAML highlighting and folding come from VS Code's built-in YAML support; the extension adds
+SQL and PRQL highlighting inside `query:` / `prql:` blocks. No configuration is needed beyond
+having a recent `bino` on your `PATH` (or `bino.binPath` set). In an untrusted workspace the
+extension does not start the server.
