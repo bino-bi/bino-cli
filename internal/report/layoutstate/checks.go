@@ -104,27 +104,43 @@ func SupportedVersion(v int) bool { return v == Version }
 // signature of a dataset or SQL wiring mistake, which otherwise just looks
 // like an empty box in the preview.
 //
-// Charts and tables report hasNoData; the XY charts (scatter/bubble/bullet)
-// only report pointCount, so the zero-count branch carries them. Components
-// that declare no count at all (bn-text, bn-image, layout containers) are
-// never flagged.
+// Charts and tables report hasNoData; scatter and bubble only report
+// pointCount, so the zero-count branch carries them. Components that declare
+// no count at all (bn-text, bn-image, layout containers) are never flagged.
+// The XY charts are the exception: with no rows they draw no svg, so they
+// report no count either.
 func checkEmpty(c Component, src Source) (Finding, bool) {
 	// a component with an error is empty for that reason: the error says why
 	if len(checkErrors(c, src)) > 0 {
 		return Finding{}, false
 	}
+	m := c.Metadata
+	switch c.Tag {
+	case "bn-chart-bullet":
+		// the engine counts circles and ellipses, and a bullet draws none
+		m.PointCount = nil
+	case "bn-chart-time", "bn-chart-structure":
+		// the engine counts only bars, so lines (and stacks before
+		// v1.0.0-next.30) report 0 bars and no data while they draw
+		if hasCanvas(c) {
+			m.HasNoData, m.BarCount = nil, nil
+		}
+	}
+
 	reason := ""
 	switch {
-	case c.Metadata.HasNoData != nil && *c.Metadata.HasNoData:
+	case m.HasNoData != nil && *m.HasNoData:
 		reason = "the component reports no data"
-	case isZero(c.Metadata.BarCount):
+	case isZero(m.BarCount):
 		reason = "0 bars rendered"
-	case isZero(c.Metadata.PointCount):
+	case isZero(m.PointCount):
 		reason = "0 points rendered"
-	case isZero(c.Metadata.RowCount):
+	case isZero(m.RowCount):
 		reason = "0 rows rendered"
-	case isZero(c.Metadata.NodeCount):
+	case isZero(m.NodeCount):
 		reason = "0 nodes rendered"
+	case isXYChart(c.Tag) && !hasCanvas(c):
+		reason = "nothing drawn"
 	default:
 		return Finding{}, false
 	}
@@ -132,6 +148,21 @@ func checkEmpty(c Component, src Source) (Finding, bool) {
 	return newFinding(c, src, RuleEmptyComponent, SeverityWarning,
 		"rendered empty - "+reason,
 		"check the dataset reference and that its query returns rows"), true
+}
+
+func isXYChart(tag string) bool {
+	return tag == "bn-chart-scatter" || tag == "bn-chart-bubble" || tag == "bn-chart-bullet"
+}
+
+// hasCanvas reports whether a chart drew its svg#drawCanvas, which it does
+// only when it has data.
+func hasCanvas(c Component) bool {
+	for _, r := range c.Regions {
+		if strings.HasPrefix(r.ID, "canvas") {
+			return true
+		}
+	}
+	return false
 }
 
 // checkOverflow reports content that does not fit its component box.

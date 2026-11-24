@@ -81,6 +81,7 @@ func TestCheckEmpty(t *testing.T) {
 		name     string
 		tag      string
 		metadata Metadata
+		regions  []string
 		want     bool
 		wantMsg  string
 	}{
@@ -106,6 +107,84 @@ func TestCheckEmpty(t *testing.T) {
 			metadata: Metadata{PointCount: intPtr(0)},
 			want:     true,
 			wantMsg:  "0 points rendered",
+		},
+		{
+			// A drawn bullet reports 0 points: the engine counts circles and
+			// ellipses, and a bullet draws none.
+			name:     "bullet that draws",
+			tag:      "bn-chart-bullet",
+			metadata: Metadata{PointCount: intPtr(0)},
+			regions:  []string{"canvas"},
+			want:     false,
+		},
+		{
+			name:     "bullet reporting no data",
+			tag:      "bn-chart-bullet",
+			metadata: Metadata{HasNoData: boolPtr(true), PointCount: intPtr(0)},
+			regions:  []string{"canvas"},
+			want:     true,
+			wantMsg:  "the component reports no data",
+		},
+		{
+			name:     "bullet with no rows",
+			tag:      "bn-chart-bullet",
+			metadata: Metadata{},
+			want:     true,
+			wantMsg:  "nothing drawn",
+		},
+		{
+			// With no rows the XY charts draw no svg and report no count.
+			name:     "scatter with no rows",
+			tag:      "bn-chart-scatter",
+			metadata: Metadata{},
+			want:     true,
+			wantMsg:  "nothing drawn",
+		},
+		{
+			name:     "bubble with no rows",
+			tag:      "bn-chart-bubble",
+			metadata: Metadata{},
+			want:     true,
+			wantMsg:  "nothing drawn",
+		},
+		{
+			name:     "scatter with points",
+			tag:      "bn-chart-scatter",
+			metadata: Metadata{PointCount: intPtr(8)},
+			regions:  []string{"canvas"},
+			want:     false,
+		},
+		{
+			// An older engine counts no line points, so a drawn line chart
+			// reports 0 bars and no data. Its canvas proves it drew.
+			name:     "line chart with a canvas on an older engine",
+			tag:      "bn-chart-time",
+			metadata: Metadata{HasNoData: boolPtr(true), BarCount: intPtr(0)},
+			regions:  []string{"canvas:base", "canvas:delta"},
+			want:     false,
+		},
+		{
+			name:     "stacked structure chart with a canvas on an older engine",
+			tag:      "bn-chart-structure",
+			metadata: Metadata{HasNoData: boolPtr(true), BarCount: intPtr(0)},
+			regions:  []string{"canvas:base"},
+			want:     false,
+		},
+		{
+			name:     "time chart with no canvas",
+			tag:      "bn-chart-time",
+			metadata: Metadata{HasNoData: boolPtr(true), BarCount: intPtr(0)},
+			want:     true,
+			wantMsg:  "the component reports no data",
+		},
+		{
+			// Only a canvas region proves data, not any region.
+			name:     "structure chart with only a footer region",
+			tag:      "bn-chart-structure",
+			metadata: Metadata{HasNoData: boolPtr(true), BarCount: intPtr(0)},
+			regions:  []string{"footer"},
+			want:     true,
+			wantMsg:  "the component reports no data",
 		},
 		{
 			name:     "tree with zero nodes",
@@ -140,6 +219,9 @@ func TestCheckEmpty(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := component(t, tt.tag+"[0]", tt.tag)
 			c.Metadata = tt.metadata
+			for _, id := range tt.regions {
+				c.Regions = append(c.Regions, Region{ID: id})
+			}
 
 			got := Analyze(snapshot([]Component{c}, nil))
 
