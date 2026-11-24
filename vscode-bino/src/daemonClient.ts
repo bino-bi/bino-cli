@@ -69,7 +69,8 @@ export interface RegistrySearchResult {
  */
 export class DaemonClient {
     private port: number | undefined;
-    private daemonPid: number | undefined; // PID for direct kill on shutdown
+    private daemonPid: number | undefined; // PID for an explicit restart
+    private projectRoot: string | undefined;
     private daemonProcess: cp.ChildProcess | undefined;
     private eventSource: { abort: () => void } | undefined;
     private status: DaemonStatus = 'disconnected';
@@ -106,6 +107,7 @@ export class DaemonClient {
         }
 
         this.setStatus('connecting');
+        this.projectRoot = projectRoot;
 
         // Step 1: Try to discover existing daemon
         const portFile = this.readPortFile(projectRoot);
@@ -276,25 +278,10 @@ export class DaemonClient {
     }
 
     /**
-     * Shut down the daemon process.
-     * Sends SIGTERM directly to the daemon PID - this is synchronous and
-     * reliable even when VS Code is closing and won't wait for HTTP requests.
-     * The daemon's Go signal handler catches SIGTERM and runs deferred cleanup
-     * (remove port file, stop preview child, close DuckDB).
+     * Disconnect from the daemon without stopping it. Other windows and MCP
+     * clients may share it; the daemon exits on its own once no client is left.
      */
     shutdown(): void {
-        this.stopEventStream();
-
-        const pid = this.daemonPid ?? this.daemonProcess?.pid;
-        if (pid) {
-            try {
-                this.outputChannel.appendLine(`[Daemon] Sending SIGTERM to pid ${pid}`);
-                process.kill(pid, 'SIGTERM');
-            } catch {
-                // Process may already be dead
-            }
-        }
-
         this.cleanup();
     }
 
@@ -362,6 +349,11 @@ export class DaemonClient {
         } catch {
             return false;
         }
+    }
+
+    /** The project root of the last connect(), if any. */
+    getProjectRoot(): string | undefined {
+        return this.projectRoot;
     }
 
     /** The bino version that started the connected daemon, if known. */

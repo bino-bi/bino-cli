@@ -6,7 +6,7 @@ import { BinoTreeProvider, BinoTreeItem, InlineChild } from './tree';
 import { BinoValidator } from './validation';
 import { BinoPreviewManager } from './preview';
 import { showSetupCheckResults } from './setup';
-import { startLanguageClient } from './languageClient';
+import { startLanguageClient, stopLanguageClient } from './languageClient';
 import { registerPrqlFeatures } from './prql';
 import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
@@ -584,12 +584,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             wizardManager?.openForDatabase();
         }),
         vscode.commands.registerCommand('bino.restartDaemon', async () => {
-            const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const root = daemonClient?.getProjectRoot() ?? indexer?.getProjectRootForUri();
             if (!daemonClient || !root) {
                 vscode.window.showWarningMessage('Bino: daemon is not enabled for this workspace.');
                 return;
             }
             const ok = await daemonClient.restart(root);
+            // `bino lsp` binds to the daemon's port once at startup; the new
+            // daemon listens elsewhere, so the language server must restart too.
+            const lspRoot = indexer?.getWorkspaceProjectRoot();
+            if (lspRoot) {
+                try {
+                    await stopLanguageClient();
+                    await startLanguageClient(context, outputChannel, lspRoot);
+                } catch (err) {
+                    outputChannel.appendLine(`[LSP] failed to restart: ${err}`);
+                }
+            }
             vscode.window.showInformationMessage(ok ? 'Bino daemon restarted.' : 'Bino daemon failed to restart - check the output channel.');
         })
     );
@@ -1166,8 +1177,8 @@ function updateDaemonStatusBar(): void {
 }
 
 export function deactivate(): void {
-    // Send SIGTERM to daemon - synchronous, guaranteed to run before VS Code exits.
-    // The daemon's Go signal handler cleans up: removes port file, stops preview, closes DuckDB.
+    // Disconnect only: other windows and MCP clients may share the daemon, and
+    // it exits by itself once no client is connected.
     daemonClient?.shutdown();
     designerPanel?.dispose();
     treeTableEditorManager?.dispose();

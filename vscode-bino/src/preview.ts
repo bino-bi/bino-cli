@@ -7,6 +7,18 @@ import { getEmbeddableKinds } from './embeddable';
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
+/** `bino preview`'s default port, used when bino.previewPort is unset. */
+const DEFAULT_PREVIEW_PORT = 45678;
+
+/** The message for a preview that exited before it served. */
+function previewStartError(port: number, output: string): string {
+    if (!output || /address already in use|only one usage of each socket address/i.test(output)) {
+        return `Bino preview could not start on port ${port}. The port may be in use by another program. ` +
+            'Stop that program or change the "bino.previewPort" setting. See the "Bino Reports" output for details.';
+    }
+    return 'Bino preview exited before it started. See the "Bino Reports" output for details.';
+}
+
 /**
  * BinoPreviewManager manages the lifecycle of bino preview and build processes.
  */
@@ -19,6 +31,10 @@ export class BinoPreviewManager {
     private indexer: WorkspaceIndexer | undefined;
     private daemonClient: DaemonClient | undefined;
     private usingDaemonPreview = false;
+    // Port of the running preview, as the daemon or the spawn reported it.
+    private activePort: number | undefined;
+    // Resolves a pending daemon stop when the daemon reports the old preview gone.
+    private daemonStopWaiter: (() => void) | undefined;
 
     // Embedded single-artefact preview (chrome-free /__embedding/{name} view)
     private artefactPanel: vscode.WebviewPanel | undefined;
@@ -74,10 +90,13 @@ export class BinoPreviewManager {
         return folders[0].uri.fsPath;
     }
 
-    /** Get the preview port from config */
+    /** The port the running preview serves on, or the configured port when none runs. */
     private getPreviewPort(): number {
+        if (this.activePort !== undefined) {
+            return this.activePort;
+        }
         const config = vscode.workspace.getConfiguration('bino');
-        return config.get<number>('previewPort') ?? 3000;
+        return config.get<number>('previewPort') ?? DEFAULT_PREVIEW_PORT;
     }
 
     /** Update status bar display */
@@ -131,6 +150,11 @@ export class BinoPreviewManager {
                 const result = await this.daemonClient.startPreview(port);
                 if (result && result.status !== 'error') {
                     this.usingDaemonPreview = true;
+                    // A preview the daemon already runs keeps its own port.
+                    this.activePort = result.port || port;
+                    if (this.activePort !== port) {
+                        this.outputChannel.appendLine(`[Preview] Daemon preview already runs on port ${this.activePort}`);
+                    }
                     if (result.status === 'running') {
                         this.setStatus('running');
                     }
@@ -152,101 +176,149 @@ export class BinoPreviewManager {
             return;
         }
 
-        const binPath = this.getBinoPath();
-
         this.setStatus('starting');
         this.outputChannel.appendLine(`[Preview] Starting preview server on port ${port}...`);
         this.outputChannel.show(true);
+        this.spawnPreview(workDir, port, true);
+    }
 
+    /**
+     * Spawn `bino preview` as a child process. Older binaries do not know
+     * --no-open; when one rejects it, the spawn is retried without it.
+     */
+    private spawnPreview(workDir: string, port: number, noOpen: boolean): void {
+        const args = ['preview', '--port', String(port)];
+        if (noOpen) {
+            args.push('--no-open');
+        }
+        let proc: cp.ChildProcess;
         try {
-            this.previewProcess = cp.spawn(binPath, ['preview', '--port', String(port)], {
+            proc = cp.spawn(this.getBinoPath(), args, {
                 cwd: workDir,
-                shell: true,
                 stdio: ['ignore', 'pipe', 'pipe']
             });
-
-            this.previewProcess.stdout?.on('data', (data: Buffer) => {
-                const text = data.toString();
-                this.outputChannel.append(text);
-
-                // Detect when server is ready
-                if (text.includes('listening') || text.includes('http://') || text.includes('ready')) {
-                    this.setStatus('running');
-                }
-            });
-
-            this.previewProcess.stderr?.on('data', (data: Buffer) => {
-                this.outputChannel.append(data.toString());
-            });
-
-            this.previewProcess.on('error', (err) => {
-                this.outputChannel.appendLine(`[Preview] Error: ${err.message}`);
-                this.setStatus('error');
-                this.previewProcess = undefined;
-            });
-
-            this.previewProcess.on('exit', (code) => {
-                this.outputChannel.appendLine(`[Preview] Process exited with code ${code}`);
-                if (this.previewStatus !== 'error') {
-                    this.setStatus('stopped');
-                }
-                this.previewProcess = undefined;
-            });
-
-            // Give it a moment to start, then assume running if no error
-            setTimeout(() => {
-                if (this.previewStatus === 'starting') {
-                    this.setStatus('running');
-                }
-            }, 2000);
-
         } catch (err) {
             this.outputChannel.appendLine(`[Preview] Failed to start: ${err}`);
             this.setStatus('error');
             vscode.window.showErrorMessage(`Failed to start preview: ${err}`);
+            return;
         }
+        this.previewProcess = proc;
+        this.activePort = port;
+
+        // Recent output, to find the ready line and the reason for an early exit.
+        let output = '';
+        const onOutput = (data: Buffer) => {
+            const text = data.toString();
+            this.outputChannel.append(text);
+            output = (output + text).slice(-4096);
+            if (this.previewProcess === proc && this.previewStatus === 'starting' && output.includes('Serving preview at')) {
+                this.setStatus('running');
+            }
+        };
+        proc.stdout?.on('data', onOutput);
+        proc.stderr?.on('data', onOutput);
+
+        proc.on('error', (err) => {
+            if (this.previewProcess !== proc) {
+                return;
+            }
+            this.outputChannel.appendLine(`[Preview] Error: ${err.message}`);
+            this.previewProcess = undefined;
+            this.activePort = undefined;
+            this.setStatus('error');
+            vscode.window.showErrorMessage(`Failed to start preview: ${err.message}`);
+        });
+
+        proc.on('exit', (code) => {
+            this.outputChannel.appendLine(`[Preview] Process exited with code ${code}`);
+            // A stopped or replaced process must not change the current state.
+            if (this.previewProcess !== proc) {
+                return;
+            }
+            this.previewProcess = undefined;
+            this.activePort = undefined;
+            const wasStarting = this.previewStatus === 'starting';
+            if (wasStarting && noOpen && output.includes('unknown flag: --no-open')) {
+                this.spawnPreview(workDir, port, false);
+                return;
+            }
+            if (wasStarting) {
+                this.setStatus('error');
+                vscode.window.showErrorMessage(previewStartError(port, output));
+                return;
+            }
+            if (this.previewStatus !== 'error') {
+                this.setStatus('stopped');
+            }
+        });
     }
 
-    /** Stop the preview server */
-    stopPreview(): void {
+    /** Stop the preview server. Resolves once the preview has exited (or a timeout passed). */
+    async stopPreview(): Promise<void> {
         // Stop daemon-managed preview
         if (this.usingDaemonPreview) {
             this.outputChannel.appendLine('[Preview] Stopping via daemon...');
-            this.daemonClient?.stopPreview().catch(() => { });
             this.usingDaemonPreview = false;
+            this.activePort = undefined;
             this.setStatus('stopped');
+            // The daemon reports "stopped" once the old process has exited and freed its port.
+            const exited = new Promise<void>(resolve => {
+                const timer = setTimeout(() => { this.daemonStopWaiter = undefined; resolve(); }, 5000);
+                this.daemonStopWaiter = () => { clearTimeout(timer); resolve(); };
+            });
+            await this.daemonClient?.stopPreview().catch(() => undefined);
+            await exited;
             return;
         }
 
-        if (!this.previewProcess) {
+        const proc = this.previewProcess;
+        if (!proc) {
             vscode.window.showInformationMessage('Preview is not running');
             return;
         }
 
         this.outputChannel.appendLine('[Preview] Stopping preview server...');
-
-        try {
-            this.previewProcess.kill('SIGTERM');
-            // Force kill after 3 seconds if not terminated
-            setTimeout(() => {
-                if (this.previewProcess) {
-                    this.previewProcess.kill('SIGKILL');
-                }
-            }, 3000);
-        } catch (err) {
-            this.outputChannel.appendLine(`[Preview] Error stopping: ${err}`);
-        }
-
         this.previewProcess = undefined;
+        this.activePort = undefined;
         this.setStatus('stopped');
+
+        if (proc.exitCode !== null || proc.signalCode !== null) {
+            return;
+        }
+        await new Promise<void>(resolve => {
+            // Force kill after 3 seconds if not terminated
+            const timer = setTimeout(() => proc.kill('SIGKILL'), 3000);
+            proc.once('exit', () => { clearTimeout(timer); resolve(); });
+            try {
+                proc.kill('SIGTERM');
+            } catch (err) {
+                this.outputChannel.appendLine(`[Preview] Error stopping: ${err}`);
+            }
+        });
     }
 
     /** Restart the preview server */
     async restartPreview(): Promise<void> {
-        this.stopPreview();
-        // Wait a bit for cleanup
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await this.stopPreview();
         await this.startPreview();
+    }
+
+    /** Wait until a started preview runs, fails, or the timeout passes. */
+    private waitForRunning(timeoutMs = 15000): Promise<void> {
+        if (this.previewStatus !== 'starting') {
+            return Promise.resolve();
+        }
+        return new Promise(resolve => {
+            const timer = setTimeout(() => { sub.dispose(); resolve(); }, timeoutMs);
+            const sub = this.onStatusChange(status => {
+                if (status !== 'starting') {
+                    clearTimeout(timer);
+                    sub.dispose();
+                    resolve();
+                }
+            });
+        });
     }
 
     /** Open preview in browser */
@@ -261,8 +333,7 @@ export class BinoPreviewManager {
         // Ensure preview is running
         if (this.previewStatus !== 'running') {
             await this.startPreview();
-            // Wait a moment for the server to be ready
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await this.waitForRunning();
         }
 
         const port = this.getPreviewPort();
@@ -327,7 +398,7 @@ export class BinoPreviewManager {
         // Ensure the preview server is running.
         if (this.previewStatus !== 'running') {
             await this.startPreview();
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await this.waitForRunning();
         }
 
         this.currentArtefact = artefact;
@@ -977,7 +1048,7 @@ export class BinoPreviewManager {
         } else if (selection.label.includes('Restart')) {
             await this.restartPreview();
         } else if (selection.label.includes('Stop')) {
-            this.stopPreview();
+            await this.stopPreview();
         } else if (selection.label.includes('Start')) {
             await this.startPreview();
         }
@@ -985,19 +1056,37 @@ export class BinoPreviewManager {
 
     /** Handle SSE preview-status events from daemon */
     handlePreviewStatusEvent(data: { status: string; url?: string; port?: number }): void {
+        if (data.status === 'stopped' && this.daemonStopWaiter) {
+            const done = this.daemonStopWaiter;
+            this.daemonStopWaiter = undefined;
+            done();
+        }
         if (!this.usingDaemonPreview) {
             return;
         }
         switch (data.status) {
             case 'running':
+                if (data.port) {
+                    this.activePort = data.port;
+                }
                 this.setStatus('running');
                 break;
-            case 'stopped':
+            case 'stopped': {
+                const port = this.getPreviewPort();
+                const wasStarting = this.previewStatus === 'starting';
                 this.usingDaemonPreview = false;
-                this.setStatus('stopped');
+                this.activePort = undefined;
+                if (wasStarting) {
+                    this.setStatus('error');
+                    vscode.window.showErrorMessage(previewStartError(port, ''));
+                } else {
+                    this.setStatus('stopped');
+                }
                 break;
+            }
             case 'error':
                 this.usingDaemonPreview = false;
+                this.activePort = undefined;
                 this.setStatus('error');
                 break;
         }
@@ -1005,7 +1094,7 @@ export class BinoPreviewManager {
 
     /** Dispose resources */
     dispose(): void {
-        this.stopPreview();
+        void this.stopPreview();
         this.previewPanel?.dispose();
         this.artefactPanel?.dispose();
         this.disposeArtefactFollow();

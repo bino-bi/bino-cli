@@ -799,7 +799,7 @@
         },
         "bino.previewPort": {
           "type": "number",
-          "default": 3000,
+          "default": 45678,
           "description": "Port number for the bino preview server."
         },
         "bino.daemon.enabled": {
