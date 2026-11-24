@@ -387,3 +387,50 @@ func TestQueryErrorRange_FoldedFlagNotComment(t *testing.T) {
 		t.Errorf("a '>' in the header comment must not mark the block folded: %v", d)
 	}
 }
+
+// cancelBackend cancels the check's base context when it reaches DataSet at.
+type cancelBackend struct {
+	queryBackend
+	at     string
+	cancel context.CancelFunc
+}
+
+func (b *cancelBackend) Columns(ctx context.Context, name string) ([]string, error) {
+	if name == b.at && b.cancel != nil {
+		b.cancel()
+		return nil, context.Canceled
+	}
+	return b.queryBackend.Columns(ctx, name)
+}
+
+func TestQueryDiagnostics_BudgetKeepsUncheckedResults(t *testing.T) {
+	be := &cancelBackend{queryBackend: queryBackend{colErr: map[string]error{"a": errBrokenColumn, "b": errBrokenColumn, "c": errBrokenColumn}}, at: "b"}
+	base := newTestServer()
+	fb, _ := base.backend.(*fakeBackend)
+	be.fakeBackend = *fb
+	s := NewServer(be, base.log, true, "/proj")
+	s.queryDiagnostics.Store(true)
+	doc := "kind: DataSet\nmetadata:\n  name: a\nspec:\n  query: SELECT x\n---\n" +
+		"kind: DataSet\nmetadata:\n  name: b\nspec:\n  query: SELECT x\n---\n" +
+		"kind: DataSet\nmetadata:\n  name: c\nspec:\n  query: SELECT x\n"
+	u := openDoc(t, s, doc)
+	path := u.FsPath()
+	checkNow(s, path)
+	if len(s.queryDiags[path]) != 3 {
+		t.Fatalf("first check: want 3 diagnostics, got %v", s.queryDiags[path])
+	}
+
+	// a is fixed; the budget runs out at b, so b and c keep their findings.
+	delete(be.colErr, "a")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.ctx, be.cancel = ctx, cancel
+	checkNow(s, path)
+	lines := make([]uint32, 0, len(s.queryDiags[path]))
+	for _, d := range s.queryDiags[path] {
+		lines = append(lines, d.Range.Start.Line)
+	}
+	if len(lines) != 2 || lines[0] != 10 || lines[1] != 16 {
+		t.Errorf("diagnostic lines = %v, want [10 16] (b and c)", lines)
+	}
+}

@@ -216,13 +216,22 @@ func (s *Server) runQueryCheck(path string, seq uint64) {
 	defer cancel()
 
 	var diags []protocol.Diagnostic
+	var unchecked []protocol.Range // blocks the budget did not reach
 	for _, d := range reportspec.Outline(doc.Text) {
 		block, ok := sqlQueryBlock(d)
 		if !ok {
 			continue
 		}
+		if ctx.Err() != nil {
+			unchecked = append(unchecked, doc.RangeToProtocol(block.Content))
+			continue
+		}
 		_, err := s.backend.Columns(ctx, d.Name)
-		if err == nil || ctx.Err() != nil {
+		if ctx.Err() != nil {
+			unchecked = append(unchecked, doc.RangeToProtocol(block.Content))
+			continue
+		}
+		if err == nil {
 			continue
 		}
 		msg, n, ok := parseDuckDBError(err.Error())
@@ -245,6 +254,15 @@ func (s *Server) runQueryCheck(path string, seq uint64) {
 	}
 	if s.queryDiags == nil {
 		s.queryDiags = make(map[string][]protocol.Diagnostic)
+	}
+	// Keep the previous findings of the DataSets the budget skipped.
+	for _, prev := range s.queryDiags[path] {
+		for _, r := range unchecked {
+			if prev.Range.Start.Line >= r.Start.Line && prev.Range.Start.Line <= r.End.Line {
+				diags = append(diags, prev)
+				break
+			}
+		}
 	}
 	s.queryDiags[path] = diags
 	s.mu.Unlock()
