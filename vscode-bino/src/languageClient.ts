@@ -31,7 +31,7 @@ export function probeLspCapability(binPath: string): Promise<boolean> {
  */
 export async function startLanguageClient(
     context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel,
+    outputChannel: vscode.LogOutputChannel,
     projectRoot: string
 ): Promise<boolean> {
     const binPath = getBinoPath();
