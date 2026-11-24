@@ -38,9 +38,14 @@ jobs:
           # of the CLI or the published docs image.
           # @astrojs/compiler-binding-android-arm64 is MIT on npm, but GitHub's
           # dependency graph reports it as unlicensed.
+          # opencontainers/go-digest and sassoftware/relic (pulled in by
+          # sigstore-go) are Apache-2.0 code; the scanner also counts
+          # go-digest's CC-BY-SA docs and relic's DCO text.
           allow-dependencies-licenses: >-
             pkg:npm/@astrojs/compiler-binding-android-arm64,
             pkg:golang/github.com/modelcontextprotocol/go-sdk,
+            pkg:golang/github.com/opencontainers/go-digest,
+            pkg:golang/github.com/sassoftware/relic/v8,
             pkg:golang/golang.org/x/crypto,
             pkg:golang/golang.org/x/image,
             pkg:golang/golang.org/x/mod,
