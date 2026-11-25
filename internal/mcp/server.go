@@ -72,8 +72,9 @@ Resources:
   bino://kinds           every manifest kind + its capability category
   bino://documents       project index: every document -> {kind, name, file, position}
   bino://packages        the project's registry packages (bino.lock + bino.toml [dependencies])
-  bino://skills          index of the bino/IBCS knowledge skills (also served as prompts)
-  bino://skills/{name}   one skill as markdown, e.g. bino://skills/bino-ibcs
+  skill://{name}/SKILL.md  the bino/IBCS knowledge skills (MCP Skills extension: skills/list,
+                         skills/get), e.g. skill://bino-ibcs/SKILL.md and its references/;
+                         also served as prompts of the same name
 
 Schema tools:
   outline_kind(kind)     compact per-field outline of a kind's spec (start here)
@@ -113,6 +114,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 		Version: version.Version,
 	}, &mcpsdk.ServerOptions{
 		Instructions: serverInstructions,
+		Capabilities: SkillsCapabilities(),
 	})
 
 	if deps.ReadOnly {
@@ -251,9 +253,10 @@ func (h *handlers) registerResources(srv *mcpsdk.Server) {
 var mcpSkills = []string{"bino-concepts", "bino-authoring", "bino-ibcs", "bino-data-modeling", "bino-validation-loop", "bino-packaging"}
 
 // registerSkills serves each skill in mcpSkills twice: as a prompt (one user
-// message carrying the body) and as a bino://skills/{name} markdown resource,
-// plus a bino://skills JSON index. The skills are embedded, so a parse failure
-// is a build defect and panics rather than silently serving fewer prompts.
+// message carrying the body, references appended) and through the MCP Skills
+// extension, every file a skill:// resource with skills/list and skills/get.
+// The skills are embedded, so a parse failure is a build defect and panics
+// rather than silently serving fewer.
 func (h *handlers) registerSkills(srv *mcpsdk.Server) {
 	all, err := claudeplugin.Skills()
 	if err != nil {
@@ -263,17 +266,12 @@ func (h *handlers) registerSkills(srv *mcpsdk.Server) {
 	for _, s := range all {
 		byName[s.Name] = s
 	}
-
-	index := make([]skillIndexEntry, 0, len(mcpSkills))
 	for _, name := range mcpSkills {
 		s, ok := byName[name]
 		if !ok {
 			panic(fmt.Sprintf("mcp: embedded plugin skill %q not found", name))
 		}
-		index = append(index, skillIndexEntry{Name: s.Name, Description: s.Description})
 		title := strings.TrimPrefix(strings.SplitN(s.Body, "\n", 2)[0], "# ")
-		uri := "bino://skills/" + s.Name
-
 		srv.AddPrompt(&mcpsdk.Prompt{
 			Name:        s.Name,
 			Title:       title,
@@ -284,34 +282,14 @@ func (h *handlers) registerSkills(srv *mcpsdk.Server) {
 				Messages:    []*mcpsdk.PromptMessage{{Role: "user", Content: &mcpsdk.TextContent{Text: s.Body}}},
 			}, nil
 		})
-
-		srv.AddResource(&mcpsdk.Resource{
-			Name:        "skill-" + s.Name,
-			URI:         uri,
-			Title:       title,
-			Description: s.Description,
-			MIMEType:    "text/markdown",
-		}, func(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
-			return &mcpsdk.ReadResourceResult{
-				Contents: []*mcpsdk.ResourceContents{{URI: uri, MIMEType: "text/markdown", Text: s.Body}},
-			}, nil
-		})
 	}
-
-	srv.AddResource(&mcpsdk.Resource{
-		Name:        "skills",
-		URI:         "bino://skills",
-		Title:       "Skills index",
-		Description: "The bino/IBCS knowledge skills served by this server: name and description of each; read bino://skills/{name} or get the prompt of the same name for the text.",
-		MIMEType:    "application/json",
-	}, func(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
-		return jsonResource("bino://skills", map[string]any{"skills": index})
-	})
-}
-
-type skillIndexEntry struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	entries, err := SkillCatalog()
+	if err != nil {
+		panic(fmt.Sprintf("mcp: skill catalog: %v", err))
+	}
+	if err := RegisterSkills(srv, entries); err != nil {
+		panic(fmt.Sprintf("mcp: skills extension: %v", err))
+	}
 }
 
 func (h *handlers) readTemplates(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {

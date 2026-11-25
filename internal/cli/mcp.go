@@ -28,6 +28,7 @@ func newMCPCommand() *cobra.Command {
 		allowPublish bool
 		readOnly     bool
 		listTools    bool
+		listSkills   bool
 		jsonOut      bool
 	)
 
@@ -55,6 +56,9 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 			}
 			if listTools {
 				return printMCPTools(ctx, cmd.OutOrStdout(), projectRoot, allowPublish, readOnly, jsonOut)
+			}
+			if listSkills {
+				return printMCPSkills(cmd.OutOrStdout(), jsonOut)
 			}
 			if readOnly {
 				dataset.DisableProjectCache()
@@ -90,7 +94,9 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 	cmd.Flags().BoolVar(&allowPublish, "allow-publish", false, "Expose the registry_publish tool (irreversible: mints an immutable, possibly public, registry version)")
 	cmd.Flags().BoolVar(&readOnly, "read-only", false, "Serve only tools that change nothing: no authoring, registry, build, layout, publish, preview or source probe")
 	cmd.Flags().BoolVar(&listTools, "list-tools", false, "Print the tools this server offers and exit (honors --read-only and --allow-publish)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "With --list-tools: print name, title, annotations and input schema as JSON")
+	cmd.Flags().BoolVar(&listSkills, "list-skills", false, "Print the skills this server serves and exit")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "With --list-tools: print name, title, annotations and input schema as JSON; with --list-skills: every skill with its files, digests and text")
+	cmd.MarkFlagsMutuallyExclusive("list-tools", "list-skills")
 	cmd.MarkFlagsMutuallyExclusive("read-only", "allow-publish")
 	return cmd
 }
@@ -172,8 +178,18 @@ func runMCPProxy(ctx context.Context, endpoint, token string) error {
 	}
 	defer func() { _ = upstream.Close() }() //nolint:errcheck // session teardown at proxy shutdown
 
-	local := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "bino", Title: "bino - Report-as-Code", Version: version.Version}, nil)
+	local := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "bino", Title: "bino - Report-as-Code", Version: version.Version},
+		&mcpsdk.ServerOptions{Capabilities: mcp.SkillsCapabilities()})
 	if err := mirrorUpstream(ctx, local, upstream); err != nil {
+		return err
+	}
+	// skills/list and skills/get are no standard methods the mirror sees;
+	// this binary embeds the same skills, so it answers them itself.
+	entries, err := mcp.SkillCatalog()
+	if err != nil {
+		return err
+	}
+	if err := mcp.RegisterSkills(local, entries); err != nil {
 		return err
 	}
 
@@ -246,6 +262,25 @@ func printMCPTools(ctx context.Context, out io.Writer, projectRoot string, allow
 	}
 	for _, t := range tools {
 		fmt.Fprintf(out, "%-28s %s\n", t.Name, t.Title)
+	}
+	return nil
+}
+
+// printMCPSkills lists the skills the server serves: their URIs, or with
+// jsonOut every skill with its frontmatter and files, so a host can serve the
+// same skills without running bino.
+func printMCPSkills(out io.Writer, jsonOut bool) error {
+	skills, err := mcp.SkillCatalog()
+	if err != nil {
+		return RuntimeError(err)
+	}
+	if jsonOut {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]any{"version": version.Version, "skills": skills})
+	}
+	for _, s := range skills {
+		fmt.Fprintf(out, "%-40s %d file(s)\n", s.URI, len(s.Files))
 	}
 	return nil
 }

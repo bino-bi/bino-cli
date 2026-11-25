@@ -152,9 +152,8 @@ func TestResourcesReadable(t *testing.T) {
 }
 
 // TestSkillsPromptsAndResources pins the skills served over MCP: the six
-// client-neutral plugin skills as prompts and bino://skills/{name} resources,
-// with bino-ibcs carrying its reference files, and the Claude Code specific
-// skills left out.
+// client-neutral plugin skills as prompts, and the Claude Code specific skills
+// left out. TestSkillsExtension covers the skill:// resources.
 func TestSkillsPromptsAndResources(t *testing.T) {
 	cs := newTestClient(t)
 	ctx := context.Background()
@@ -205,38 +204,11 @@ func TestSkillsPromptsAndResources(t *testing.T) {
 		if !strings.HasPrefix(tc.Text, heading) {
 			t.Errorf("prompt %s: body starts with %.40q, want %q", name, tc.Text, heading)
 		}
-
-		// The same text is readable as a resource.
-		if got := readResourceText(t, cs, "bino://skills/"+name); got != tc.Text {
-			t.Errorf("bino://skills/%s differs from the prompt body", name)
-		}
 	}
 
-	// bino-ibcs carries its reference files so the prompt is self-contained.
-	ibcs, err := cs.ReadResource(ctx, &mcpsdk.ReadResourceParams{URI: "bino://skills/bino-ibcs"})
-	if err != nil {
-		t.Fatalf("read bino://skills/bino-ibcs: %v", err)
-	}
-	if ibcs.Contents[0].MIMEType != "text/markdown" {
-		t.Errorf("bino://skills/bino-ibcs mime = %q, want text/markdown", ibcs.Contents[0].MIMEType)
-	}
-	if !strings.Contains(ibcs.Contents[0].Text, "## 1. The SUCCESS formula") {
-		t.Error("bino://skills/bino-ibcs is missing the ibcs-standard reference")
-	}
-
-	// The index lists exactly the served skills.
-	var index struct {
-		Skills []skillIndexEntry `json:"skills"`
-	}
-	if err := json.Unmarshal([]byte(readResourceText(t, cs, "bino://skills")), &index); err != nil {
-		t.Fatalf("bino://skills not JSON: %v", err)
-	}
-	if len(index.Skills) != len(wantHeading) {
-		t.Errorf("bino://skills lists %d skills, want %d", len(index.Skills), len(wantHeading))
-	}
-
-	if _, err := cs.ReadResource(ctx, &mcpsdk.ReadResourceParams{URI: "bino://skills/bino-orchestration"}); err == nil {
-		t.Error("bino://skills/bino-orchestration is readable, want not found")
+	// The bino:// skill resources are gone; the skills are skill:// now.
+	if _, err := cs.ReadResource(ctx, &mcpsdk.ReadResourceParams{URI: "bino://skills"}); err == nil {
+		t.Error("bino://skills is still served")
 	}
 }
 

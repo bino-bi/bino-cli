@@ -83,3 +83,80 @@ func parseSkill(file string) (Skill, error) {
 	}
 	return Skill{Name: meta.Name, Description: strings.TrimSpace(meta.Description), Body: body}, nil
 }
+
+// SkillFile is one file of a skill directory, by its path relative to the
+// skill root (SKILL.md, references/ibcs-standard.md).
+type SkillFile struct {
+	Path string
+	Data []byte
+}
+
+// SkillDir is a skill as a directory, for the MCP Skills extension: its
+// frontmatter verbatim and every embedded file, SKILL.md first.
+type SkillDir struct {
+	Name        string
+	Frontmatter map[string]any
+	Files       []SkillFile
+}
+
+// SkillDirs returns every embedded skill as a directory, sorted by name.
+func SkillDirs() ([]SkillDir, error) {
+	files, err := fs.Glob(skillsFS, "skills/*/SKILL.md")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SkillDir, 0, len(files))
+	for _, file := range files {
+		root := path.Dir(file)
+		raw, err := skillsFS.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		fm, err := frontmatter(string(raw))
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", file, err)
+		}
+		d := SkillDir{Name: path.Base(root), Frontmatter: fm, Files: []SkillFile{{Path: "SKILL.md", Data: raw}}}
+		if name, _ := fm["name"].(string); name != d.Name {
+			return nil, fmt.Errorf("%s: frontmatter name %q differs from the directory", file, name)
+		}
+		err = fs.WalkDir(skillsFS, root, func(p string, e fs.DirEntry, err error) error {
+			if err != nil || e.IsDir() || p == file {
+				return err
+			}
+			data, err := skillsFS.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			d.Files = append(d.Files, SkillFile{Path: strings.TrimPrefix(p, root+"/"), Data: data})
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+// frontmatter parses the YAML frontmatter of a SKILL.md into a map, every
+// field as written.
+func frontmatter(content string) (map[string]any, error) {
+	const fence = "---\n"
+	if !strings.HasPrefix(content, fence) {
+		return nil, fmt.Errorf("missing frontmatter")
+	}
+	rest := content[len(fence):]
+	end := strings.Index(rest, "\n"+fence)
+	if end < 0 {
+		return nil, fmt.Errorf("unterminated frontmatter")
+	}
+	fm := map[string]any{}
+	if err := yaml.Unmarshal([]byte(rest[:end]), &fm); err != nil {
+		return nil, fmt.Errorf("parse frontmatter: %w", err)
+	}
+	if fm["name"] == nil || fm["description"] == nil {
+		return nil, fmt.Errorf("frontmatter needs name and description")
+	}
+	return fm, nil
+}

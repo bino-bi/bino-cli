@@ -112,15 +112,27 @@ Read-only context an agent can pull in:
 | `bino://documents`     | The project index: every document → `{kind, name, file, position}`.                                          |
 | `bino://packages`      | The project's registry packages: `bino.lock` merged with `bino.toml` `[dependencies]`, with installed state. |
 | `bino://templates`     | The built-in and curated templates `init_bundle` can scaffold from.                                          |
-| `bino://skills`        | Index of the knowledge skills below: name and description of each, as JSON.                                  |
-| `bino://skills/{name}` | One skill as markdown (e.g. `bino://skills/bino-ibcs`), the same text the prompt of that name carries.       |
+| `skill://{name}/SKILL.md` | One knowledge skill (e.g. `skill://bino-ibcs/SKILL.md`); its other files sit beside it, such as `skill://bino-ibcs/references/ibcs-standard.md`. |
+
+## Skills
+
+The knowledge skills below are served with the MCP
+[Skills extension](https://modelcontextprotocol.io/extensions/skills/overview)
+(`io.modelcontextprotocol/skills`). The server declares it in its capabilities and answers
+`skills/list` (every skill with its frontmatter and the digest and size of each file) and
+`skills/get` (one skill by the URI of its `SKILL.md`). Every file is also an ordinary resource
+under `skill://`, so a client without the extension reads them with `resources/read`.
+
+`bino mcp --list-skills` prints the served skills; with `--json` it prints each skill with its
+frontmatter and every file with its URI, digest, size and text, so another program can serve
+the same skills without running bino.
 
 ## Prompts
 
 The server also serves bino's authoring and IBCS knowledge as MCP prompts. They are the same skills
 the Claude Code plugin ships, embedded in the binary, so any client that can run `bino mcp` gets
 them without a copy of the plugin. Each prompt takes no arguments and returns one user message with
-the skill text; the same text is readable as `bino://skills/{name}`.
+the skill text, its reference files appended; the same skill is served under `skill://{name}/`.
 
 | Prompt                 | What it teaches                                                                                                                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
