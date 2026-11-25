@@ -113,10 +113,12 @@ func TestAddComponentStyleHelpExampleIsValid(t *testing.T) {
 		t.Fatalf("help example is not a valid ComponentStyle: %v\n%s", err, manifest)
 	}
 	// styleContent allows unknown keys, but the engine rejects them.
+	type def struct {
+		Ref        string         `json:"$ref"`
+		Properties map[string]def `json:"properties"`
+	}
 	var doc struct {
-		Defs map[string]struct {
-			Properties map[string]any `json:"properties"`
-		} `json:"$defs"`
+		Defs map[string]def `json:"$defs"`
 	}
 	if err := json.Unmarshal(schema.DocumentSchemaBytes(), &doc); err != nil {
 		t.Fatal(err)
@@ -125,9 +127,17 @@ func TestAddComponentStyleHelpExampleIsValid(t *testing.T) {
 	if err := json.Unmarshal([]byte(content), &sections); err != nil {
 		t.Fatalf("help example is not a JSON object of sections: %v", err)
 	}
-	for section := range sections {
-		if _, ok := doc.Defs["styleContent"].Properties[section]; !ok {
+	for section, keys := range sections {
+		ref, ok := doc.Defs["styleContent"].Properties[section]
+		if !ok {
 			t.Errorf("help example uses unknown style section %q", section)
+			continue
+		}
+		known := doc.Defs[strings.TrimPrefix(ref.Ref, "#/$defs/")].Properties
+		for key := range keys {
+			if _, ok := known[key]; !ok {
+				t.Errorf("help example uses unknown key %s.%s", section, key)
+			}
 		}
 	}
 }
