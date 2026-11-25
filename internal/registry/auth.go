@@ -30,3 +30,26 @@ func (c *Client) RevokePAT(ctx context.Context, id string) error {
 	}
 	return c.doJSON(ctx, http.MethodDelete, c.baseURL+"/api/registry/auth/pat/"+id, auth, nil, nil)
 }
+
+// OIDCExchangeResult is the Trusted Publishing exchange response: a
+// short-lived token that may only publish Package.
+type OIDCExchangeResult struct {
+	Token   string `json:"token"`
+	Expires string `json:"expires"`
+	Package string `json:"package"`
+}
+
+// ExchangeOIDC swaps a GitHub Actions OIDC token, issued for the registry's
+// URL as audience, for a publish token for pkg. The registry takes each OIDC
+// token only once.
+func (c *Client) ExchangeOIDC(ctx context.Context, oidcToken, pkg string) (OIDCExchangeResult, error) {
+	var out OIDCExchangeResult
+	err := c.doJSON(ctx, http.MethodPost, c.baseURL+"/api/registry/auth/oidc/exchange", "",
+		map[string]string{"token": oidcToken, "package": pkg}, &out)
+	return out, err
+}
+
+// UsePublishToken makes publishes authenticate with a token from
+// ExchangeOIDC. It is never sent on other requests, since the registry only
+// accepts it for publishing.
+func (c *Client) UsePublishToken(token string) { c.publishToken = token }

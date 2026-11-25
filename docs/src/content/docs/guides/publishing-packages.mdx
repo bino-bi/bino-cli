@@ -159,6 +159,91 @@ bino publish --bump patch
 Versions are immutable and there is no unpublish. `--dry-run` is worth the
 extra minute in a pipeline that publishes automatically.
 
+On GitHub Actions you can skip the token secret: see
+[Trusted Publishing](#trusted-publishing-from-github-actions).
+
+## Trusted Publishing from GitHub Actions
+
+From bino v0.120.0, a GitHub Actions job can publish without a personal access
+token. The scope owner names the repository and workflow that may publish, and
+bino proves it is that workflow with the job's OIDC token:
+
+1. bino asks GitHub for an OIDC token whose audience is the registry's URL.
+2. The registry checks the token and looks for a matching trusted publisher of
+   the package's scope.
+3. It answers with a token that may only publish this one package, for 15
+   minutes. bino publishes with it, dry run included.
+
+Nothing long-lived is stored in the repository, and the version records the
+repository, workflow, ref, commit and run it was published from.
+
+### Add a trusted publisher
+
+A scope owner adds it on the registry, on the scope's page under the signing
+settings, **Trusted publishers**:
+
+| Field      | Value                                                                       |
+| ---------- | --------------------------------------------------------------------------- |
+| Issuer     | GitHub Actions (`https://token.actions.githubusercontent.com`), the only one |
+| Repository | `owner/repo`, for example `acme/reports`                                     |
+| Workflow   | the workflow file's path, for example `.github/workflows/publish.yml`       |
+| Ref        | an exact ref such as `refs/heads/main` or `refs/tags/v1.2.0`, or empty for any ref |
+| Package    | a package name in the scope, or empty for every package of the scope         |
+
+Every trusted publisher is a publish grant for the scope. With an empty ref,
+anyone who can push a branch carrying that workflow file can publish, so set a
+ref and a package where you can. Only jobs for a branch or a tag publish; a
+pull request job never does.
+
+On the first publish the registry records the repository's GitHub ids. If the
+repository is deleted and someone creates a new one under the same name, the
+registry refuses it. To trust a repository under that name again, remove its
+trusted publishers, save, and add them back.
+
+### The workflow
+
+```yaml
+name: publish
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write # lets bino request OIDC tokens
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bino
+        run: /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
+      - name: Publish
+        run: bino publish --bump patch --sign --keyless
+```
+
+There is no `BINO_REGISTRY_TOKEN`. bino uses Trusted Publishing when the job
+can request OIDC tokens and no registry token is configured (in `bino.toml`,
+in `BINO_REGISTRY_TOKEN` or from `bino registry login`). A configured token
+wins, so add `--trusted-publishing` to use Trusted Publishing anyway.
+
+`--sign --keyless` asks GitHub for a second OIDC token, for Sigstore. The
+signature then names the publish channel `oidc` and the run, as the Sigstore
+certificate states it. `--sign` is optional; Trusted Publishing also works
+for unsigned publishes and for `--sign --key`. Keyless signing only works for
+public packages.
+
+When the exchange fails, `bino publish` stops and says why:
+
+- **no trusted publisher matches**: add the repository, workflow and ref as a
+  trusted publisher of the scope, or fix the ones you added. If the registry
+  says Trusted Publishing is not configured, its operator has to turn it on.
+- **the registry does not support Trusted Publishing**: the registry is too
+  old. Publish with a token instead.
+- **invalid token**: the job is not for a branch or a tag (for example a pull
+  request), or the token is not for this registry.
+
 ## Signing a release
 
 From bino v0.116.0, `bino publish --sign` signs the release, so consumers can
@@ -224,7 +309,9 @@ jobs:
 ```
 
 The signature records the run: repository, workflow, ref, commit and run URL,
-as the Sigstore certificate states them. Consumers pin the repository and the
+as the Sigstore certificate states them. This example publishes with a token,
+so the signature names the publish channel `pat`; drop the `env` block to use
+[Trusted Publishing](#trusted-publishing-from-github-actions) instead. Consumers pin the repository and the
 workflow:
 
 ```toml

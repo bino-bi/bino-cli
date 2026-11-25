@@ -98,6 +98,11 @@ visibility. Then:
   exists when the human started the server with `bino mcp --allow-publish`, or the daemon with
   `bino daemon --mcp-allow-publish` when `bino mcp` proxies to it.
 
+**Signing and CI:** `--sign --key <file>` (or `--sign --keyless` in CI, public packages only) signs
+the release; `registry_publish` takes `sign_key` and `sign_keyless` for it. From GitHub Actions a
+package publishes without a token through Trusted Publishing, once the scope owner adds the repository
+and workflow as a trusted publisher on the registry.
+
 **Bump:** `patch` for fixes that keep every name and param, `minor` for new definitions or new params
 with defaults, `major` for a removed or renamed definition, a removed param, or a param without a
 default. The first publish is always 1.0.0. Republishing unchanged content returns `unchanged=true`;
