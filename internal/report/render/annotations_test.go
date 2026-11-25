@@ -511,8 +511,9 @@ func TestAnnotations_CardInATreeHasNoTargetAttributes(t *testing.T) {
 
 func TestAnnotations_ItemsCarryTheName(t *testing.T) {
 	out := renderAnnotations(t, ModeBuild, chartDoc, marker2024, arrowNoText, annotationTestPage(chartRefChild+","+annotationsAll))
-	var names []string
-	for _, item := range layerItems(t, out) {
+	items := layerItems(t, out)
+	names := make([]string, 0, len(items))
+	for _, item := range items {
 		names = append(names, item.Name)
 		if item.SourceFile != "" || item.Line != 0 {
 			t.Fatalf("a build has no source location: %+v", item)

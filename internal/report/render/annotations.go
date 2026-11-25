@@ -408,11 +408,11 @@ func (rc *renderCtx) annotationListPlaceholder(s schema.AnnotationListSpec) stri
 
 // annotationSource returns the file and 1-based line of an Annotation
 // document, or "" and 0 when unknown (always outside the preview).
-func (rc *renderCtx) annotationSource(a annotationDoc) (string, int) {
+func (rc *renderCtx) annotationSource(a annotationDoc) (file string, line int) {
 	if rc.srcLines == nil || a.doc.File == "" {
 		return "", 0
 	}
-	if line := rc.srcLines.docLine(&a.doc); line > 0 {
+	if line = rc.srcLines.docLine(&a.doc); line > 0 {
 		return a.doc.File, line
 	}
 	return "", 0
