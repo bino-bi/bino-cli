@@ -12,7 +12,7 @@ import (
 )
 
 // annotationTargetKinds are the kinds an Annotation can point at.
-var annotationTargetKinds = []string{"ChartTime", "ChartStructure", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "Tree", "Grid"}
+var annotationTargetKinds = []string{"ChartTime", "ChartStructure", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "Tree", "Grid", "SmallMultiple"}
 
 // AnnotationManifestData holds data for rendering an Annotation manifest.
 type AnnotationManifestData struct {
@@ -22,8 +22,10 @@ type AnnotationManifestData struct {
 	Mark        string
 	Color       string
 	Target      string   // Kind:name
+	Panel       string   // panel label, SmallMultiple targets only
 	Point       []string // field=value
 	To          string   // Kind:name
+	ToPanel     string   // panel label, SmallMultiple ends only
 	ToPoint     []string // field=value
 	Title       string
 	Text        string
@@ -37,8 +39,10 @@ func newAddAnnotationCommand() *cobra.Command { //nolint:gocognit // mirrors the
 		flagPercent    bool
 		flagColor      string
 		flagTarget     string
+		flagPanel      string
 		flagPoint      []string
 		flagTo         string
+		flagToPanel    string
 		flagToPoint    []string
 		flagTitle      string
 		flagText       string
@@ -94,8 +98,10 @@ scenario, row, part.
 				Percent:     flagPercent,
 				Color:       flagColor,
 				Target:      flagTarget,
+				Panel:       flagPanel,
 				Point:       flagPoint,
 				To:          flagTo,
+				ToPanel:     flagToPanel,
 				ToPoint:     flagToPoint,
 				Title:       flagTitle,
 				Text:        flagText,
@@ -176,6 +182,11 @@ scenario, row, part.
 					return canceled(err)
 				}
 			}
+			if data.Panel == "" && isSmallMultipleEnd(data.Target) {
+				if data.Panel, err = promptAnnotationPanel("Panel of the target"); err != nil {
+					return canceled(err)
+				}
+			}
 			if len(data.Point) == 0 {
 				if data.Point, err = promptAnnotationPoint("Point of the target"); err != nil {
 					return canceled(err)
@@ -184,6 +195,11 @@ scenario, row, part.
 			if data.Mark == "arrow" || data.Mark == "difference" || data.Mark == "bracket" {
 				if data.To == "" {
 					if data.To, err = promptAnnotationEnd(manifests, "End of the arrow, or the second value"); err != nil {
+						return canceled(err)
+					}
+				}
+				if data.ToPanel == "" && isSmallMultipleEnd(data.To) {
+					if data.ToPanel, err = promptAnnotationPanel("Panel of the end"); err != nil {
 						return canceled(err)
 					}
 				}
@@ -221,8 +237,10 @@ scenario, row, part.
 	cmd.Flags().BoolVar(&flagPercent, "percent", false, "For --mark difference: also print the relative difference. For --mark bracket: print the share of its rows")
 	cmd.Flags().StringVar(&flagColor, "color", "", "Color name from the bn-annotation style, e.g. negative")
 	cmd.Flags().StringVar(&flagTarget, "target", "", "Target component as Kind:name")
+	cmd.Flags().StringVar(&flagPanel, "panel", "", "For a SmallMultiple target: label of one panel (empty: the whole SmallMultiple)")
 	cmd.Flags().StringArrayVar(&flagPoint, "point", nil, "Point of the target as field=value (repeatable)")
 	cmd.Flags().StringVar(&flagTo, "to", "", "End of an arrow, second value of a difference, last row of a bracket or second data point of a frame as Kind:name")
+	cmd.Flags().StringVar(&flagToPanel, "to-panel", "", "For a SmallMultiple end: label of one panel")
 	cmd.Flags().StringArrayVar(&flagToPoint, "to-point", nil, "Point of the end as field=value (repeatable)")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Title in the AnnotationList")
 	cmd.Flags().StringVar(&flagText, "text", "", "Text in the AnnotationList (inline Markdown)")
@@ -248,6 +266,15 @@ func promptAnnotationEnd(manifests []ManifestInfo, label string) (string, error)
 		return "", errAddCanceled
 	}
 	return item.Kind + ":" + item.Name, nil
+}
+
+func isSmallMultipleEnd(value string) bool {
+	kind, _, _ := strings.Cut(value, ":")
+	return kind == "SmallMultiple"
+}
+
+func promptAnnotationPanel(label string) (string, error) {
+	return addPromptString(label+" (empty: the whole SmallMultiple)", "")
 }
 
 func promptAnnotationPoint(label string) ([]string, error) {
@@ -278,6 +305,9 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 	if len(data.ToPoint) > 0 && data.To == "" {
 		return nil, errors.New("--to-point needs --to")
 	}
+	if data.ToPanel != "" && data.To == "" {
+		return nil, errors.New("--to-panel needs --to")
+	}
 	switch data.Mark {
 	case "", "marker", "pointer":
 		if data.To != "" {
@@ -295,7 +325,7 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 		return nil, errors.New("--percent needs --mark difference or --mark bracket")
 	}
 
-	target, err := parseAnnotationTarget(data.Target, data.Point)
+	target, err := parseAnnotationTarget(data.Target, data.Panel, data.Point)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +343,7 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 	}
 	spec.Percent = data.Percent
 	if data.To != "" {
-		to, err := parseAnnotationTarget(data.To, data.ToPoint)
+		to, err := parseAnnotationTarget(data.To, data.ToPanel, data.ToPoint)
 		if err != nil {
 			return nil, err
 		}
@@ -323,12 +353,15 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 	return doc, nil
 }
 
-func parseAnnotationTarget(value string, point []string) (schema.AnnotationTarget, error) {
+func parseAnnotationTarget(value, panel string, point []string) (schema.AnnotationTarget, error) {
 	kind, name, ok := strings.Cut(value, ":")
 	if !ok || kind == "" || name == "" {
 		return schema.AnnotationTarget{}, fmt.Errorf("target %q: use Kind:name, e.g. ChartTime:net_sales", value)
 	}
-	target := schema.AnnotationTarget{Kind: kind, Name: name}
+	if panel != "" && kind != "SmallMultiple" {
+		return schema.AnnotationTarget{}, fmt.Errorf("panel %q: only a SmallMultiple has panels, %s has none", panel, value)
+	}
+	target := schema.AnnotationTarget{Kind: kind, Name: name, Panel: panel}
 	if len(point) == 0 {
 		return target, nil
 	}

@@ -1,9 +1,14 @@
 package cli
 
 import (
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
+
+	"bino.bi/bino/internal/schema"
 )
 
 func TestBuildTextDocument(t *testing.T) {
@@ -70,14 +75,14 @@ func TestBuildComponentStyleDocument(t *testing.T) {
 	t.Run("flat JSON object becomes a structured map", func(t *testing.T) {
 		data := ComponentStyleManifestData{
 			Name:    "header_style",
-			Content: `{"fontFamily": "Arial", "fontSize": "24px"}`,
+			Content: `{"global": {"fontFamily": "Arial"}, "bn-text": {"fontSizePx": 24}}`,
 		}
 		got := wizardRoundTrip(t, buildComponentStyleDocument(data), "style.yaml")
 		assertContainsAll(t, got, []string{
 			"kind: ComponentStyle",
 			"name: header_style",
 			"fontFamily: Arial",
-			"fontSize: 24px",
+			"fontSizePx: 24",
 		})
 	})
 
@@ -89,6 +94,42 @@ func TestBuildComponentStyleDocument(t *testing.T) {
 		got := wizardRoundTrip(t, buildComponentStyleDocument(data), "style_css.yaml")
 		assertContainsAll(t, got, []string{"content:", "color: red;"})
 	})
+}
+
+// The help example is what users copy, so it must be a style the schema accepts.
+func TestAddComponentStyleHelpExampleIsValid(t *testing.T) {
+	example := newAddComponentStyleCommand().Example
+	start := strings.Index(example, "--content '")
+	if start < 0 {
+		t.Fatalf("no --content example in:\n%s", example)
+	}
+	content := example[start+len("--content '"):]
+	content = content[:strings.Index(content, "'")]
+	manifest, err := yaml.Marshal(buildComponentStyleDocument(ComponentStyleManifestData{Name: "header_style", Content: content}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := schema.Validate(manifest); err != nil {
+		t.Fatalf("help example is not a valid ComponentStyle: %v\n%s", err, manifest)
+	}
+	// styleContent allows unknown keys, but the engine rejects them.
+	var doc struct {
+		Defs map[string]struct {
+			Properties map[string]any `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(schema.DocumentSchemaBytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	var sections map[string]map[string]any
+	if err := json.Unmarshal([]byte(content), &sections); err != nil {
+		t.Fatalf("help example is not a JSON object of sections: %v", err)
+	}
+	for section := range sections {
+		if _, ok := doc.Defs["styleContent"].Properties[section]; !ok {
+			t.Errorf("help example uses unknown style section %q", section)
+		}
+	}
 }
 
 func TestBuildRuleSetDocument(t *testing.T) {

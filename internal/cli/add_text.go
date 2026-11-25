@@ -281,9 +281,10 @@ func newAddComponentStyleCommand() *cobra.Command {
 		Use:   "componentstyle [name]",
 		Short: "Create a ComponentStyle manifest",
 		Long: strings.TrimSpace(`
-Create a new ComponentStyle manifest for CSS styling.
+Create a new ComponentStyle manifest.
 
-ComponentStyle defines CSS properties that can be applied to report components.
+The content is a JSON object with one section per component, such as "global",
+"bn-text" or "bn-table". Components use the style through selectedStyle.
 `),
 		Example: strings.TrimSpace(`
   # Interactive wizard
@@ -291,7 +292,7 @@ ComponentStyle defines CSS properties that can be applied to report components.
 
   # With inline content
   bino add componentstyle header_style \
-    --content '{"fontFamily": "Arial", "fontSize": "24px"}' \
+    --content '{"global": {"fontFamily": "Arial"}, "bn-text": {"fontSizePx": 24}}' \
     --output styles/header.yaml \
     --no-prompt
 `),
@@ -371,13 +372,15 @@ ComponentStyle defines CSS properties that can be applied to report components.
 
 			// Content
 			if data.Content == "" {
-				fmt.Fprintln(out, "\nEnter CSS properties as JSON or press Enter to open editor:")
+				fmt.Fprintln(out, "\nEnter the style content as JSON or press Enter to open editor:")
 				data.Content, _ = addPromptString("Content (JSON)", "")
 				if data.Content == "" {
 					template := `{
-  "fontFamily": "Arial, sans-serif",
-  "fontSize": "12px",
-  "color": "#333333"
+  "global": {
+    "fontFamily": "Arial, sans-serif",
+    "fontSizePx": 12,
+    "fontColor": "#333333"
+  }
 }`
 					data.Content, err = promptWithEditor("bino-style-", ".json", template)
 					if err != nil {
@@ -404,7 +407,7 @@ ComponentStyle defines CSS properties that can be applied to report components.
 		SilenceErrors: true,
 	}
 
-	cmd.Flags().StringVar(&flagContent, "content", "", "CSS properties as JSON")
+	cmd.Flags().StringVar(&flagContent, "content", "", "Style content as a JSON object, e.g. {\"global\": {\"fontFamily\": \"Arial\"}}")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
@@ -877,27 +880,11 @@ func buildComponentStyleDocument(data ComponentStyleManifestData) *schema.Docume
 
 	spec := &schema.ComponentStyleSpec{}
 
-	// Parse content as JSON or use as-is
+	// Keep parsed JSON objects as structured YAML; fall back to the raw string.
 	if data.Content != "" {
-		if strings.HasPrefix(strings.TrimSpace(data.Content), "{") {
-			// Simple JSON to map conversion for single-level objects
-			content := strings.TrimSpace(data.Content)
-			content = strings.TrimPrefix(content, "{")
-			content = strings.TrimSuffix(content, "}")
-			contentMap := make(map[string]string)
-			for _, line := range strings.Split(content, ",") {
-				line = strings.TrimSpace(line)
-				if line == "" {
-					continue
-				}
-				parts := strings.SplitN(line, ":", 2)
-				if len(parts) == 2 {
-					key := strings.Trim(strings.TrimSpace(parts[0]), "\"")
-					val := strings.Trim(strings.TrimSpace(parts[1]), "\"")
-					contentMap[key] = val
-				}
-			}
-			spec.Content = contentMap
+		var parsed any
+		if err := json.Unmarshal([]byte(data.Content), &parsed); err == nil {
+			spec.Content = parsed
 		} else {
 			spec.Content = data.Content
 		}

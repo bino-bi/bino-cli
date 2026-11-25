@@ -122,7 +122,7 @@ prefixes are allowed too. Dataset columns exist only for `ac`, `pp`, `fc` and
 | Property     | Type   | Description                                                                                                                                                         |
 | ------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`       | string | Display name. Slot 1 shows it as written, slots 2 to 4 with their number (`Budget`, `Budget2`).                                                                     |
-| `colorIndex` | number | Theme style slot the scenario is drawn in: `10` = `ac` (solid), `20` = `pp` (light), `30` = `fc` (hatched), `50` = `pl` (outlined). Any other value counts as `10`. |
+| `colorIndex` | number | Theme style slot the scenario is drawn in: `10` = `ac` (solid), `20` = `pp` (light), `30` = `fc` (hatched), `50` = `pl` (outlined). Other values are a schema error. |
 | `sortIndex`  | number | Base sort index for column ordering. Slot `n` adds `n*10`.                                                                                                          |
 
 Each prefix expands into four slots (`ac` → `ac1`..`ac4`) that inherit the base

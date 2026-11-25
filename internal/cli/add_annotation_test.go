@@ -100,3 +100,50 @@ func TestBuildAnnotationDocument_Difference(t *testing.T) {
 		t.Fatalf("spec = %+v", spec)
 	}
 }
+
+func TestBuildAnnotationDocument_SmallMultiplePanel(t *testing.T) {
+	doc, err := buildAnnotationDocument(AnnotationManifestData{
+		Name:    "berlin_peak",
+		Mark:    "arrow",
+		Target:  "SmallMultiple:by_city",
+		Panel:   "Berlin",
+		Point:   []string{"date=2024-01-01", "scenario=ac1"},
+		To:      "SmallMultiple:by_city",
+		ToPanel: "Munich",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := doc.Spec.(*schema.AnnotationSpec)
+	if spec.Target.Panel != "Berlin" || spec.To.Panel != "Munich" {
+		t.Fatalf("spec = %+v", spec)
+	}
+	manifest, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := schema.Validate(manifest); err != nil {
+		t.Fatalf("the built document must pass the schema: %v\n%s", err, manifest)
+	}
+}
+
+func TestBuildAnnotationDocument_PanelErrors(t *testing.T) {
+	tests := map[string]AnnotationManifestData{
+		"only a SmallMultiple has panels": {Name: "a", Target: "ChartTime:c", Panel: "Berlin"},
+		"--to-panel needs --to":           {Name: "a", Target: "SmallMultiple:s", ToPanel: "Berlin"},
+	}
+	for want, data := range tests {
+		if _, err := buildAnnotationDocument(data); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want it to contain %q", err, want)
+		}
+	}
+}
+
+func TestAnnotationTargetKindsIncludeSmallMultiple(t *testing.T) {
+	for _, kind := range annotationTargetKinds {
+		if kind == "SmallMultiple" {
+			return
+		}
+	}
+	t.Fatalf("annotationTargetKinds = %v, want SmallMultiple in it", annotationTargetKinds)
+}
