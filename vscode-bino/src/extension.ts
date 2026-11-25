@@ -516,14 +516,17 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     // The editor title shows their buttons only on a file that holds such a document.
     const updateEditorKindContext = (editor: vscode.TextEditor | undefined) => {
         const text = editor?.document.languageId === 'yaml' ? editor.document.getText() : '';
-        void vscode.commands.executeCommand('setContext', 'bino.activeHasComponentStyle', /^kind:\s*ComponentStyle\s*$/m.test(text));
-        void vscode.commands.executeCommand('setContext', 'bino.activeHasRuleSet', /^kind:\s*RuleSet\s*$/m.test(text));
+        void vscode.commands.executeCommand('setContext', 'bino.activeHasComponentStyle', /^kind:\s*["']?ComponentStyle["']?\s*(#.*)?$/m.test(text));
+        void vscode.commands.executeCommand('setContext', 'bino.activeHasRuleSet', /^kind:\s*["']?RuleSet["']?\s*(#.*)?$/m.test(text));
     };
+    let editorKindTimer: ReturnType<typeof setTimeout> | undefined;
     updateEditorKindContext(vscode.window.activeTextEditor);
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(updateEditorKindContext),
-        vscode.workspace.onDidSaveTextDocument(doc => {
-            if (doc === vscode.window.activeTextEditor?.document) { updateEditorKindContext(vscode.window.activeTextEditor); }
+        vscode.workspace.onDidChangeTextDocument(e => {
+            if (e.document !== vscode.window.activeTextEditor?.document) { return; }
+            if (editorKindTimer) { clearTimeout(editorKindTimer); }
+            editorKindTimer = setTimeout(() => updateEditorKindContext(vscode.window.activeTextEditor), 500);
         })
     );
 
@@ -814,13 +817,14 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('bino.openStyleEditor', async (arg?: LSPDocument | BinoTreeItem) => {
-            const doc = (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
-            await styleEditor?.open(doc?.kind ? doc : undefined);
+        // The editor title passes the file's Uri, the Documents view its tree item.
+        vscode.commands.registerCommand('bino.openStyleEditor', async (arg?: LSPDocument | BinoTreeItem | vscode.Uri) => {
+            const doc = arg instanceof vscode.Uri ? arg : (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
+            await styleEditor?.open(doc instanceof vscode.Uri || doc?.kind ? doc : undefined);
         }),
-        vscode.commands.registerCommand('bino.openRuleSetEditor', async (arg?: LSPDocument | BinoTreeItem) => {
-            const doc = (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
-            await ruleSetEditor?.open(doc?.kind ? doc : undefined);
+        vscode.commands.registerCommand('bino.openRuleSetEditor', async (arg?: LSPDocument | BinoTreeItem | vscode.Uri) => {
+            const doc = arg instanceof vscode.Uri ? arg : (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
+            await ruleSetEditor?.open(doc instanceof vscode.Uri || doc?.kind ? doc : undefined);
         })
     );
 

@@ -11,6 +11,7 @@ const CSS = `
     table.rules th { color: var(--vscode-descriptionForeground); font-weight: normal; font-size: 0.85em; border-bottom: 1px solid var(--vscode-panel-border); }
     table.rules tr.dragging { opacity: 0.4; }
     table.rules tr.over td { border-top: 2px solid var(--vscode-focusBorder); }
+    table.rules tr.over-after td { border-bottom: 2px solid var(--vscode-focusBorder); }
     td.grip { cursor: grab; color: var(--vscode-descriptionForeground); user-select: none; }
     td.prefix { font-family: var(--vscode-editor-font-family); font-weight: bold; }
     .looks { display: inline-flex; gap: 4px; }
@@ -80,10 +81,9 @@ const SCRIPT = `
     function numberCell(path, own, inherited) {
         const input = h('input', { type: 'number', 'data-key': path.join('/'), value: show(own), placeholder: show(inherited) });
         input.addEventListener('change', () => {
-            const raw = input.value.trim();
-            if (raw === '') return clear(path);
-            const n = Number(raw);
-            if (!isNaN(n)) edit(path, n);
+            const n = numberOf(input);
+            if (n === undefined) clear(path);
+            else if (!isNaN(n)) edit(path, n);
         });
         return input;
     }
@@ -93,25 +93,33 @@ const SCRIPT = `
         const head = h('tr', {}, ['', 'prefix', 'name', 'look (colorIndex)', 'order (sortIndex)', 'variance order'].map(t => h('th', { text: t })));
         const rows = state.rows.map((row, i) => {
             const base = ['scenarios', row.prefix];
-            const tr = h('tr', { draggable: 'true' }, [
-                h('td', { class: 'grip', title: 'Drag to change the order', text: '\\u2630' }),
+            // only the grip starts a drag: a text drag in an input must not move the row
+            const grip = h('td', { class: 'grip', title: 'Drag to change the order', text: '\\u2630' });
+            const tr = h('tr', {}, [
+                grip,
                 h('td', { class: 'prefix' + (Object.keys(row.own).length ? ' set' : ''), text: row.prefix }),
                 h('td', {}, [textCell(base.concat(['name']), row.own.name, row.system.name)]),
                 h('td', {}, [lookPicker(base.concat(['colorIndex']), row.own.colorIndex, row.system.colorIndex)]),
                 h('td', {}, [numberCell(base.concat(['sortIndex']), row.own.sortIndex, row.system.sortIndex)]),
                 h('td', { class: 'muted', text: row.variance ? row.variance.absolute + ' / ' + row.variance.relative : '' }),
             ]);
+            grip.addEventListener('mousedown', () => { tr.draggable = true; });
             tr.addEventListener('dragstart', e => { dragFrom = i; tr.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-            tr.addEventListener('dragend', () => { tr.classList.remove('dragging'); document.querySelectorAll('tr.over').forEach(r => r.classList.remove('over')); });
-            tr.addEventListener('dragover', e => { e.preventDefault(); tr.classList.add('over'); });
-            tr.addEventListener('dragleave', () => tr.classList.remove('over'));
+            tr.addEventListener('dragend', () => {
+                tr.draggable = false;
+                dragFrom = -1;
+                tr.classList.remove('dragging');
+                document.querySelectorAll('tr.over, tr.over-after').forEach(r => r.classList.remove('over', 'over-after'));
+            });
+            // the row goes where the line is: above the target when moved up, below it when moved down
+            tr.addEventListener('dragover', e => { if (dragFrom < 0) return; e.preventDefault(); tr.classList.add(dragFrom < i ? 'over-after' : 'over'); });
+            tr.addEventListener('dragleave', () => tr.classList.remove('over', 'over-after'));
             tr.addEventListener('drop', e => {
                 e.preventDefault();
                 if (dragFrom < 0 || dragFrom === i) return;
                 const order = state.rows.map(r => r.prefix);
                 const moved = order.splice(dragFrom, 1)[0];
                 order.splice(i, 0, moved);
-                dragFrom = -1;
                 post({ type: 'reorder', order: order });
             });
             return tr;

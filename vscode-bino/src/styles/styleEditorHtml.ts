@@ -57,12 +57,14 @@ const SCRIPT = `
         } else {
             const input = h('input', { 'data-key': k, type: node.input === 'number' ? 'number' : 'text', step: 'any', value: show(node.own), placeholder: show(node.inherited) });
             input.addEventListener('change', () => {
-                const raw = input.value.trim();
-                if (raw === '') return clear(node.path);
                 if (node.input === 'number') {
-                    const n = Number(raw);
-                    if (!isNaN(n)) edit(node.path, n);
-                } else edit(node.path, raw);
+                    const n = numberOf(input);
+                    if (n === undefined) clear(node.path);
+                    else if (!isNaN(n)) edit(node.path, n);
+                    return;
+                }
+                const raw = input.value.trim();
+                if (raw === '') clear(node.path); else edit(node.path, raw);
             });
             control = input;
         }
@@ -94,7 +96,7 @@ const SCRIPT = `
                 }
                 if (k === 'width') {
                     const input = h('input', { type: 'number', step: 'any', 'data-key': dk, value: show(value(k)), placeholder: show(ph(k)) });
-                    input.addEventListener('change', () => input.value.trim() === '' ? clear(path) : edit(path, Number(input.value)));
+                    input.addEventListener('change', () => { const n = numberOf(input); if (n === undefined) clear(path); else if (!isNaN(n)) edit(path, n); });
                     return h('td', {}, [input]);
                 }
                 if (k === 'dasharray') {
@@ -154,7 +156,7 @@ const SCRIPT = `
             ? h('div', { class: 'muted' }, [sourceText(node) + ': '].concat(node.inherited.map(c => node.colors ? h('span', { class: 'chip', title: show(c), style: 'background:' + show(c) }) : show(c) + ' ')))
             : null;
         const actions = h('div', {}, [
-            h('button', { class: 'link', text: '+ add', onclick: () => write(items.concat([node.colors ? '#000000' : ''])) }),
+            h('button', { class: 'link', text: '+ add', onclick: () => write(items.concat([node.colors ? '#000000' : 'Series ' + (items.length + 1)])) }),
             !own && node.inherited && node.inherited.length ? h('button', { class: 'link', text: 'override inherited list', onclick: () => write(node.inherited.slice()) }) : null,
         ]);
         return h('fieldset', { title: node.description || '' }, [h('legend', { text: node.label }), inherited].concat(rows).concat([actions]));
@@ -168,6 +170,7 @@ const SCRIPT = `
             nameInput.addEventListener('change', () => {
                 const nn = nameInput.value.trim();
                 if (!nn || nn === name) return;
+                if (Object.prototype.hasOwnProperty.call(own, nn)) { nameInput.value = name; return; }
                 const next = {};
                 for (const [k, v] of Object.entries(own)) next[k === name ? nn : k] = v;
                 write(next);

@@ -46,12 +46,14 @@ export function getIn(root: unknown, path: string[]): unknown {
  * `_system` only.
  */
 export function inheritedValue(path: string[], styleName: string, defaultContent: unknown): Inherited | undefined {
+    const system = getIn(SYSTEM_STYLE, path);
     if (styleName !== DEFAULT_STYLE) {
         const value = getIn(defaultContent, path);
+        // an object of _default is merged over the engine's, as the engine does
+        if (isObject(value)) { return { value: mergeStyles(system, value), source: '_default' }; }
         if (value !== undefined) { return { value, source: '_default' }; }
     }
-    const value = getIn(SYSTEM_STYLE, path);
-    return value === undefined ? undefined : { value, source: '_system' };
+    return system === undefined ? undefined : { value: system, source: '_system' };
 }
 
 /**

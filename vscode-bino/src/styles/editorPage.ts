@@ -70,17 +70,33 @@ const COMMON_SCRIPT = `
         if (value === undefined || value === null) return '';
         return typeof value === 'object' ? JSON.stringify(value) : String(value);
     }
-    /** Re-render and give the focus back to the control with the same data-key. */
+    /**
+     * Re-render and give the focus back to the control with the same data-key,
+     * with the text typed into it that was not sent yet.
+     */
     function keepFocus(render) {
         const active = document.activeElement;
         const key = active && active.getAttribute && active.getAttribute('data-key');
+        const typing = key && active.tagName === 'INPUT' && active.type !== 'color' ? { value: active.value, start: active.selectionStart, end: active.selectionEnd } : null;
         const scroll = window.scrollY;
         render();
         if (key) {
             const again = document.querySelector('[data-key="' + CSS.escape(key) + '"]');
-            if (again) again.focus();
+            if (again) {
+                again.focus();
+                if (typing && again.tagName === 'INPUT') {
+                    again.value = typing.value;
+                    try { again.setSelectionRange(typing.start, typing.end); } catch (e) { /* number inputs have no selection */ }
+                }
+            }
         }
         window.scrollTo(0, scroll);
+    }
+    /** The number of a number input; undefined when it is empty, NaN when it holds text that is no number. */
+    function numberOf(input) {
+        if (input.validity && input.validity.badInput) return NaN;
+        const raw = input.value.trim();
+        return raw === '' ? undefined : Number(raw);
     }
     function docPicker(state) {
         if (!state.docs || state.docs.length < 2) return null;

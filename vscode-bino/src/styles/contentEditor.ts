@@ -4,7 +4,7 @@ import { WorkspaceIndexer, LSPDocument } from '../indexer';
 import { AuthoringClient, formatEditDiagnostics, EditResult } from '../authoringClient';
 import { BinoPreviewManager } from '../preview';
 import { getNonce } from '../webviewNonce';
-import { removalPath } from './styleModel';
+import { getIn, isObject, removalPath } from './styleModel';
 
 /** A document of the edited kind in a YAML file. */
 export interface ContentDoc {
@@ -39,6 +39,10 @@ export interface EditorSession {
     suppressForwardSync: boolean;
     /** Editor-specific choice kept across re-renders (the RuleSet editor's style). */
     choice?: string;
+    /** Messages run one after the other: each write computes from the text the previous one left. */
+    queue: Promise<void>;
+    /** Number of the latest render; an older one that finishes later is dropped. */
+    renderSeq: number;
 }
 
 /** A message from the webview. */
@@ -78,9 +82,10 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
         return false;
     }
 
-    /** Open the editor for a document of this kind: the given one, the one at the cursor, or a picked one. */
-    async open(target?: Pick<LSPDocument, 'file' | 'kind' | 'name'>): Promise<void> {
-        const doc = target ?? this.resolveActive() ?? (await this.pick());
+    /** Open the editor for a document of this kind: the given one, one in the given file, the one at the cursor, or a picked one. */
+    async open(target?: Pick<LSPDocument, 'file' | 'kind' | 'name'> | vscode.Uri): Promise<void> {
+        const doc = target instanceof vscode.Uri ? await this.firstIn(target)
+            : target ?? this.resolveActive() ?? (await this.pick());
         if (!doc) { return; }
         if (doc.kind !== this.kind) {
             vscode.window.showInformationMessage(`Bino: ${doc.name} is a ${doc.kind}, not a ${this.kind}.`);
@@ -99,18 +104,23 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
     }
 
     resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): void {
-        const session: EditorSession = { document, panel, suppressForwardSync: false };
+        const session: EditorSession = { document, panel, suppressForwardSync: false, queue: Promise.resolve(), renderSeq: 0 };
         this.sessions.add(session);
         panel.webview.options = { enableScripts: true };
         panel.webview.html = this.html(getNonce());
 
         const listeners = [
-            panel.webview.onDidReceiveMessage(msg => this.handleMessage(session, msg)),
+            panel.webview.onDidReceiveMessage(msg => {
+                session.queue = session.queue.then(() => this.handleMessage(session, msg)).catch(err => {
+                    vscode.window.showErrorMessage(`Bino: ${err instanceof Error ? err.message : String(err)}`);
+                });
+            }),
             vscode.workspace.onDidChangeTextDocument(e => {
-                if (e.document.uri.toString() !== document.uri.toString()) { return; }
+                if (e.contentChanges.length === 0 || e.document.languageId !== 'yaml') { return; }
+                // Our own file at once; other files can change what is inherited or who uses it.
+                const own = e.document.uri.toString() === document.uri.toString();
                 if (session.refreshTimer) { clearTimeout(session.refreshTimer); }
-                // Our own edits re-render too, but the page keeps its focus: it only patches values.
-                session.refreshTimer = setTimeout(() => { void this.render(session); }, 300);
+                session.refreshTimer = setTimeout(() => { void this.render(session); }, own ? 300 : 1000);
             }),
         ];
         panel.onDidDispose(() => {
@@ -131,6 +141,7 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
 
     /** Push the state of the shown document to the page. */
     protected async render(s: EditorSession): Promise<void> {
+        const seq = ++s.renderSeq;
         const docs = contentDocs(s.document.getText(), this.kind);
         const doc = docs.find(d => d.name === s.target) ?? docs[0];
         s.target = doc?.name;
@@ -139,6 +150,7 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
             return;
         }
         const state = await this.buildState(s, doc, docs);
+        if (seq !== s.renderSeq) { return; }
         void s.panel.webview.postMessage({
             type: 'state',
             docs: docs.map(d => d.name),
@@ -201,9 +213,15 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
     protected async removeContent(s: EditorSession, paths: string[][]): Promise<boolean> {
         const doc = this.current(s);
         if (!doc || typeof doc.content === 'string') { return false; }
-        const cut = paths
-            .filter(p => Array.isArray(p) && p.length > 0)
-            .map(p => `spec.content.${joinPath(removalPath(doc.content, p))}`);
+        // One path after the other on a copy, so parents left empty by several removals go too.
+        const content = JSON.parse(JSON.stringify(doc.content ?? {})) as unknown;
+        const cut: string[] = [];
+        for (const p of paths.filter(p => Array.isArray(p) && p.length > 0)) {
+            if (getIn(content, p) === undefined) { continue; }
+            const removed = removalPath(content, p);
+            deleteIn(content, removed);
+            cut.push(`spec.content.${joinPath(removed)}`);
+        }
         if (cut.length === 0) { return false; }
         return this.apply(s, this.authoring.remove({ file: s.document.uri.fsPath, position: doc.position, paths: [...new Set(cut)] }));
     }
@@ -242,14 +260,14 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
     private async openUsedBy(s: EditorSession, entry: UsedByEntry | undefined): Promise<void> {
         if (!entry) { return; }
         s.previewTarget = entry;
-        await this.preview.previewArtefactEmbedded({ kind: entry.kind, name: entry.name, file: entry.file, position: entry.position });
+        await this.preview.previewArtefactEmbedded({ kind: entry.kind, name: entry.name, file: entry.file, position: entry.position }, true);
     }
 
     /** After an edit, re-show the picked manifest; the preview reads the unsaved buffer. */
     private reloadPreview(s: EditorSession): void {
         const target = s.previewTarget;
         if (!target || !this.preview.isEmbeddedPreviewOpen()) { return; }
-        void this.preview.previewArtefactEmbedded({ kind: target.kind, name: target.name, file: target.file, position: target.position });
+        void this.preview.previewArtefactEmbedded({ kind: target.kind, name: target.name, file: target.file, position: target.position }, true);
     }
 
     /** The top-level manifests that reference the shown document, from the language server. */
@@ -268,7 +286,11 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
             const file = loc.uri.fsPath;
             if (!texts.has(file)) {
                 const open = vscode.workspace.textDocuments.find(d => d.uri.fsPath === file);
-                texts.set(file, open ? open.getText() : Buffer.from(await vscode.workspace.fs.readFile(loc.uri)).toString('utf8'));
+                try {
+                    texts.set(file, open ? open.getText() : Buffer.from(await vscode.workspace.fs.readFile(loc.uri)).toString('utf8'));
+                } catch {
+                    continue;
+                }
             }
             const owner = topLevelDocAt(texts.get(file)!, offsetOf(texts.get(file)!, loc.range.start));
             if (!owner || owner.kind === this.kind) { continue; }
@@ -276,6 +298,15 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
             entries.push({ ...owner, file, line: loc.range.start.line });
         }
         return entries.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+    }
+
+    /** The document of this kind at the cursor of the file, or its first one. */
+    private async firstIn(uri: vscode.Uri): Promise<Pick<LSPDocument, 'file' | 'kind' | 'name'> | undefined> {
+        const active = vscode.window.activeTextEditor;
+        if (active?.document.uri.toString() === uri.toString()) { return this.resolveActive(); }
+        const text = (await vscode.workspace.openTextDocument(uri)).getText();
+        const doc = contentDocs(text, this.kind)[0];
+        return doc ? { file: uri.fsPath, kind: this.kind, name: doc.name } : undefined;
     }
 
     private resolveActive(): Pick<LSPDocument, 'file' | 'kind' | 'name'> | undefined {
@@ -298,6 +329,12 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
         });
         return picked?.doc;
     }
+}
+
+/** Delete the key at a path of a plain object, in place. */
+function deleteIn(root: unknown, path: string[]): void {
+    const parent = getIn(root, path.slice(0, -1));
+    if (isObject(parent)) { delete parent[path[path.length - 1]]; }
 }
 
 /** Content-relative key path as the dotted path of the edit helper. */

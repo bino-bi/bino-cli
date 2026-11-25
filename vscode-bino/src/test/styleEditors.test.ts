@@ -20,6 +20,16 @@ suite('style editor model', () => {
         assert.strictEqual(inheritedValue(['global', 'nothing'], 'corporate', def), undefined);
     });
 
+    test('an object of _default is merged over the engine object it overrides', () => {
+        const def = { 'bn-chart-time': { barStyles: { ac: { fill: '#ff0000' } } } };
+        const got = inheritedValue(['bn-chart-time', 'barStyles'], 'corporate', def);
+        assert.strictEqual(got?.source, '_default');
+        const bars = got?.value as Record<string, Record<string, unknown>>;
+        assert.strictEqual(bars.ac.fill, '#ff0000');
+        assert.strictEqual(bars.ac.stroke, getIn(SYSTEM_STYLE, ['bn-chart-time', 'barStyles', 'ac', 'stroke']));
+        assert.strictEqual(bars.fc.fillpattern, 'hatched');
+    });
+
     test('clearing the last key of a section removes the section, never the content', () => {
         const content = { global: { fontColor: '#111111' }, 'bn-chart-time': { barStyles: { ac: { fill: '#000000' } }, padding: { top: 1 } } };
         assert.deepStrictEqual(removalPath(content, ['global', 'fontColor']), ['global']);
