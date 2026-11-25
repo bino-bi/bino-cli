@@ -227,21 +227,26 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				return RuntimeError(err)
 			}
 
-			// Exit once no SSE client and no MCP session has been attached for
-			// defaultInactivityTimeout, so a daemon nobody uses does not linger.
-			go watchIdle(serverCtx, 30*time.Second, defaultInactivityTimeout, func() int {
-				active := server.ClientCount()
-				if mcpActive != nil {
-					active += int(mcpActive())
-				}
-				return active
-			}, func() {
-				logger.Infof("No active clients for %v, shutting down", defaultInactivityTimeout)
-				server.BroadcastEvent("shutdown", map[string]string{
-					"reason": "inactivity timeout",
+			// A read-only daemon is started and stopped by its host, which
+			// may call it with short stateless requests that the idle check
+			// never sees; only an editor's daemon exits on its own.
+			if !readOnly {
+				// Exit once no SSE client and no MCP session has been attached for
+				// defaultInactivityTimeout, so a daemon nobody uses does not linger.
+				go watchIdle(serverCtx, 30*time.Second, defaultInactivityTimeout, func() int {
+					active := server.ClientCount()
+					if mcpActive != nil {
+						active += int(mcpActive())
+					}
+					return active
+				}, func() {
+					logger.Infof("No active clients for %v, shutting down", defaultInactivityTimeout)
+					server.BroadcastEvent("shutdown", map[string]string{
+						"reason": "inactivity timeout",
+					})
+					server.RequestShutdown()
 				})
-				server.RequestShutdown()
-			})
+			}
 
 			// Start HTTP server in background
 			serverErrCh := make(chan error, 1)
