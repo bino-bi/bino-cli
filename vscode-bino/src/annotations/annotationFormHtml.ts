@@ -185,7 +185,7 @@ const SCRIPT = `
             keepFocus(draw);
         } else if (msg.type === 'canPick') {
             state.canPick = msg.on;
-            if (!msg.on) waiting = undefined;
+            if (!msg.on && waiting) { waiting = undefined; post({ type: 'waiting' }); }
             keepFocus(draw);
         }
     });

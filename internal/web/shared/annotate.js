@@ -57,15 +57,30 @@ export function pointOnPath(inner) {
   return { point: null, stopped: false };
 }
 
+const isSlot = (el) => el.hasAttribute('data-bino-kind') && !!(el.getAttribute('data-bino-ref') || el.getAttribute('data-bino-name'));
+// a Grid or Tree holds components that cannot be targets themselves
+const isHolder = (el) => el.localName === 'bn-grid' || el.localName === 'bn-tree';
+
 /**
- * The component a path is in: the nearest Grid child or Tree node that can be
- * a target, else the nearest component slot. Elements inside it come first in
- * `inner`, with the engine host of the component among them.
+ * The component a path is in, as an annotation can name it. A Grid child or
+ * Tree node says so itself (data-bino-target-kind). Anything else inside a
+ * Grid or Tree, a card in a cell for example, cannot be a target: the click
+ * then names the Grid or Tree, or the SmallMultiple whose panel it is in.
+ * Elements inside the component come first in `inner`, with the engine host
+ * of the component among them.
  */
 export function locate(path) {
   const els = path.filter(isElement);
-  const at = els.findIndex((el) => el.hasAttribute('data-bino-target-kind') || (el.hasAttribute('data-bino-kind') && (el.getAttribute('data-bino-ref') || el.getAttribute('data-bino-name'))));
-  if (at < 0) return null;
+  let at = els.findIndex((el) => el.hasAttribute('data-bino-target-kind'));
+  if (at < 0) {
+    at = els.findIndex(isSlot);
+    if (at < 0) return null;
+    const holder = els.findIndex((el, i) => i > at && isHolder(el));
+    if (holder >= 0) {
+      const outer = els.findIndex((el, i) => i > holder && isSlot(el));
+      if (outer >= 0) at = outer;
+    }
+  }
   const slot = els[at];
   const byTarget = slot.hasAttribute('data-bino-target-kind');
   const kind = byTarget ? slot.getAttribute('data-bino-target-kind') : slot.getAttribute('data-bino-kind');
@@ -89,14 +104,13 @@ export function locate(path) {
 /**
  * The smallest point of a layout state whose box holds a click, or null.
  * The fallback for marks that cover the elements with the keys, such as the
- * overlay line of a time chart over its bars. Boxes are in the host's own
- * layout px, so a scaled page is measured back to them.
+ * overlay line of a time chart over its bars.
  */
 export function pointAtCursor(state, host, x, y) {
+  // the engine measures its boxes from the host's screen box, so they are screen px too
   const origin = host.getBoundingClientRect();
-  const scale = host.offsetWidth ? origin.width / host.offsetWidth : 1;
-  const lx = (x - origin.left) / scale;
-  const ly = (y - origin.top) / scale;
+  const lx = x - origin.left;
+  const ly = y - origin.top;
   let found = null;
   let smallest = Infinity;
   for (const entry of (state && state.elements) || []) {
@@ -200,14 +214,19 @@ export function install(win) {
     const path = e.composedPath();
     const found = locate(path);
     if (!found) { hide(); return; }
-    // the data point under the cursor if there is one, else the component
-    const els = path.filter(isElement);
-    const mark = found.inner.find((el) => el.hasAttribute('data-bn-part'));
-    show(mark || els[els.indexOf(found.slot)]);
+    // the data point a click would pick if there is one, else the component
+    let mark = null;
+    for (const el of found.inner) {
+      if (el.hasAttribute('data-bn-part')) { mark = el; break; }
+      if (el.localName === 'td' || el.localName === 'th') break;
+    }
+    show(mark || found.slot);
   }, true);
 
   doc.addEventListener('click', (e) => {
     if (!on || e.metaKey || e.ctrlKey || e.button !== 0) return;
+    // the preview's own toolbar and anything outside a component keep their clicks
+    if (!locate(e.composedPath())) return;
     e.preventDefault();
     e.stopPropagation();
     const id = ++latest;

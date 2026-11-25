@@ -42,9 +42,11 @@ const syntheticFrame = `<!doctype html><html><head>%ANNOTATE%</head><body style=
 <div data-bino-kind="SmallMultiple" data-bino-name="by_city">
   <div data-bino-panel="Berlin"><div id="panel" data-bn-date="2024-01-01" data-bn-scenario="pl1" data-bn-part="label">panel</div></div>
 </div>
-<div data-bino-kind="Grid" data-bino-name="grid">
+<div data-bino-kind="Grid" data-bino-name="grid"><bn-grid>
   <div data-bino-target-kind="Text" data-bino-target-name="note"><span id="note">note</span></div>
-</div>
+  <div><div data-bino-kind="Table" data-bino-name="in_card"><span id="incard" data-bn-category="x" data-bn-part="element">card</span></div></div>
+</bn-grid></div>
+<button id="chrome">toolbar</button>
 <script>
 // a chart with one keyed bar in its shadow root and a line on top that has no key
 customElements.define('bn-chart-time', class extends HTMLElement {
@@ -199,6 +201,8 @@ func TestIntegration_AnnotateModeSynthetic(t *testing.T) {
 			`{"kind":"SmallMultiple","name":"by_city","panel":"Berlin","point":{"date":"2024-01-01","part":"label","scenario":"pl1"},"type":"bino:pickPoint"}`},
 		{"Grid child names its own target", `d => d.getElementById('note')`, 0,
 			`{"kind":"Text","name":"note","type":"bino:pickPoint"}`},
+		{"a card in a Grid cell is no target: the Grid is", `d => d.getElementById('incard')`, 0,
+			`{"kind":"Grid","name":"grid","type":"bino:pickPoint"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -210,9 +214,25 @@ func TestIntegration_AnnotateModeSynthetic(t *testing.T) {
 		})
 	}
 
-	// Ctrl+click keeps revealing the source, also in annotate mode
+	// a click outside every component keeps its meaning and picks nothing
+	if pick := clickIn(t, ctx, `d => { d.getElementById('chrome').onclick = () => { d.defaultView.toolbarClicked = true; }; return d.getElementById('chrome'); }`, 0, 0, false); pick != nil {
+		t.Fatalf("click on the toolbar posted %v", pick)
+	}
+	clicked, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.getElementById('f').contentWindow.toolbarClicked === true`))
+	if err != nil || !clicked {
+		t.Fatalf("the toolbar button did not get its click (err %v)", err)
+	}
+
+	// Ctrl+click keeps revealing the source, also in annotate mode, and picks nothing
+	before := len(messages(t, ctx))
 	if pick := clickIn(t, ctx, `d => d.getElementById('cell')`, 0, 0, true); pick == nil || pick["type"] != "bino:revealSource" {
 		t.Fatalf("Ctrl+click = %v, want bino:revealSource", pick)
+	}
+	time.Sleep(300 * time.Millisecond)
+	for _, m := range messages(t, ctx)[before:] {
+		if m["type"] == "bino:pickPoint" {
+			t.Fatalf("Ctrl+click also picked %v", m)
+		}
 	}
 }
 

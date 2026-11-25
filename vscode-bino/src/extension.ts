@@ -554,6 +554,13 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
             if (form.isOpen && waitingEnd) {
                 form.pick(waitingEnd, target);
                 waitingEnd = undefined;
+            } else if (form.isOpen) {
+                // the open form may hold input that is not saved: ask before it goes
+                void vscode.window.showInformationMessage(`Bino: annotate ${pick.kind} ${pick.name}?`, 'New annotation', 'Use as target of the open form')
+                    .then(choice => {
+                        if (choice === 'New annotation') { void form.open(undefined, { target }); }
+                        if (choice === 'Use as target of the open form') { form.pick('target', target); }
+                    });
             } else {
                 void form.open(undefined, { target });
             }

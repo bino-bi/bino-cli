@@ -824,7 +824,8 @@ ${annotateScript()}
      */
     private handleAnnotateMessage(panel: vscode.WebviewPanel, msg: { type?: string; [k: string]: unknown }): void {
         if (msg.type === 'bino:capabilities') {
-            if (!this.annotating.has(panel)) { this.annotating.set(panel, false); }
+            // a new page in the webview starts with the mode its webview has, which a new webview has off
+            this.annotating.set(panel, msg.on === true);
             this.annotateEmitter.fire(this.isAnnotating());
         } else if (msg.type === 'bino:annotateState') {
             this.annotating.set(panel, msg.on === true);
@@ -1196,7 +1197,7 @@ function annotateScript(): string {
         function annotateCapable(msg) {
             if (!msg.annotate) return;
             annotateBtn.hidden = false;
-            vscode.postMessage({ type: 'bino:capabilities', annotate: msg.annotate });
+            vscode.postMessage({ type: 'bino:capabilities', annotate: msg.annotate, on: annotateOn });
             sendAnnotate();
         }
         annotateBtn.addEventListener('click', () => {
