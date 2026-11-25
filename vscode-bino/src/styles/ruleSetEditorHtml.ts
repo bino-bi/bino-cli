@@ -121,6 +121,9 @@ const SCRIPT = `
                 const moved = order.splice(dragFrom, 1)[0];
                 order.splice(i, 0, moved);
                 post({ type: 'reorder', order: order });
+                // show the new order at once; the next drag starts from it
+                state.rows = order.map(p => state.rows.find(r => r.prefix === p));
+                keepFocus(draw);
             });
             return tr;
         });

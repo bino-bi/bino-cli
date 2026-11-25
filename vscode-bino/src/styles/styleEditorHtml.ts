@@ -141,10 +141,17 @@ const SCRIPT = `
         return svg;
     }
 
+    // Whole-value writes update the shown value at once, so a second click before the
+    // document comes back builds on the first one.
+    function writeWhole(node, next, empty) {
+        if (empty) { clear(node.path); node.own = undefined; } else { edit(node.path, next); node.own = next; }
+        keepFocus(draw);
+    }
+
     function list(node) {
         const own = node.own;
         const items = own || [];
-        const write = next => next.length ? edit(node.path, next) : clear(node.path);
+        const write = next => writeWhole(node, next, next.length === 0);
         const rows = items.map((v, i) => h('div', { class: 'list-item' }, [
             node.colors ? colorInput(key(node.path) + '/' + i, v, '', nv => { const next = items.slice(); next[i] = nv; write(next.filter(x => x !== '')); })
                 : (function () { const inp = h('input', { 'data-key': key(node.path) + '/' + i, value: show(v) }); inp.addEventListener('change', () => { const next = items.slice(); next[i] = inp.value; write(next.filter(x => x !== '')); }); return inp; })(),
@@ -164,7 +171,7 @@ const SCRIPT = `
 
     function map(node) {
         const own = node.own || {};
-        const write = next => Object.keys(next).length ? edit(node.path, next) : clear(node.path);
+        const write = next => writeWhole(node, next, Object.keys(next).length === 0);
         const rows = Object.entries(own).map(([name, value]) => {
             const nameInput = h('input', { 'data-key': key(node.path) + '/' + name + '/name', value: name, size: 12 });
             nameInput.addEventListener('change', () => {

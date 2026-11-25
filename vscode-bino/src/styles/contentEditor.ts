@@ -111,9 +111,12 @@ export abstract class ContentEditorProvider implements vscode.CustomTextEditorPr
 
         const listeners = [
             panel.webview.onDidReceiveMessage(msg => {
-                session.queue = session.queue.then(() => this.handleMessage(session, msg)).catch(err => {
+                const run = () => this.handleMessage(session, msg).catch(err => {
                     vscode.window.showErrorMessage(`Bino: ${err instanceof Error ? err.message : String(err)}`);
                 });
+                // Navigation can wait for a preview server: it must not hold up writes.
+                if (msg?.type === 'openUsedBy' || msg?.type === 'revealSource') { void run(); return; }
+                session.queue = session.queue.then(run);
             }),
             vscode.workspace.onDidChangeTextDocument(e => {
                 if (e.contentChanges.length === 0 || e.document.languageId !== 'yaml') { return; }
