@@ -275,6 +275,11 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 		return PresentationResult{}, diags, err
 	}
 
+	ruleSets, err := collectRuleSets(docs)
+	if err != nil {
+		return PresentationResult{}, diags, err
+	}
+
 	fontAssets, assetComponents, localAssets, err := collectAssets(docs)
 	if err != nil {
 		return PresentationResult{}, diags, err
@@ -289,6 +294,9 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
 		segments = append(segments, renderedStyles...)
+	}
+	if renderedRuleSets := renderRuleSets(ruleSets); len(renderedRuleSets) > 0 {
+		segments = append(segments, renderedRuleSets...)
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
@@ -435,6 +443,11 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	if err != nil {
 		return PresentationFrameResult{}, diags, err
 	}
+
+	ruleSets, err := collectRuleSets(docs)
+	if err != nil {
+		return PresentationFrameResult{}, diags, err
+	}
 	fontAssets, assetComponents, localAssets, err := collectAssets(docs)
 	if err != nil {
 		return PresentationFrameResult{}, diags, err
@@ -448,6 +461,9 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
 		segments = append(segments, renderedStyles...)
+	}
+	if renderedRuleSets := renderRuleSets(ruleSets); len(renderedRuleSets) > 0 {
+		segments = append(segments, renderedRuleSets...)
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)

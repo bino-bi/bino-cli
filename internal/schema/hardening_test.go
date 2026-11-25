@@ -510,6 +510,35 @@ spec:
 			wantErr: true,
 		},
 		{
+			name: "RuleSet scenario colorIndex outside the four slots rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec:
+  content:
+    scenarios:
+      pl:
+        colorIndex: 25
+`,
+			wantErr: true,
+		},
+		{
+			name: "RuleSet fallback colorIndex outside the four slots rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec:
+  content:
+    fallback:
+      colorIndex: 40
+`,
+			wantErr: true,
+		},
+		{
 			name: "RuleSet unknown content key rejected",
 			yaml: `
 apiVersion: bino.bi/v1alpha1

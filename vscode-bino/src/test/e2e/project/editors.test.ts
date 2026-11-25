@@ -72,4 +72,22 @@ suite('e2e: designer and tree editor', () => {
             assert.strictEqual(reopened.input.viewType, viewType);
         });
     }
+
+    test('reorder moves a layout child in the open buffer', async function () {
+        needBino(this);
+        const uri = vscode.Uri.file(path.join(workspaceRoot(), 'report.yaml'));
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+
+        const appended = await authoring.append({
+            file: uri.fsPath, position: 2, path: 'spec.children',
+            value: { kind: 'Text', metadata: { name: 'second' }, spec: { value: 'Second text' } },
+        });
+        assert.deepStrictEqual(appended, { ok: true, applied: 'workspaceEdit' });
+
+        const result = await authoring.reorder({ file: uri.fsPath, position: 2, path: 'spec.children', from: 1, to: 0 });
+        assert.deepStrictEqual(result, { ok: true, applied: 'workspaceEdit' });
+        const text = doc.getText();
+        assert.ok(text.indexOf('name: second') < text.indexOf('name: greeting'), text);
+    });
 });

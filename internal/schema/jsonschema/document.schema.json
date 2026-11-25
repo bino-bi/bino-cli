@@ -2543,7 +2543,8 @@
             },
             "colorIndex": {
               "type": "number",
-              "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined). Any other value counts as 10."
+              "enum": [10, 20, 30, 50],
+              "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined)."
             },
             "sortIndex": {
               "type": "number",
@@ -2565,7 +2566,8 @@
         },
         "colorIndex": {
           "type": "number",
-          "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined). Any other value counts as 10."
+          "enum": [10, 20, 30, 50],
+          "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined)."
         },
         "sortIndex": {
           "type": "number",

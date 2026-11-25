@@ -70,6 +70,19 @@ export interface AppendRequest {
 }
 
 /**
+ * A reorder request: move the element at index `from` of the sequence at
+ * `path` to index `to` (both 0-based, `to` is the index after the move).
+ */
+export interface ReorderRequest {
+    file: string;
+    position?: number;
+    /** Dotted path of the sequence, e.g. "spec.children". */
+    path: string;
+    from: number;
+    to: number;
+}
+
+/**
  * The single extension-side authoring client every Design surface mutates
  * manifests through. It computes the rewritten manifest via the one Go fidelity
  * engine (`bino lsp-helper edit`, which preserves comments and key order) and
@@ -102,6 +115,11 @@ export class AuthoringClient {
     /** Append an element to the sequence at a dotted path (creating it if absent). */
     async append(req: AppendRequest): Promise<EditResult> {
         return this.apply(req.file, req.position, { op: 'append', path: req.path, value: req.value });
+    }
+
+    /** Move one element within the sequence at a dotted path. */
+    async reorder(req: ReorderRequest): Promise<EditResult> {
+        return this.apply(req.file, req.position, { op: 'reorder', path: req.path, from: req.from, to: req.to });
     }
 
     /**
