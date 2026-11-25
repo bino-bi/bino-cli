@@ -63,6 +63,24 @@
           { "filenamePattern": "*.yml" }
         ],
         "priority": "option"
+      },
+      {
+        "viewType": "bino.styleEditor",
+        "displayName": "Bino ComponentStyle Editor",
+        "selector": [
+          { "filenamePattern": "*.yaml" },
+          { "filenamePattern": "*.yml" }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "bino.ruleSetEditor",
+        "displayName": "Bino RuleSet Editor",
+        "selector": [
+          { "filenamePattern": "*.yaml" },
+          { "filenamePattern": "*.yml" }
+        ],
+        "priority": "option"
       }
     ],
     "snippets": [
@@ -364,6 +382,18 @@
         "icon": "$(list-tree)"
       },
       {
+        "command": "bino.openStyleEditor",
+        "title": "Open ComponentStyle Editor",
+        "category": "Bino",
+        "icon": "$(paintcan)"
+      },
+      {
+        "command": "bino.openRuleSetEditor",
+        "title": "Open RuleSet Editor",
+        "category": "Bino",
+        "icon": "$(checklist)"
+      },
+      {
         "command": "bino.openDesigner",
         "title": "Open Designer",
         "category": "Bino",
@@ -469,6 +499,14 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "bino.openStyleEditor",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.openRuleSetEditor",
+          "when": "bino.projectDetected"
+        },
         {
           "command": "bino.registrySearch",
           "when": "bino.projectDetected"
@@ -580,6 +618,16 @@
       ],
       "view/item/context": [
         {
+          "command": "bino.openStyleEditor",
+          "when": "view == binoDocuments && viewItem == binoDocumentComponentStyle",
+          "group": "preview@2"
+        },
+        {
+          "command": "bino.openRuleSetEditor",
+          "when": "view == binoDocuments && viewItem == binoDocumentRuleSet",
+          "group": "preview@2"
+        },
+        {
           "command": "bino.previewArtefactEmbedded",
           "when": "view == binoDocuments && viewItem == binoArtefact",
           "group": "preview@1"
@@ -591,22 +639,22 @@
         },
         {
           "command": "bino.openFirstProblem",
-          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)/",
           "group": "navigation"
         },
         {
           "command": "bino.showGraphForItem",
-          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)/",
           "group": "graph@1"
         },
         {
           "command": "bino.showDependenciesForItem",
-          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)/",
           "group": "graph@2"
         },
         {
           "command": "bino.showDependentsForItem",
-          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)/",
           "group": "graph@3"
         },
         {
@@ -644,6 +692,16 @@
         {
           "command": "bino.openTreeEditor",
           "when": "editorLangId == yaml && bino.projectDetected",
+          "group": "navigation"
+        },
+        {
+          "command": "bino.openStyleEditor",
+          "when": "editorLangId == yaml && bino.projectDetected && bino.activeHasComponentStyle",
+          "group": "navigation"
+        },
+        {
+          "command": "bino.openRuleSetEditor",
+          "when": "editorLangId == yaml && bino.projectDetected && bino.activeHasRuleSet",
           "group": "navigation"
         }
       ],

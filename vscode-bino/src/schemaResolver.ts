@@ -204,6 +204,19 @@ export class SchemaResolver {
         return fields;
     }
 
+    /**
+     * The fields of a named `$defs` entry, with paths starting at `basePath`.
+     * Used for content objects that a kind's spec only reaches through a
+     * oneOf (the content of ComponentStyle and RuleSet).
+     */
+    getFieldsForDef(defName: string, basePath: string[] = []): FieldDef[] {
+        this.sync();
+        const def = this.defs[defName];
+        if (!def) { return []; }
+        this.recursionGuard.clear();
+        return this.resolveObjectFields(def as Record<string, unknown>, basePath, defName);
+    }
+
     /** Get the full document-level fields (apiVersion, kind, metadata, spec) */
     getDocumentFields(): FieldDef[] {
         this.sync();

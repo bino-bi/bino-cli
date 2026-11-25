@@ -458,6 +458,47 @@ files, so the text editor stays the default. Open it with:
   quick-fixes and Add Element), so the rest of the file (comments,
   formatting, unrelated fields) is left untouched.
 
+### 9.1 ComponentStyle editor
+
+**Bino ComponentStyle Editor** edits the `spec.content` of a
+[ComponentStyle](/reference/component-style/). Open it with **Bino: Open
+ComponentStyle Editor** (a button in the editor title bar of a YAML file that
+holds a ComponentStyle), **Reopen Editor With...**, or the Documents view
+context menu.
+
+- One tab per section (`global`, `bn-table`, `bn-chart-time`, ...). It offers
+  only the keys the template engine knows.
+- An empty field shows the value it inherits, with its source: the style
+  `_default`, or the engine default. A named style inherits from `_default`
+  first.
+- Clearing a field removes its key, so the YAML holds only your overrides.
+- The SVG style groups (`barStyles`, `axisStyles`, `varianceStyles`) are a
+  table per slot with a swatch of the resulting look. Colour lists and the
+  named annotation colours have add, remove and reorder buttons.
+- **Used by** lists the manifests whose `selectedStyle` names the style. Click
+  one to open it in the embedded preview. The preview follows each edit, also
+  before you save.
+- When `spec.content` is a JSON string, the editor offers **Convert to YAML
+  object** and changes nothing until then.
+
+### 9.2 RuleSet editor
+
+**Bino RuleSet Editor** edits a [RuleSet](/reference/ruleset/) as a table.
+Open it like the ComponentStyle editor (**Bino: Open RuleSet Editor**).
+
+- One row per scenario prefix (`ac`, `fc`, `pl`, `pp`, and other prefixes of
+  the file), then the fallback row. Grey values are the engine defaults; only
+  changed cells are written.
+- `colorIndex` is shown as the four looks (solid, light, hatched, outlined),
+  drawn in the colours of a ComponentStyle you pick at the top.
+- Drag a row to change the column order. The editor writes `sortIndex` in
+  steps of 100, and the variance order that follows from it is shown next to
+  it.
+- **Used by** works as in the ComponentStyle editor, through `ruleset`.
+
+All edits go through the same path as the Designer, so undo, comments and
+schema validation work as in the text editor.
+
 ---
 
 ## 10. DataSource Wizard

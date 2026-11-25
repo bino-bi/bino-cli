@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 const DESIGNER = 'bino.designer';
 const TREE = 'bino.treeEditor';
+const STYLE = 'bino.styleEditor';
+const RULESET = 'bino.ruleSetEditor';
 
 function fixtureUri(): vscode.Uri {
     const folder = vscode.workspace.workspaceFolders?.[0];
@@ -87,5 +89,44 @@ suite('custom editors', () => {
         await vscode.commands.executeCommand('undo');
         assert.strictEqual(doc.getText(), before);
         await vscode.commands.executeCommand('workbench.action.files.revert');
+    });
+
+    for (const viewType of [STYLE, RULESET]) {
+        test(`${viewType} opens, reopens after close, and its document edits can be undone`, async () => {
+            const folder = vscode.workspace.workspaceFolders?.[0];
+            assert.ok(folder);
+            const uri = vscode.Uri.joinPath(folder.uri, 'style-rules.yaml');
+            await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
+            const tab = await waitForCustomTab(viewType, uri);
+            await vscode.window.tabGroups.close(tab);
+            assert.strictEqual(findCustomTab(viewType, uri), undefined);
+            await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
+            await waitForCustomTab(viewType, uri);
+
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const before = doc.getText();
+            const edit = new vscode.WorkspaceEdit();
+            edit.insert(uri, new vscode.Position(0, 0), '# note\n');
+            assert.ok(await vscode.workspace.applyEdit(edit));
+            await vscode.commands.executeCommand('undo');
+            assert.strictEqual(doc.getText(), before);
+            await vscode.commands.executeCommand('workbench.action.files.revert');
+        });
+    }
+
+    test('the open commands open the editor for the document at the cursor', async () => {
+        const folder = vscode.workspace.workspaceFolders?.[0];
+        assert.ok(folder);
+        const uri = vscode.Uri.joinPath(folder.uri, 'style-rules.yaml');
+        const editor = await vscode.window.showTextDocument(uri);
+        const pos = editor.document.positionAt(editor.document.getText().indexOf('kind: RuleSet'));
+        editor.selection = new vscode.Selection(pos, pos);
+        await vscode.commands.executeCommand('bino.openRuleSetEditor');
+        await waitForCustomTab(RULESET, uri);
+
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await vscode.window.showTextDocument(uri);
+        await vscode.commands.executeCommand('bino.openStyleEditor');
+        await waitForCustomTab(STYLE, uri);
     });
 });

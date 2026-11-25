@@ -1,0 +1,526 @@
+{
+  "engineVersion": "v1.0.0-next.87",
+  "style": {
+    "global": {
+      "fontFamily": "'Noto Sans', sans-serif",
+      "fontSizePx": 13.3333,
+      "fontColor": "#000000",
+      "fontBackgroundColor": "#ffffff"
+    },
+    "bn-text": {},
+    "bn-chart-time": {
+      "scaleFactors": {
+        "scenarioOffset": 0.3,
+        "scenarioLabelToColumn": 0.3,
+        "labelToColumn": 0.3,
+        "labelToAxis": 0.3,
+        "needleWidth": 0.3,
+        "needleHeadWidth": 0.6,
+        "columnWidth": 2,
+        "varianceAxisLineWidth": 0.3,
+        "axisLineWidth": 0.1,
+        "auxiliaryLineWidth": 0.1,
+        "scenarioLineWidth": 0.2,
+        "markerWidth": 0.7,
+        "markerOffset": 0,
+        "categoryWidth": 3,
+        "axisTickLength": 0.3
+      },
+      "axisStyles": {
+        "ac": {
+          "stroke": "#121212",
+          "fill": "#121212",
+          "width": 0.1
+        },
+        "fc": {
+          "stroke": "#121212",
+          "fill": "#ffffff",
+          "width": 0.1,
+          "dasharray": "10 5 5 5"
+        },
+        "pp": {
+          "stroke": "#606060",
+          "fill": "#606060",
+          "width": 0.1
+        },
+        "pl": {
+          "stroke": "#121212",
+          "fill": "#ffffff",
+          "width": 0.1
+        }
+      },
+      "barStyles": {
+        "ac": {
+          "stroke": "#404040",
+          "fill": "#404040",
+          "width": 0.1
+        },
+        "fc": {
+          "stroke": "#404040",
+          "fill": "#ffffff",
+          "width": 0.5,
+          "fillpattern": "hatched"
+        },
+        "pp": {
+          "stroke": "#A6A6A6",
+          "fill": "#A6A6A6",
+          "width": 0.1
+        },
+        "pl": {
+          "stroke": "#404040",
+          "fill": "#ffffff",
+          "width": 0.1
+        }
+      },
+      "varianceStyles": {
+        "pos": {
+          "stroke": "#008f96",
+          "fill": "#008f96",
+          "width": 0.1
+        },
+        "neg": {
+          "stroke": "#ff0000",
+          "fill": "#ff0000",
+          "width": 0.1
+        },
+        "neu": {
+          "stroke": "#808080",
+          "fill": "#808080",
+          "width": 0.1
+        }
+      },
+      "stackColors": [
+        "#000000",
+        "#c0c0c0",
+        "#808080"
+      ],
+      "padding": {
+        "top": 10,
+        "left": 10,
+        "right": 10,
+        "bottom": 10
+      }
+    },
+    "bn-chart-structure": {
+      "scaleFactors": {
+        "scenarioOffset": 0.3,
+        "scenarioLabelToBar": 0.1,
+        "labelToBar": 0.3,
+        "labelToAxis": 0.3,
+        "needleWidth": 0.3,
+        "needleHeadWidth": 0.6,
+        "barWidth": 1.2,
+        "varianceAxisLineWidth": 0.3,
+        "axisLineWidth": 0.1,
+        "auxiliaryLineWidth": 0.1,
+        "scenarioLineWidth": 0.2,
+        "markerWidth": 0.7,
+        "markerOffset": 0,
+        "categoryWidth": 1.9,
+        "axisTickLength": 0.3
+      },
+      "axisStyles": {
+        "ac": {
+          "stroke": "#121212",
+          "fill": "#121212",
+          "width": 0.1
+        },
+        "fc": {
+          "stroke": "#121212",
+          "fill": "#ffffff",
+          "width": 0.1,
+          "dasharray": "10 5 5 5"
+        },
+        "pp": {
+          "stroke": "#606060",
+          "fill": "#606060",
+          "width": 0.1
+        },
+        "pl": {
+          "stroke": "#121212",
+          "fill": "#ffffff",
+          "width": 0.1
+        }
+      },
+      "barStyles": {
+        "ac": {
+          "stroke": "#404040",
+          "fill": "#404040",
+          "width": 0.1
+        },
+        "fc": {
+          "stroke": "#404040",
+          "fill": "#ffffff",
+          "width": 0.5,
+          "fillpattern": "hatched"
+        },
+        "pp": {
+          "stroke": "#A6A6A6",
+          "fill": "#A6A6A6",
+          "width": 0.1
+        },
+        "pl": {
+          "stroke": "#404040",
+          "fill": "#ffffff",
+          "width": 0.1
+        }
+      },
+      "varianceStyles": {
+        "pos": {
+          "stroke": "#008f96",
+          "fill": "#008f96",
+          "width": 0.1
+        },
+        "neg": {
+          "stroke": "#ff0000",
+          "fill": "#ff0000",
+          "width": 0.1
+        },
+        "neu": {
+          "stroke": "#808080",
+          "fill": "#808080",
+          "width": 0.1
+        }
+      },
+      "stackColors": [
+        "#000000",
+        "#c0c0c0",
+        "#808080"
+      ],
+      "titleBold": false,
+      "padding": {
+        "top": 10,
+        "left": 10,
+        "right": 10,
+        "bottom": 10
+      }
+    },
+    "bn-chart-scatter": {
+      "scaleFactors": {
+        "pointRadius": 0.4,
+        "bubbleMaxRadius": 3.2,
+        "bubbleMinRadius": 0.35,
+        "axisTickLength": 0.35,
+        "labelToMark": 0.3,
+        "legendSwatch": 0.9,
+        "panelGap": 1.6,
+        "refLineWidth": 0.075,
+        "gridLineWidth": 0.075
+      },
+      "axisStyles": {
+        "ac": {
+          "stroke": "#A6A6A6",
+          "fill": "#A6A6A6",
+          "width": 1
+        },
+        "fc": {
+          "stroke": "#808080",
+          "fill": "#808080",
+          "width": 1
+        },
+        "pp": {
+          "stroke": "#D9D9D9",
+          "fill": "#D9D9D9",
+          "width": 1
+        },
+        "pl": {
+          "stroke": "#EFEFEF",
+          "fill": "#EFEFEF",
+          "width": 1
+        }
+      },
+      "seriesColors": [
+        "#404040",
+        "#F2C14E",
+        "#F07D00",
+        "#4E8FE0",
+        "#7FD6C2",
+        "#D97C7C"
+      ],
+      "markStyles": {
+        "stroke": "#ffffff",
+        "opacity": 1
+      },
+      "seriesNames": [],
+      "seriesFills": [],
+      "shareColors": [],
+      "padding": {
+        "top": 10,
+        "left": 10,
+        "right": 10,
+        "bottom": 10
+      }
+    },
+    "bn-chart-bubble": {
+      "scaleFactors": {
+        "pointRadius": 0.4,
+        "bubbleMaxRadius": 3.2,
+        "bubbleMinRadius": 0.35,
+        "axisTickLength": 0.35,
+        "labelToMark": 0.3,
+        "legendSwatch": 0.9,
+        "panelGap": 1.6,
+        "refLineWidth": 0.075,
+        "gridLineWidth": 0.075
+      },
+      "axisStyles": {
+        "ac": {
+          "stroke": "#A6A6A6",
+          "fill": "#A6A6A6",
+          "width": 1
+        },
+        "fc": {
+          "stroke": "#808080",
+          "fill": "#808080",
+          "width": 1
+        },
+        "pp": {
+          "stroke": "#D9D9D9",
+          "fill": "#D9D9D9",
+          "width": 1
+        },
+        "pl": {
+          "stroke": "#EFEFEF",
+          "fill": "#EFEFEF",
+          "width": 1
+        }
+      },
+      "seriesColors": [
+        "#404040",
+        "#F2C14E",
+        "#F07D00",
+        "#4E8FE0",
+        "#7FD6C2",
+        "#D97C7C"
+      ],
+      "markStyles": {
+        "stroke": "#ffffff",
+        "opacity": 1
+      },
+      "seriesNames": [],
+      "seriesFills": [],
+      "shareColors": [],
+      "padding": {
+        "top": 10,
+        "left": 10,
+        "right": 10,
+        "bottom": 10
+      }
+    },
+    "bn-chart-bullet": {
+      "scaleFactors": {
+        "rowHeight": 1.9,
+        "barHeight": 0.66,
+        "varianceHeight": 0.4,
+        "targetTickHeight": 1.1,
+        "targetLineWidth": 0.15,
+        "axisLineWidth": 0.075,
+        "labelToBar": 0.3,
+        "labelToAxis": 0.3,
+        "axisTickLength": 0.35,
+        "tickStripHeight": 1.2
+      },
+      "axisStyles": {
+        "ac": {
+          "stroke": "#121212",
+          "fill": "#121212",
+          "width": 0.1
+        },
+        "fc": {
+          "stroke": "#121212",
+          "fill": "#ffffff",
+          "width": 0.1,
+          "dasharray": "10 5 5 5"
+        },
+        "pp": {
+          "stroke": "#606060",
+          "fill": "#606060",
+          "width": 0.1
+        },
+        "pl": {
+          "stroke": "#121212",
+          "fill": "#ffffff",
+          "width": 0.1
+        }
+      },
+      "barStyles": {
+        "ac": {
+          "stroke": "#404040",
+          "fill": "#404040",
+          "width": 0.1
+        },
+        "fc": {
+          "stroke": "#404040",
+          "fill": "#ffffff",
+          "width": 0.5,
+          "dasharray": "4 3"
+        },
+        "pp": {
+          "stroke": "#A6A6A6",
+          "fill": "#A6A6A6",
+          "width": 0.1
+        },
+        "pl": {
+          "stroke": "#404040",
+          "fill": "#ffffff",
+          "width": 0.1
+        }
+      },
+      "varianceStyles": {
+        "pos": {
+          "stroke": "#008f96",
+          "fill": "#008f96",
+          "width": 0.1
+        },
+        "neg": {
+          "stroke": "#ff0000",
+          "fill": "#ff0000",
+          "width": 0.1
+        },
+        "neu": {
+          "stroke": "#808080",
+          "fill": "#808080",
+          "width": 0.1
+        }
+      },
+      "rangeColors": [
+        "#D9D9D9",
+        "#EFEFEF"
+      ],
+      "padding": {
+        "top": 10,
+        "left": 10,
+        "right": 10,
+        "bottom": 10
+      }
+    },
+    "bn-tree": {
+      "edgeColor": "#404040",
+      "edgeWidth": 1,
+      "operatorCircleRadius": 10,
+      "operatorFontSizeScale": 0.9,
+      "operatorColor": "#404040"
+    },
+    "bn-grid": {
+      "headerBackground": "transparent",
+      "borderColor": "#A6A6A6",
+      "borderWidth": 1,
+      "cellPadding": 4,
+      "cellBackground": "transparent",
+      "captionFontSize": 12,
+      "captionFontWeight": "bold",
+      "captionColor": "#000000",
+      "captionGap": 2
+    },
+    "bn-layout-card": {},
+    "bn-table": {},
+    "bn-annotation": {
+      "color": "#0070c0",
+      "colors": {
+        "negative": "#ff0000",
+        "positive": "#008f96"
+      },
+      "markerStyle": "filled"
+    }
+  },
+  "ruleSet": {
+    "scenarios": {
+      "ac": {
+        "name": "AC",
+        "colorIndex": 10,
+        "sortIndex": 400
+      },
+      "fc": {
+        "name": "FC",
+        "colorIndex": 30,
+        "sortIndex": 300
+      },
+      "pl": {
+        "name": "PL",
+        "colorIndex": 50,
+        "sortIndex": 200
+      },
+      "bu": {
+        "name": "BU",
+        "colorIndex": 50,
+        "sortIndex": 200
+      },
+      "pp": {
+        "name": "PP",
+        "colorIndex": 20,
+        "sortIndex": 100
+      },
+      "py": {
+        "name": "PY",
+        "colorIndex": 20,
+        "sortIndex": 100
+      },
+      "dac": {
+        "name": "dAC",
+        "colorIndex": 10,
+        "sortIndex": 1400
+      },
+      "dfc": {
+        "name": "dFC",
+        "colorIndex": 30,
+        "sortIndex": 1300
+      },
+      "dpl": {
+        "name": "dPL",
+        "colorIndex": 50,
+        "sortIndex": 1200
+      },
+      "dbu": {
+        "name": "dBU",
+        "colorIndex": 50,
+        "sortIndex": 1200
+      },
+      "dpp": {
+        "name": "dPP",
+        "colorIndex": 20,
+        "sortIndex": 1100
+      },
+      "dpy": {
+        "name": "dPY",
+        "colorIndex": 20,
+        "sortIndex": 1100
+      },
+      "drac": {
+        "name": "drAC",
+        "colorIndex": 10,
+        "sortIndex": 1405
+      },
+      "drfc": {
+        "name": "drFC",
+        "colorIndex": 30,
+        "sortIndex": 1305
+      },
+      "drpl": {
+        "name": "drPL",
+        "colorIndex": 50,
+        "sortIndex": 1205
+      },
+      "drbu": {
+        "name": "drBU",
+        "colorIndex": 50,
+        "sortIndex": 1205
+      },
+      "drpp": {
+        "name": "drPP",
+        "colorIndex": 20,
+        "sortIndex": 1105
+      },
+      "drpy": {
+        "name": "drPY",
+        "colorIndex": 20,
+        "sortIndex": 1105
+      }
+    },
+    "fallback": {
+      "name": "Series",
+      "group": "Series",
+      "colorIndex": 10,
+      "sortIndex": 120
+    }
+  }
+}

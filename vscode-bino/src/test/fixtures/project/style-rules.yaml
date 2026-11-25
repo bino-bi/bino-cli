@@ -1,0 +1,18 @@
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: corporate
+spec:
+  content:
+    global:
+      fontFamily: Arial
+---
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec:
+  content:
+    scenarios:
+      pl:
+        name: PLAN

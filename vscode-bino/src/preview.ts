@@ -387,8 +387,9 @@ export class BinoPreviewManager {
      * Open the embedded single-artefact preview (chrome-free /__embedding/{name}).
      * Auto-follows the active editor while the panel is open.
      * @param target Optional artefact document from a tree item or CodeLens.
+     * @param preserveFocus Keep the focus where it is, e.g. in an editor that refreshes the preview after an edit.
      */
-    async previewArtefactEmbedded(target?: LSPDocument): Promise<void> {
+    async previewArtefactEmbedded(target?: LSPDocument, preserveFocus = false): Promise<void> {
         let artefact = target
             ? { name: target.name, kind: target.kind }
             : this.resolveActiveArtefact();
@@ -445,7 +446,7 @@ export class BinoPreviewManager {
         // the preview shows the editor's current state, not stale disk content.
         await this.pushAllDirtyOverrides();
 
-        this.artefactPanel.reveal(vscode.ViewColumn.Beside);
+        this.artefactPanel.reveal(vscode.ViewColumn.Beside, preserveFocus);
         this.artefactPanel.title = `Embed: ${artefact.name}`;
         const base = await previewBaseUrl(this.getPreviewPort());
         if (!this.artefactPanel) {
