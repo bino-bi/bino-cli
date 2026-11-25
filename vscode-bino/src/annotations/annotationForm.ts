@@ -65,8 +65,14 @@ export class AnnotationFormPanel {
         this.authoring = new AuthoringClient(indexer);
     }
 
-    /** Open the form for an annotation, or for a new one. */
-    async open(entry?: AnnotationEntry, prefill?: FormPrefill): Promise<void> {
+    /** Open the form for an annotation, or for a new one. Runs after a save that is still going on. */
+    open(entry?: AnnotationEntry, prefill?: FormPrefill): Promise<void> {
+        const next = this.queue.then(() => this.show(entry, prefill));
+        this.queue = next.catch(() => undefined);
+        return next;
+    }
+
+    private async show(entry?: AnnotationEntry, prefill?: FormPrefill): Promise<void> {
         const manifests = await loadManifests(this.indexer);
         this.components = targetComponents(manifests);
         this.entry = entry;
@@ -177,9 +183,14 @@ export class AnnotationFormPanel {
             return fail('Bino: an annotation needs a target component.');
         }
         if (this.entry) {
-            const { patch, remove } = specChanges(this.entry.spec, spec);
-            const file = this.entry.file;
-            const position = this.entry.position;
+            // Look the annotation up again: a document above it may have come or gone since the form opened.
+            const shown = this.entry;
+            const current = annotationEntries(await loadManifests(this.indexer, [shown.file]))
+                .find(e => e.name === shown.name && e.file === shown.file);
+            if (!current) { return fail(`Bino: annotation ${shown.name} is no longer in ${vscode.workspace.asRelativePath(shown.file)}.`); }
+            const { patch, remove } = specChanges(current.spec, spec);
+            const file = current.file;
+            const position = current.position;
             if (Object.keys(patch).length) {
                 const result = await this.authoring.edit({ file, position, patch });
                 if (!result.ok) { return fail(`Edit rejected: ${formatEditDiagnostics(result)}`); }
@@ -188,7 +199,7 @@ export class AnnotationFormPanel {
                 const result = await this.authoring.remove({ file, position, paths: remove });
                 if (!result.ok) { return fail(`Edit rejected: ${formatEditDiagnostics(result)}`); }
             }
-            this.entry = { ...this.entry, spec };
+            this.entry = { ...current, spec };
             this.onSaved();
             vscode.window.setStatusBarMessage(`Bino: saved annotation ${this.entry.name}`, 3000);
             return undefined;
@@ -197,7 +208,9 @@ export class AnnotationFormPanel {
             return fail('Bino: enter a name for the annotation (letters, digits, _ . -).');
         }
         const target = spec.target as { kind: string; name: string };
-        const home = this.components.find(c => c.kind === target.kind && c.name === target.name)?.file;
+        // the helper writes to disk: behind unsaved edits of an open file it would make a conflict, so then it picks a file
+        const found = this.components.find(c => c.kind === target.kind && c.name === target.name)?.file;
+        const home = found && !vscode.workspace.textDocuments.some(d => d.uri.fsPath === found && d.isDirty) ? found : undefined;
         const root = this.indexer.getProjectRootForUri(home ? vscode.Uri.file(home) : undefined);
         const result = await this.authoring.create({
             kind: 'Annotation', name, spec,
@@ -208,9 +221,10 @@ export class AnnotationFormPanel {
         }
         this.onSaved();
         // Edit it from now on: a second save must not create a twin.
-        const manifests = await loadManifests(this.indexer);
-        const created = annotationEntries(manifests).find(e => e.name === name);
-        if (created) { await this.open(created); }
+        const projectRoot = this.indexer.getProjectRootForUri();
+        const written = path.isAbsolute(result.file) || !projectRoot ? result.file : path.join(projectRoot, result.file);
+        const created = annotationEntries(await loadManifests(this.indexer, [written])).find(e => e.name === name);
+        if (created) { await this.show(created); }
         vscode.window.setStatusBarMessage(`Bino: created annotation ${name} in ${vscode.workspace.asRelativePath(result.file)}`, 4000);
         return undefined;
     }

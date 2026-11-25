@@ -108,28 +108,35 @@ export function collectPages(manifests: ManifestJson[]): PageInfo[] {
     const selectors: { artefact: string; patterns: RegExp[] }[] = [];
     for (const m of manifests) {
         if (m.kind !== 'ReportArtefact' || typeof m.metadata?.name !== 'string') { continue; }
-        const raw = m.spec?.layoutPages ?? ['*'];
+        const raw = m.spec?.layoutPages;
         const entries = typeof raw === 'string' ? [raw] : asArray(raw);
-        const patterns = entries
+        const names = entries
             .map(entry => typeof entry === 'string' ? entry : typeof (entry as { page?: unknown })?.page === 'string' ? (entry as { page: string }).page : undefined)
-            .filter((p): p is string => !!p)
-            .map(globToRegExp);
+            .map(name => name?.trim())
+            .filter((p): p is string => !!p);
+        // an empty list selects every page, like no list
+        const patterns = (names.length ? names : ['*']).map(globToRegExp);
         selectors.push({ artefact: m.metadata.name, patterns });
     }
 
+    // children of pages, cards and grids, and the nodes of a tree
     const walk = (spec: Record<string, unknown> | undefined, out: PlacedComponent[], seen: Set<string>) => {
-        for (const child of asArray(spec?.children)) {
+        for (const child of [...asArray(spec?.children), ...asArray(spec?.nodes)]) {
             if (!child || typeof child !== 'object') { continue; }
             const c = child as { kind?: unknown; ref?: unknown; metadata?: { name?: unknown }; spec?: Record<string, unknown> };
             if (typeof c.kind !== 'string') { continue; }
             const name = typeof c.ref === 'string' ? c.ref : typeof c.metadata?.name === 'string' ? c.metadata.name : undefined;
             if (name) { out.push({ kind: c.kind, name }); }
-            const key = `${c.kind}:${name}`;
-            const body = typeof c.ref === 'string' ? byKey.get(key)?.spec : c.spec;
-            if (body && !seen.has(key)) {
-                seen.add(key);
-                walk(body, out, seen);
+            if (typeof c.ref !== 'string') {
+                walk(c.spec, out, seen);
+                continue;
             }
+            // a ref is walked once per page, which also stops a cycle; its own children win over the referenced ones
+            const key = `${c.kind}:${c.ref}`;
+            if (seen.has(key)) { continue; }
+            seen.add(key);
+            const own = c.spec && (Array.isArray(c.spec.children) || Array.isArray(c.spec.nodes)) ? c.spec : undefined;
+            walk(own ?? byKey.get(key)?.spec, out, seen);
         }
     };
 

@@ -67,7 +67,7 @@ const COMMON_SCRIPT = `
     }
     function post(msg) { vscode.postMessage(msg); }
     // A value that went out with 'change' is no longer typing: mark it sent before the handlers run.
-    document.addEventListener('change', e => { if (e.target && e.target.tagName === 'INPUT') e.target.defaultValue = e.target.value; }, true);
+    document.addEventListener('change', e => { if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) e.target.defaultValue = e.target.value; }, true);
     function show(value) {
         if (value === undefined || value === null) return '';
         return typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -79,7 +79,7 @@ const COMMON_SCRIPT = `
     function keepFocus(render) {
         const active = document.activeElement;
         const key = active && active.getAttribute && active.getAttribute('data-key');
-        const typing = key && active.tagName === 'INPUT' && active.type !== 'color' && active.value !== active.defaultValue
+        const typing = key && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && active.type !== 'color' && active.value !== active.defaultValue
             ? { value: active.value, start: active.selectionStart, end: active.selectionEnd } : null;
         const scroll = window.scrollY;
         render();
@@ -87,7 +87,7 @@ const COMMON_SCRIPT = `
             const again = document.querySelector('[data-key="' + CSS.escape(key) + '"]');
             if (again) {
                 again.focus();
-                if (typing && again.tagName === 'INPUT') {
+                if (typing && (again.tagName === 'INPUT' || again.tagName === 'TEXTAREA')) {
                     again.value = typing.value;
                     try { again.setSelectionRange(typing.start, typing.end); } catch (e) { /* number inputs have no selection */ }
                 }

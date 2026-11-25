@@ -33,7 +33,7 @@ const ANNOTATION_RULE = /^annotation-/;
  * the index is empty (still loading, or no language server) the YAML files of
  * the project root are read instead.
  */
-export async function loadManifests(indexer: WorkspaceIndexer): Promise<LoadedManifest[]> {
+export async function loadManifests(indexer: WorkspaceIndexer, alsoFiles: string[] = []): Promise<LoadedManifest[]> {
     let files = [...new Set(indexer.getDocuments().map(d => d.file))];
     if (files.length === 0) {
         const root = indexer.getProjectRootForUri();
@@ -42,6 +42,8 @@ export async function loadManifests(indexer: WorkspaceIndexer): Promise<LoadedMa
             files = found.map(u => u.fsPath);
         }
     }
+    // files written a moment ago are not in the index yet
+    files = [...new Set([...files, ...alsoFiles])];
     const out: LoadedManifest[] = [];
     for (const file of files) {
         const uri = vscode.Uri.file(file);

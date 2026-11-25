@@ -579,8 +579,13 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
             const edit = new vscode.WorkspaceEdit();
             const end = lines[1] >= doc.lineCount ? doc.lineAt(doc.lineCount - 1).range.end : new vscode.Position(lines[1], 0);
             edit.delete(doc.uri, new vscode.Range(new vscode.Position(lines[0], 0), end));
-            await vscode.workspace.applyEdit(edit);
-            await doc.save();
+            // unsaved edits of the user stay unsaved: then the delete is one more of them
+            const hadEdits = doc.isDirty;
+            if (!(await vscode.workspace.applyEdit(edit))) {
+                vscode.window.showErrorMessage(`Bino: could not delete annotation ${picked.name}.`);
+                return;
+            }
+            if (!hadEdits) { await doc.save(); }
             annotationsView.refresh();
         })
     );

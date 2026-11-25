@@ -150,6 +150,7 @@ const SCRIPT = `
         body.push(text('title', 'title', 'bold in the AnnotationList'));
         const area = h('textarea', { 'data-key': 'text' });
         area.value = spec.text || '';
+        area.defaultValue = area.value;
         area.addEventListener('change', () => setSpec('text', area.value.trim()));
         body.push(row('text', area, 'inline Markdown'));
 

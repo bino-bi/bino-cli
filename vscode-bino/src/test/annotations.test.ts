@@ -64,6 +64,31 @@ suite('annotation model', () => {
         assert.deepStrictEqual(all[0].artefacts, ['a']);
     });
 
+    test('cards with the same name or none, tree nodes, an empty layoutPages and ref children with own children', () => {
+        const pages = collectPages([
+            { kind: 'ReportArtefact', metadata: { name: 'all' }, spec: { layoutPages: [] } },
+            { kind: 'Tree', metadata: { name: 'tree' }, spec: { nodes: [{ id: 'n1', kind: 'Table', ref: 'city_table' }] } },
+            { kind: 'LayoutCard', metadata: { name: 'shared' }, spec: { children: [{ kind: 'Text', metadata: { name: 'from_ref' } }] } },
+            {
+                kind: 'LayoutPage', metadata: { name: 'p' }, spec: {
+                    children: [
+                        { kind: 'LayoutCard', metadata: { name: 'Card' }, spec: { children: [{ kind: 'Table', metadata: { name: 'first' } }] } },
+                        { kind: 'LayoutCard', metadata: { name: 'Card' }, spec: { children: [{ kind: 'ChartTime', metadata: { name: 'second' } }] } },
+                        { kind: 'LayoutCard', spec: { children: [{ kind: 'Text', metadata: { name: 'unnamed_card_child' } }] } },
+                        { kind: 'Tree', ref: 'tree' },
+                        { kind: 'LayoutCard', ref: 'shared', spec: { children: [{ kind: 'Text', metadata: { name: 'own_child' } }] } },
+                    ],
+                },
+            },
+        ]);
+        const names = pages[0].components.map(c => c.name);
+        assert.deepStrictEqual(pages[0].artefacts, ['all']);
+        for (const want of ['first', 'second', 'unnamed_card_child', 'city_table', 'own_child']) {
+            assert.ok(names.includes(want), `${want} missing in ${names.join(', ')}`);
+        }
+        assert.ok(!names.includes('from_ref'), 'the own children of a ref replace the referenced ones');
+    });
+
     test('a saved spec drops empty values, keys the mark does not read, and the default mark', () => {
         assert.deepStrictEqual(cleanSpec({
             mark: 'marker', color: '', title: 'T', digits: 2, percent: false,
