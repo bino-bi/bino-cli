@@ -499,6 +499,27 @@ Open it like the ComponentStyle editor (**Bino: Open RuleSet Editor**).
 All edits go through the same path as the Designer, so undo, comments and
 schema validation work as in the text editor.
 
+### 9.3 Annotations view and form
+
+The **Annotations** view in the Bino sidebar lists every
+[Annotation](/reference/annotation/) by artefact, page and target component.
+An annotation whose target is on no page is listed under *(target on no page)*.
+Lint findings of an annotation (for example `annotation-target-missing` or
+`annotation-point-missing`) show next to it.
+
+- Click an annotation to show its YAML. **Edit Annotation** (the pencil, or the
+  context menu) opens the form; **Delete Annotation** removes its document.
+- **New Annotation** (the `+` in the view title) opens an empty form.
+- The form shows only the fields of the chosen `mark`: `to` for arrow,
+  difference, bracket and frame; `percent`, `digits`, `sentiment` and
+  `highlight` for a difference; and so on. `color` offers the names of the
+  `bn-annotation` colours.
+- The target picker lists the components of the project. For a component with
+  data points it offers the point fields of its kind, with the raw values of
+  its dataset to pick from: type to filter them. A field left empty matches
+  any value.
+- A new annotation is written into the file of its target component.
+
 ---
 
 ## 10. DataSource Wizard
