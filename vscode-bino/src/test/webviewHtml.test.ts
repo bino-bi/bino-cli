@@ -109,6 +109,8 @@ suite('webview HTML', () => {
             assert.strictEqual(html.match(/annotateBtn\.hidden = false/g)?.length, 1);
             assert.match(html, /msg\.type === 'bino:capabilities'[^}]*annotateCapable\(msg\)/);
             assert.match(html, /function annotateCapable\(msg\) \{\s*if \(!msg\.annotate\) return;/);
+            // the engine's mark support reaches the extension too
+            assert.match(html, /type: 'bino:capabilities', annotate: msg\.annotate, marks: msg\.marks/);
             // picks only come from the frame and go to the extension
             assert.match(html, /event\.source === frame\.contentWindow\)[\s\S]*'bino:pickPoint'[\s\S]*vscode\.postMessage\(msg\)/);
         }

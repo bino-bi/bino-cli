@@ -286,7 +286,7 @@ export function install(win) {
   // a debounce. A layer places its marks in its shadow root after the charts drew,
   // which no observer here sees: a later second look catches them.
   const report = () => {
-    for (const ms of [800, 3000]) {
+    for (const ms of [800, 3000, 8000]) {
       if (pending.has(ms)) continue;
       pending.add(ms);
       setTimeout(() => { pending.delete(ms); sendReport(); }, ms);

@@ -94,6 +94,8 @@ export class BinoPreviewManager {
     /** Panels whose page can annotate but whose engine does not name its marks. */
     private readonly marksMissing = new Set<vscode.WebviewPanel>();
     private marksNoticeShown = false;
+    /** The last annotation report of each preview panel. */
+    private readonly reports = new Map<vscode.WebviewPanel, AnnotationsReport>();
     /** Panels whose page said it can annotate, with the mode each one is in. */
     private readonly annotating = new Map<vscode.WebviewPanel, boolean>();
     private currentArtefact: { name: string; kind: string } | undefined;
@@ -863,14 +865,22 @@ ${annotateScript()}
         } else if (msg.type === 'bino:revealAnnotation' && typeof msg.name === 'string') {
             this.revealAnnotationEmitter.fire(msg as unknown as RevealAnnotationMessage);
         } else if (msg.type === 'bino:annotations' && Array.isArray(msg.pages)) {
-            this.annotationsEmitter.fire({ pages: msg.pages as AnnotationsReport['pages'], marks: msg.marks === 1 });
+            this.reports.set(panel, { pages: msg.pages as AnnotationsReport['pages'], marks: msg.marks === 1 });
+            this.fireReports();
         } else if (msg.type === 'bino:pickPoint' && typeof msg.kind === 'string' && typeof msg.name === 'string') {
             this.pickPointEmitter.fire(msg as unknown as PickPointMessage);
         }
     }
 
+    /** All open previews together: each one reports only the pages it shows. */
+    private fireReports(): void {
+        const all = [...this.reports.values()];
+        this.annotationsEmitter.fire({ pages: all.flatMap(r => r.pages), marks: all.length > 0 && all.every(r => r.marks) });
+    }
+
     private forgetAnnotate(panel: vscode.WebviewPanel): void {
         this.marksMissing.delete(panel);
+        if (this.reports.delete(panel)) { this.fireReports(); }
         if (this.annotating.delete(panel)) { this.annotateEmitter.fire(this.isAnnotating()); }
     }
 
@@ -1232,7 +1242,7 @@ function annotateScript(): string {
         function annotateCapable(msg) {
             if (!msg.annotate) return;
             annotateBtn.hidden = false;
-            vscode.postMessage({ type: 'bino:capabilities', annotate: msg.annotate, on: annotateOn });
+            vscode.postMessage({ type: 'bino:capabilities', annotate: msg.annotate, marks: msg.marks, on: annotateOn });
             sendAnnotate();
         }
         annotateBtn.addEventListener('click', () => {
