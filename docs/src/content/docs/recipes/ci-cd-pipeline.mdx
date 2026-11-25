@@ -15,20 +15,31 @@ This recipe shows how to run `bino build` in a CI/CD pipeline so reports are gen
 - CI runner with internet access (for installing bino and Chrome headless shell).
 - Any secrets (database passwords, API keys) stored as CI/CD environment variables.
 
+## Pin the bino version
+
+A report in CI must build the same way next month. If the pipeline installs `latest`, every new bino release changes the build without a commit in your repository, and an old report can no longer be built again in the same way. So every example below pins one bino release. Change the version on purpose, in a commit, like any other dependency.
+
+For the same reason, pin the template engine with `engine-version` in `bino.toml` and commit `bino.lock`. [Keep the engine and packages up to date](#keep-the-engine-and-packages-up-to-date) shows how to get a pull request when a newer version exists.
+
 ## Install bino in CI
 
-bino ships a single binary. Install it and its rendering engine in one step:
+On GitHub Actions, use the official action (see the [example](#github-actions-example) below). Everywhere else, install a fixed release with `install.sh`:
 
 ```bash
-# Install bino
-/bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
-
-# Install Chrome headless shell (required for PDF rendering)
-bino setup
+BINO_VERSION=v0.124.0
+curl -fsSL "https://github.com/bino-bi/bino-cli-releases/releases/download/${BINO_VERSION}/install.sh" -o install.sh
+bash install.sh --yes --tag "${BINO_VERSION}"
 ```
+
+`install.sh` checks the download against the release's `checksums.txt` (it prints a warning and skips the check when it cannot look the file up through the GitHub API) and then runs `bino setup`, which installs Chrome headless shell for PDF rendering. It needs `curl` and `python3` on the runner and installs to `~/.local/bin` (change it with `--install-dir`).
 
 <Aside type="tip">
   Set `CI=1` in your environment to disable the interactive update check.
+</Aside>
+
+<Aside type="note">
+  Quick start only: `curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh | bash`
+  installs whatever release is newest today. Fine on a laptop, wrong for CI.
 </Aside>
 
 ### Or skip the install and use the container image
@@ -39,7 +50,7 @@ If your runner can run containers, the image already contains bino and Chromium:
 docker run --rm \
   -v "$PWD:/work" \
   -e POSTGRES_PASSWORD \
-  ghcr.io/bino-bi/bino-cli:latest build --out-dir dist/
+  ghcr.io/bino-bi/bino-cli:v0.124.0 build --out-dir dist/
 ```
 
 <Aside type="note">
@@ -61,6 +72,8 @@ A typical CI job:
 
 ## GitHub Actions example
 
+The action [`bino-bi/cli-action`](https://github.com/bino-bi/cli-action) installs the pinned bino release, checks it against `checksums.txt`, caches bino, Chrome headless shell and the template engine, runs `bino registry install` when the project has a `bino.lock`, and then runs `bino lint`, `bino build` or both. Its README lists all inputs.
+
 ```yaml
 name: Build Reports
 on:
@@ -81,13 +94,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install bino
-        run: |
-          /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
-          bino setup
-
-      - name: Build reports
-        run: bino build --out-dir dist/
+      - name: Lint and build reports
+        uses: bino-bi/cli-action@v2
+        with:
+          version: v0.124.0
+          command: both
+          execute-queries: "true"
 
       - name: Upload PDFs
         uses: actions/upload-artifact@v4
@@ -119,7 +131,7 @@ jobs:
       REGION: ${{ github.event.inputs.region }}
       REPORT_YEAR: ${{ github.event.inputs.year }}
     steps:
-      # ... install + build as above
+      # ... checkout + bino-bi/cli-action as above
 ```
 
 Your manifests reference `${REGION}` and `${REPORT_YEAR}` as environment variables.
@@ -128,13 +140,15 @@ Your manifests reference `${REGION}` and `${REPORT_YEAR}` as environment variabl
 
 ```yaml
 build-reports:
-  image: ubuntu:latest
+  image: ubuntu:24.04
   variables:
     CI: "1"
+    BINO_VERSION: v0.124.0
   script:
-    - apt-get update && apt-get install -y curl
-    - /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
-    - bino setup
+    - apt-get update && apt-get install -y curl ca-certificates python3
+    - curl -fsSL "https://github.com/bino-bi/bino-cli-releases/releases/download/${BINO_VERSION}/install.sh" -o install.sh
+    - bash install.sh --yes --tag "${BINO_VERSION}" --install-dir /usr/local/bin
+    - bino registry install
     - bino build --out-dir dist/
   artifacts:
     paths:
@@ -145,36 +159,52 @@ build-reports:
     - if: $CI_COMMIT_BRANCH == "main"
 ```
 
+Chrome headless shell needs some system libraries that a bare `ubuntu` image may not have. If the build fails to start Chrome, use the [container image](/guides/docker/) as the job image instead: it has bino and Chromium inside. Its entrypoint is `bino`, so GitLab needs it cleared, and the install lines go away:
+
+```yaml
+build-reports:
+  image:
+    name: ghcr.io/bino-bi/bino-cli:v0.124.0
+    entrypoint: [""]
+  variables:
+    CI: "1"
+  script:
+    - bino registry install
+    - bino build --out-dir dist/
+  artifacts:
+    paths:
+      - dist/*.pdf
+```
+
 ## Caching Chrome headless shell
 
-Chrome headless shell is ~150 MB. Cache it between runs to speed up pipelines:
+bino keeps Chrome headless shell (about 280 MB) in `~/.bino/chrome-headless-shell` and the template engine in `~/.bino/cdn`. The GitHub Action caches both for you. In other pipelines, cache them yourself, and put the bino version in the cache key, so a new bino release does not start from an old cache. `bino setup` always fetches the newest stable Chrome, so a new Chrome release is downloaded again until the key changes:
 
 <Tabs>
-  <TabItem label="GitHub Actions">
+  <TabItem label="GitHub Actions (without the action)">
 ```yaml
-- name: Cache Chrome headless shell
+- name: Cache bino downloads
   uses: actions/cache@v4
   with:
-    path: ~/.cache/bino
-    key: bino-chrome-${{ runner.os }}
-
-- name: Install bino + Chrome
-  run: |
-  /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
-  bino setup
-
-````
+    path: |
+      ~/.bino/chrome-headless-shell
+      ~/.bino/cdn
+    key: bino-${{ runner.os }}-v0.124.0
+```
   </TabItem>
   <TabItem label="GitLab CI">
 ```yaml
 build-reports:
-  cache:
-    paths:
-      - .cache/bino
   variables:
-    XDG_CACHE_HOME: $CI_PROJECT_DIR/.cache
-````
-
+    BINO_VERSION: v0.124.0
+    # GitLab caches only paths inside the project. bino skips .bino/ when it reads manifests.
+    HOME: $CI_PROJECT_DIR/.bino/ci-home
+  cache:
+    key: bino-$BINO_VERSION
+    paths:
+      - .bino/ci-home/.bino/chrome-headless-shell
+      - .bino/ci-home/.bino/cdn
+```
   </TabItem>
 </Tabs>
 
@@ -211,9 +241,137 @@ bino build --artefact executive_summary
 bino build --exclude-artefact appendix_detail
 ```
 
+## Lint before every commit
+
+With [pre-commit](https://pre-commit.com), `bino lint` runs on each `git commit`, so a broken manifest is found before it reaches CI. bino ships the hook. Add this to `.pre-commit-config.yaml` in your repository:
+
+```yaml
+repos:
+  - repo: https://github.com/bino-bi/bino-cli
+    rev: v0.124.0
+    hooks:
+      - id: bino-lint
+        # optional, passed to bino lint:
+        # args: [--work-dir, reports, --fail-on-warnings]
+```
+
+Then run `pre-commit install` once. Notes:
+
+- The hook exists from bino v0.124.0 on, so `rev` must be that release or newer.
+- The hook calls the `bino` on your `PATH`; it does not install bino. Use the same version as `rev`.
+- `bino lint` does not start Chrome and runs no queries unless you add `--execute-queries`, so the hook is fast.
+- The hook writes the lint log to a temp directory, not to `dist/`, so it leaves no files behind.
+- It only runs when a `.yaml`, `.yml`, `.toml`, `.sql` or `.csv` file is part of the commit.
+- bino reads every YAML file in the project, `.pre-commit-config.yaml` too, and reports it as a schema error. Add `.pre-commit-config.yaml` to your `.bnignore`.
+
+## Keep the engine and packages up to date
+
+Pinning means nothing changes by itself. These two jobs tell you when there is something newer, as a pull request you can review and merge.
+
+### Template engine (Renovate)
+
+[Renovate](https://docs.renovatebot.com/) can read `engine-version` in `bino.toml` with a custom regex manager. Add this to `renovate.json`:
+
+```json
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Template engine version in bino.toml",
+      "managerFilePatterns": ["/(^|/)bino\\.toml$/"],
+      "matchStrings": ["engine-version\\s*=\\s*\"(?<currentValue>v[^\"]+)\""],
+      "depNameTemplate": "bino-bi/bn-template-engine-releases",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    }
+  ]
+}
+```
+
+Engine releases are pre-releases named like `v1.0.0-next.88`. With `semver` versioning, a project on a `v1.0.0-next.N` pin is offered the newest `v1.0.0-next.N`, and the old `0.x` releases in the same repository are never offered, because they are lower. `managerFilePatterns` needs Renovate 41 or newer; older versions call it `fileMatch` and take the pattern without the slashes.
+
+To check only this rule and no other dependencies, add `"enabledManagers": ["custom.regex"]`. Without the Renovate GitHub App, Renovate can run as a scheduled workflow in the repository itself:
+
+```yaml
+# .github/workflows/renovate.yml
+name: Renovate
+on:
+  schedule:
+    - cron: "41 4 * * 1" # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: renovatebot/github-action@v46.3.15
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+```
+
+<Aside type="caution">
+  If you build with the [container image](/guides/docker/), the engine comes with the image and a pin in
+  `bino.toml` must match it. Move the image tag instead and do not use this rule.
+</Aside>
+
+### Registry packages (scheduled workflow)
+
+Renovate does not know bino packages. A small scheduled workflow does the same job: it runs [`bino registry update`](/guides/registry-and-dependencies/#the-lockfile-workflow) and opens a pull request when `bino.lock` changed. `bino registry update` only rewrites `bino.lock`: entries that follow a tag move to the newest version, exact pins stay where they are.
+
+```yaml
+# .github/workflows/update-packages.yml
+name: Update bino packages
+on:
+  schedule:
+    - cron: "23 4 * * 1" # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      CI: "1"
+      BINO_VERSION: v0.124.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bino
+        run: |
+          curl -fsSL "https://github.com/bino-bi/bino-cli-releases/releases/download/${BINO_VERSION}/install.sh" -o "$RUNNER_TEMP/install.sh"
+          bash "$RUNNER_TEMP/install.sh" --yes --tag "${BINO_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Update bino.lock
+        run: bino registry update
+
+      - name: Open a pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: bino/update-packages
+          add-paths: bino.lock
+          commit-message: Update bino packages
+          title: Update bino packages
+          body: "`bino registry update` changed bino.lock: newer versions for packages that follow a tag, or a newer lockfile format."
+```
+
+The pull request then runs your normal CI, so a package update that breaks the report is visible before you merge it. GitHub only lets a workflow open pull requests when **Settings > Actions > General > Allow GitHub Actions to create and approve pull requests** is on. Pull requests opened with the default `GITHUB_TOKEN` do not start other workflows; use a personal access token or a GitHub App token in `token:` if you want CI to run on them.
+
 ## Tips
 
-- **Pin the bino version** in CI by downloading a specific release URL instead of `latest`.
+- **Pin the bino version** in CI: `version:` on the action, `--tag` for `install.sh`, an immutable tag for the container image.
 - **Keep secrets in CI variables**, never in manifests. Use `${VAR}` syntax and `*FromEnv` fields in `ConnectionSecret`.
 - **Use `bino lint`** as a fast validation step in PRs - it checks manifests without building PDFs.
 - **Run `bino build --verbose`** in CI for detailed logs when debugging failures.
