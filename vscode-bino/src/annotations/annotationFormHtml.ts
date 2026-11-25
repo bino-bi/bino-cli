@@ -177,10 +177,15 @@ const SCRIPT = `
         } else if (msg.type === 'picked') {
             spec[msg.end] = msg.target;
             waiting = undefined;
+            // an arrow, a difference or a bracket needs a second point: the next click gives it
+            if (msg.end === 'target' && state.toRequired.includes(spec.mark) && !(spec.to && spec.to.kind)) {
+                waiting = 'to';
+                post({ type: 'waiting', end: 'to' });
+            }
             keepFocus(draw);
         } else if (msg.type === 'canPick') {
             state.canPick = msg.on;
-            if (!msg.on) waiting = undefined;
+            if (!msg.on && waiting) { waiting = undefined; post({ type: 'waiting' }); }
             keepFocus(draw);
         }
     });

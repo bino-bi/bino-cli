@@ -545,6 +545,54 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     const annotationsView = new AnnotationsViewProvider(annotationsIndexer);
     annotationForm = new AnnotationFormPanel(indexer, () => annotationsView.refresh());
     const form = annotationForm;
+    // A click in a preview in annotate mode fills the end the form waits for, else opens a new annotation on it.
+    let waitingEnd: 'target' | 'to' | undefined;
+    form.onWaitingForPick = end => { waitingEnd = end; };
+    context.subscriptions.push(
+        previewManager.onDidPickPoint(pick => {
+            const target = { kind: pick.kind, name: pick.name, panel: pick.panel, point: pick.point };
+            if (form.isOpen && waitingEnd) {
+                form.pick(waitingEnd, target);
+                waitingEnd = undefined;
+            } else if (form.isOpen) {
+                // the open form may hold input that is not saved: ask before it goes
+                void vscode.window.showInformationMessage(`Bino: annotate ${pick.kind} ${pick.name}?`, 'New annotation', 'Use as target of the open form')
+                    .then(choice => {
+                        if (choice === 'New annotation') { void form.open(undefined, { target }); }
+                        if (choice === 'Use as target of the open form') { form.pick('target', target); }
+                    });
+            } else {
+                void form.open(undefined, { target });
+            }
+        }),
+        previewManager.onDidChangeAnnotate(on => form.setCanPick(on)),
+        // a click on a mark opens its annotation; with Cmd/Ctrl its YAML
+        previewManager.onDidRevealAnnotation(async msg => {
+            const entry = annotationEntries(await loadManifests(annotationsIndexer)).find(e => e.name === msg.name);
+            if (msg.source) {
+                const file = msg.sourceFile || entry?.file;
+                if (!file) { return; }
+                const doc = await vscode.workspace.openTextDocument(file);
+                const pos = new vscode.Position(msg.line && msg.line > 0 ? msg.line - 1 : entry?.startLine ?? 0, 0);
+                await vscode.window.showTextDocument(doc, { selection: new vscode.Range(pos, pos), viewColumn: vscode.ViewColumn.One });
+                return;
+            }
+            if (entry) { await form.open(entry); } else { vscode.window.showWarningMessage(`Bino: annotation ${msg.name} not found.`); }
+        }),
+        // the numbers the preview gave the annotations, for the view
+        previewManager.onDidReportAnnotations(report => {
+            const labels = new Map<string, { label?: string; placed: boolean }>();
+            for (const page of report.pages) {
+                for (const item of page.items) {
+                    const had = labels.get(item.name);
+                    // without mark names the page cannot tell what was placed
+                    const placed = !report.marks || item.placed || had?.placed === true;
+                    labels.set(item.name, { label: had?.label || item.label || undefined, placed });
+                }
+            }
+            annotationsView.setLabels(labels);
+        })
+    );
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider('binoAnnotations', annotationsView),
         { dispose: () => annotationForm?.dispose() },

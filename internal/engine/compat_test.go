@@ -2,8 +2,11 @@ package engine
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/Masterminds/semver/v3"
 )
 
 func TestCheckCompatibility_DefaultRanges(t *testing.T) {
@@ -358,5 +361,21 @@ func TestSmallMultipleSpanCheck(t *testing.T) {
 		if err != nil && !strings.Contains(err.Error(), "Grid rowSpan, SmallMultiple axisTitles: template engine v1.0.0-next.46 or newer is needed") {
 			t.Errorf("message does not name the features: %v", err)
 		}
+	}
+}
+
+// The VS Code extension tells the user which engine makes annotation marks
+// clickable; its copy of the floor must be this one.
+func TestAnnotationNamesMinVersionMatchesExtension(t *testing.T) {
+	src, err := os.ReadFile("../../vscode-bino/src/annotations/annotationModel.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "ANNOTATION_NAMES_MIN_ENGINE = '" + AnnotationNamesMinVersion + "'"
+	if !strings.Contains(string(src), want) {
+		t.Fatalf("annotationModel.ts has no %s", want)
+	}
+	if !semver.MustParse(AnnotationNamesMinVersion).GreaterThan(semver.MustParse(AnnotationsMinVersion)) {
+		t.Fatalf("the names floor %s must be above the annotations floor %s", AnnotationNamesMinVersion, AnnotationsMinVersion)
 	}
 }

@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import {
     cleanSpec, collectPages, distinctValues, documentLines, fieldApplies, pointFieldsFor, specChanges,
 } from '../annotations/annotationModel';
-import { buildAnnotationTree, LoadedManifest } from '../annotations/annotationsView';
+import { AnnotationsViewProvider, buildAnnotationTree, LoadedManifest } from '../annotations/annotationsView';
 import { targetComponents } from '../annotations/annotationForm';
 import { getAnnotationFormHtml } from '../annotations/annotationFormHtml';
 
@@ -129,6 +129,21 @@ suite('Annotations view', () => {
             { monthly: [{ sales_overview: [{ 'ChartTime revenue': ['peak'] }, { 'Table detail': ['cell_note'] }, { 'ChartStructure cell': ['grid_note'] }] }] },
             { '(target on no page)': ['lost !'] },
         ]);
+    });
+
+    test('shows the number from the preview and when a mark was not placed', () => {
+        const labels = new Map([['peak', { label: '2', placed: true }], ['cell_note', { placed: false }]]);
+        const tree = buildAnnotationTree(PROJECT, () => [], labels);
+        const view = new AnnotationsViewProvider({} as never);
+        const notes: Record<string, string> = {};
+        const walk = (nodes: ReturnType<typeof buildAnnotationTree>) => nodes.forEach(n => {
+            if (n.type === 'annotation') { notes[n.entry.name] = String(view.getTreeItem(n).description); }
+            if ('children' in n) { walk(n.children); }
+        });
+        walk(tree);
+        assert.strictEqual(notes.peak, '2 · marker');
+        assert.strictEqual(notes.cell_note, 'frame · not placed');
+        assert.strictEqual(notes.grid_note, 'marker');
     });
 
     test('says so when there is no annotation', () => {

@@ -1,4 +1,5 @@
 import { normalizePath, appBase, viewPath, waitForEngine, swapContext } from '../shared/dom-utils.js';
+import { install as installAnnotate } from '../shared/annotate.js';
 import './components/bino-toolbar.js';
 import './components/bino-error-panel.js';
 import './components/bino-search.js';
@@ -203,6 +204,9 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
     e.preventDefault();
     e.stopPropagation();
   });
+
+  // Annotate mode: a plain click picks a data point for the host's annotation form.
+  installAnnotate(window);
 
   // Page info overlays for "All Pages" view
   function applyPageInfoOverlays() {

@@ -73,6 +73,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The embedding route does not load the preview bundle, so annotate mode is
+	// injected there as an IIFE of the same source the preview imports.
+	annotate := api.Build(api.BuildOptions{
+		EntryPointsAdvanced: []api.EntryPoint{
+			{InputPath: "shared/annotate.js", OutputPath: "annotate"},
+		},
+		Outdir:            "static",
+		Bundle:            true,
+		Format:            api.FormatIIFE,
+		GlobalName:        "binoAnnotate",
+		Target:            api.ES2022,
+		Platform:          api.PlatformBrowser,
+		MinifyWhitespace:  true,
+		MinifyIdentifiers: true,
+		MinifySyntax:      true,
+		Write:             true,
+		LogLevel:          api.LogLevelWarning,
+	})
+	if len(annotate.Errors) > 0 {
+		os.Exit(1)
+	}
+
 	copyFonts(wd)
 	copyKatex(wd)
 }
