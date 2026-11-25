@@ -242,6 +242,8 @@ project it mounts read-only, for example a container in a hosted service. In thi
   tools are not registered. The daemon answers its `/build`, `/preview/*`, `/registry/*` and
   `/introspect-draft` routes with `403`.
 - The daemon writes no port file. Scratch files go to `$TMPDIR`, never to the project.
+- The daemon does not stop by itself when it has been idle for five minutes, as an editor's
+  daemon does: the program that started it decides when it stops.
 - The daemon takes its token from the `BINO_DAEMON_TOKEN` environment variable, which is
   required in this mode.
 
