@@ -364,7 +364,7 @@ jobs:
           add-paths: bino.lock
           commit-message: Update bino packages
           title: Update bino packages
-          body: "`bino registry update` found newer versions for packages that follow a tag."
+          body: "`bino registry update` changed bino.lock: newer versions for packages that follow a tag, or a newer lockfile format."
 ```
 
 The pull request then runs your normal CI, so a package update that breaks the report is visible before you merge it. GitHub only lets a workflow open pull requests when **Settings > Actions > General > Allow GitHub Actions to create and approve pull requests** is on. Pull requests opened with the default `GITHUB_TOKEN` do not start other workflows; use a personal access token or a GitHub App token in `token:` if you want CI to run on them.
