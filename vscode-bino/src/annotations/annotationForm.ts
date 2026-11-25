@@ -104,6 +104,7 @@ export class AnnotationFormPanel {
             colors: await this.colorNames(),
             canPick: this.canPick,
         };
+        this.onWaitingForPick?.(undefined);
         void this.panel.webview.postMessage(this.state);
     }
 

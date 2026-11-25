@@ -17,6 +17,7 @@ import (
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/mdscan"
 	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/web"
 )
 
 // previewArtefactInfo holds metadata about an artifact for the preview header dropdown.
@@ -327,13 +328,23 @@ const revealSourceScript = `<script>document.addEventListener('click',function(e
 	`name:el.getAttribute('data-bino-name')||'',ref:el.getAttribute('data-bino-ref')||''},'*');` +
 	`e.preventDefault();e.stopPropagation();},true);</script>`
 
-// withRevealSource injects revealSourceScript before </head>.
+// annotateScript is the annotate mode of the full preview for embeddings: the
+// IIFE build of the same module, installed at once.
+var annotateScript = func() []byte {
+	script, err := web.AnnotateScript()
+	if err != nil {
+		return nil
+	}
+	return slices.Concat([]byte("<script>"), script, []byte(";binoAnnotate.install(window);</script>"))
+}()
+
+// withRevealSource injects revealSourceScript and the annotate mode before </head>.
 func withRevealSource(doc []byte) []byte {
 	idx := bytes.Index(doc, []byte("</head>"))
 	if idx == -1 {
 		return doc
 	}
-	return slices.Concat(doc[:idx], []byte(revealSourceScript), doc[idx:])
+	return slices.Concat(doc[:idx], []byte(revealSourceScript), annotateScript, doc[idx:])
 }
 
 // cssLengthPattern accepts the margin lengths the preview mirrors into CSS

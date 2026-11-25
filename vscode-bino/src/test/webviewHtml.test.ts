@@ -4,6 +4,7 @@ import { getTreeTableHtml, renderTreeContent, TreeDocument } from '../treeTableH
 import { getWizardHtml } from '../wizard/wizardHtml';
 import { FieldDef } from '../schemaResolver';
 import { getStyleEditorHtml } from '../styles/styleEditorHtml';
+import { BinoPreviewManager } from '../preview';
 import { getRuleSetEditorHtml } from '../styles/ruleSetEditorHtml';
 
 const INLINE_HANDLER = /<[^>]*\son[a-z]+\s*=/i;
@@ -92,6 +93,24 @@ suite('webview HTML', () => {
             assertNonceCsp(html, 'abc123');
             assert.ok(!INLINE_HANDLER.test(html), 'inline handler in editor HTML');
             assert.ok(!html.includes('innerHTML'), 'editor builds DOM from HTML strings');
+        }
+    });
+
+    test('preview webviews show the Annotate button only after the page says it can annotate', () => {
+        const proto = BinoPreviewManager.prototype as unknown as Record<string, (...args: unknown[]) => string>;
+        const pages = [
+            proto.getEmbeddedWebviewContent.call({}, 'http://localhost:1234', 'sales', 'Table'),
+            proto.getWebviewContent.call({}, 'http://localhost:1234', '/sales'),
+        ];
+        for (const html of pages) {
+            assertNonceCsp(html);
+            assert.match(html, /<button id="annotate" hidden[ >]/, 'the button starts hidden');
+            // the only place that shows it is the capability message of the frame
+            assert.strictEqual(html.match(/annotateBtn\.hidden = false/g)?.length, 1);
+            assert.match(html, /msg\.type === 'bino:capabilities'[^}]*annotateCapable\(msg\)/);
+            assert.match(html, /function annotateCapable\(msg\) \{\s*if \(!msg\.annotate\) return;/);
+            // picks only come from the frame and go to the extension
+            assert.match(html, /event\.source === frame\.contentWindow\)[\s\S]*'bino:pickPoint'[\s\S]*vscode\.postMessage\(msg\)/);
         }
     });
 

@@ -545,6 +545,21 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     const annotationsView = new AnnotationsViewProvider(annotationsIndexer);
     annotationForm = new AnnotationFormPanel(indexer, () => annotationsView.refresh());
     const form = annotationForm;
+    // A click in a preview in annotate mode fills the end the form waits for, else opens a new annotation on it.
+    let waitingEnd: 'target' | 'to' | undefined;
+    form.onWaitingForPick = end => { waitingEnd = end; };
+    context.subscriptions.push(
+        previewManager.onDidPickPoint(pick => {
+            const target = { kind: pick.kind, name: pick.name, panel: pick.panel, point: pick.point };
+            if (form.isOpen && waitingEnd) {
+                form.pick(waitingEnd, target);
+                waitingEnd = undefined;
+            } else {
+                void form.open(undefined, { target });
+            }
+        }),
+        previewManager.onDidChangeAnnotate(on => form.setCanPick(on))
+    );
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider('binoAnnotations', annotationsView),
         { dispose: () => annotationForm?.dispose() },

@@ -520,6 +520,14 @@ Lint findings of an annotation (for example `annotation-target-missing` or
   any value.
 - A new annotation is written into the file of its target component.
 
+**Annotate mode.** Both preview panels have an **Annotate** button once the
+preview runs a bino that supports it. With the mode on, a plain click on a bar,
+a table cell, a dot or any other data point opens the annotation form with the
+component and the point filled in. For an arrow, a difference or a bracket the
+next click fills `to`. **Pick in preview** in the form does the same for one
+end. Cmd/Ctrl+click still shows the source, in the mode too. A live report
+(`bino serve`) draws no annotations, so it has no button.
+
 ---
 
 ## 10. DataSource Wizard
