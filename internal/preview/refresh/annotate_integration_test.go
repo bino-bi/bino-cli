@@ -108,7 +108,7 @@ func annotateSetup(t *testing.T, frame string, extra map[string]http.HandlerFunc
 }
 
 // messages returns the messages the frame posted.
-func messages(t *testing.T, ctx context.Context) []map[string]any {
+func messages(ctx context.Context, t *testing.T) []map[string]any {
 	t.Helper()
 	raw, err := chromedp.Run(ctx, chromedp.Evaluate[[]byte](`JSON.stringify(window.msgs)`))
 	if err != nil {
@@ -123,11 +123,11 @@ func messages(t *testing.T, ctx context.Context) []map[string]any {
 	return out
 }
 
-// clickIn clicks the centre of the element the expression finds in the frame
-// (plus dx, dy) and returns the pick it posts.
-func clickIn(t *testing.T, ctx context.Context, find string, dx, dy float64, meta bool) map[string]any {
+// clickIn clicks the center of the element the expression finds in the frame
+// (plus dy) and returns the pick it posts.
+func clickIn(ctx context.Context, t *testing.T, find string, dy float64, meta bool) map[string]any {
 	t.Helper()
-	before := len(messages(t, ctx))
+	before := len(messages(ctx, t))
 	// find returns an element, or a promise of a point {x, y} in the frame
 	expr := `(async () => { const d = document.getElementById('f').contentDocument; const el = await (` + find + `)(d);
 		const f = document.getElementById('f').getBoundingClientRect();
@@ -142,12 +142,12 @@ func clickIn(t *testing.T, ctx context.Context, find string, dx, dy float64, met
 	if meta {
 		opts = append(opts, chromedp.ButtonModifiers(2)) // Ctrl
 	}
-	if err := chromedp.Do(ctx, chromedp.MouseClickXY(xy[0]+dx, xy[1]+dy, opts...)); err != nil {
+	if err := chromedp.Do(ctx, chromedp.MouseClickXY(xy[0], xy[1]+dy, opts...)); err != nil {
 		t.Fatalf("click: %v", err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		msgs := messages(t, ctx)
+		msgs := messages(ctx, t)
 		for _, m := range msgs[before:] {
 			if m["type"] == "bino:pickPoint" || m["type"] == "bino:revealSource" {
 				return m
@@ -164,7 +164,7 @@ func TestIntegration_AnnotateModeSynthetic(t *testing.T) {
 
 	// the frame says it can annotate as soon as it loads
 	waitFor(t, func() bool {
-		for _, m := range messages(t, ctx) {
+		for _, m := range messages(ctx, t) {
 			if m["type"] == "bino:capabilities" && m["annotate"] == float64(1) {
 				return true
 			}
@@ -173,7 +173,7 @@ func TestIntegration_AnnotateModeSynthetic(t *testing.T) {
 	})
 
 	// off: a plain click posts nothing
-	if pick := clickIn(t, ctx, `d => d.getElementById('cell')`, 0, 0, false); pick != nil {
+	if pick := clickIn(ctx, t, `d => d.getElementById('cell')`, 0, false); pick != nil {
 		t.Fatalf("annotate mode off, got %v", pick)
 	}
 	if err := chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`annotate(true)`)); err != nil {
@@ -207,7 +207,7 @@ func TestIntegration_AnnotateModeSynthetic(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pick := clickIn(t, ctx, tt.find, 0, tt.dy, false)
+			pick := clickIn(ctx, t, tt.find, tt.dy, false)
 			got, _ := json.Marshal(pick)
 			if string(got) != tt.want {
 				t.Fatalf("pick = %s\nwant   %s", got, tt.want)
@@ -216,7 +216,7 @@ func TestIntegration_AnnotateModeSynthetic(t *testing.T) {
 	}
 
 	// a click outside every component keeps its meaning and picks nothing
-	if pick := clickIn(t, ctx, `d => { d.getElementById('chrome').onclick = () => { d.defaultView.toolbarClicked = true; }; return d.getElementById('chrome'); }`, 0, 0, false); pick != nil {
+	if pick := clickIn(ctx, t, `d => { d.getElementById('chrome').onclick = () => { d.defaultView.toolbarClicked = true; }; return d.getElementById('chrome'); }`, 0, false); pick != nil {
 		t.Fatalf("click on the toolbar posted %v", pick)
 	}
 	clicked, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.getElementById('f').contentWindow.toolbarClicked === true`))
@@ -225,12 +225,12 @@ func TestIntegration_AnnotateModeSynthetic(t *testing.T) {
 	}
 
 	// Ctrl+click keeps revealing the source, also in annotate mode, and picks nothing
-	before := len(messages(t, ctx))
-	if pick := clickIn(t, ctx, `d => d.getElementById('cell')`, 0, 0, true); pick == nil || pick["type"] != "bino:revealSource" {
+	before := len(messages(ctx, t))
+	if pick := clickIn(ctx, t, `d => d.getElementById('cell')`, 0, true); pick == nil || pick["type"] != "bino:revealSource" {
 		t.Fatalf("Ctrl+click = %v, want bino:revealSource", pick)
 	}
 	time.Sleep(300 * time.Millisecond)
-	for _, m := range messages(t, ctx)[before:] {
+	for _, m := range messages(ctx, t)[before:] {
 		if m["type"] == "bino:pickPoint" {
 			t.Fatalf("Ctrl+click also picked %v", m)
 		}
@@ -290,7 +290,7 @@ func TestIntegration_AnnotateModeEngine(t *testing.T) {
 					const dot = s.elements.find(e => e.point && e.point.category === 'Software'); const r = host.getBoundingClientRect();
 					return { x: r.left + dot.rect.component.x + dot.rect.component.width / 2, y: r.top + dot.rect.component.y + dot.rect.component.height / 2 }; })`
 			}
-			pick := clickIn(t, ctx, find, 0, 0, false)
+			pick := clickIn(ctx, t, find, 0, false)
 			if pick == nil || pick["kind"] != tt.kind {
 				t.Fatalf("pick = %v, want kind %s", pick, tt.kind)
 			}
@@ -358,7 +358,7 @@ func TestIntegration_AnnotateModeMarks(t *testing.T) {
 	ctx, done := annotateSetup(t, markFrame, nil)
 	defer done()
 	waitFor(t, func() bool {
-		for _, m := range messages(t, ctx) {
+		for _, m := range messages(ctx, t) {
 			if m["type"] == "bino:annotations" {
 				return true
 			}
@@ -366,7 +366,7 @@ func TestIntegration_AnnotateModeMarks(t *testing.T) {
 		return false
 	})
 	var report, caps map[string]any
-	for _, m := range messages(t, ctx) {
+	for _, m := range messages(ctx, t) {
 		switch m["type"] {
 		case "bino:annotations":
 			report = m
@@ -391,11 +391,11 @@ func TestIntegration_AnnotateModeMarks(t *testing.T) {
 		t.Fatalf("the layer is not interactive in annotate mode (err %v)", err)
 	}
 	mark := `d => d.querySelector('bn-annotation-layer').shadowRoot.getElementById('peak')`
-	pick := clickIn(t, ctx, mark, 0, 0, false)
+	pick := clickIn(ctx, t, mark, 0, false)
 	if pick == nil {
 		pick = map[string]any{}
 	}
-	for _, m := range messages(t, ctx) {
+	for _, m := range messages(ctx, t) {
 		if m["type"] == "bino:revealAnnotation" {
 			pick = m
 		}
@@ -406,11 +406,12 @@ func TestIntegration_AnnotateModeMarks(t *testing.T) {
 	}
 
 	// Ctrl+click on a mark asks for its source, not for the component's
-	before := len(messages(t, ctx))
-	clickIn(t, ctx, mark, 0, 0, true)
+	before := len(messages(ctx, t))
+	clickIn(ctx, t, mark, 0, true)
 	time.Sleep(300 * time.Millisecond)
-	var types []string
-	for _, m := range messages(t, ctx)[before:] {
+	after := messages(ctx, t)[before:]
+	types := make([]string, 0, len(after))
+	for _, m := range after {
 		types = append(types, m["type"].(string)+fmt.Sprint(m["source"]))
 	}
 	if strings.Join(types, ",") != "bino:revealAnnotationtrue" {
