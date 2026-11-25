@@ -6,7 +6,13 @@ import { AuthoringClient } from '../../../authoringClient';
 import { WorkspaceIndexer } from '../../../indexer';
 import { activateExtension, needBino, waitFor, workspaceRoot } from '../helpers';
 
-const EDITORS = ['bino.designer', 'bino.treeEditor'];
+// Each editor with a file it opens and a patch that is valid for that file's first document.
+const EDITORS = [
+    { viewType: 'bino.designer', file: 'report.yaml', position: 1, patch: { 'spec.title': 'Changed by e2e' } },
+    { viewType: 'bino.treeEditor', file: 'report.yaml', position: 1, patch: { 'spec.title': 'Changed by e2e' } },
+    { viewType: 'bino.styleEditor', file: 'styles.yaml', position: 1, patch: { 'spec.content.global.fontColor': '#123456' } },
+    { viewType: 'bino.ruleSetEditor', file: 'styles.yaml', position: 2, patch: { 'spec.content.fallback.name': 'Changed by e2e' } },
+];
 
 function customTab(viewType: string, uri: vscode.Uri): vscode.Tab | undefined {
     return vscode.window.tabGroups.all.flatMap(g => g.tabs).find(t =>
@@ -42,10 +48,10 @@ suite('e2e: designer and tree editor', () => {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 
-    for (const viewType of EDITORS) {
+    for (const { viewType, file, position, patch } of EDITORS) {
         test(`${viewType}: an edit through the write path is undone, the editor reopens`, async function () {
             needBino(this);
-            const uri = vscode.Uri.file(path.join(workspaceRoot(), 'report.yaml'));
+            const uri = vscode.Uri.file(path.join(workspaceRoot(), file));
             await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
             const tab = await waitFor(`${viewType} tab`, () => customTab(viewType, uri), 10000);
             assert.ok(tab.input instanceof vscode.TabInputCustom);
@@ -53,9 +59,9 @@ suite('e2e: designer and tree editor', () => {
 
             const doc = await vscode.workspace.openTextDocument(uri);
             const before = doc.getText();
-            const result = await authoring.edit({ file: uri.fsPath, position: 1, patch: { 'spec.title': 'Changed by e2e' } });
+            const result = await authoring.edit({ file: uri.fsPath, position, patch });
             assert.deepStrictEqual(result, { ok: true, applied: 'workspaceEdit' });
-            assert.ok(doc.getText().includes('Changed by e2e'), doc.getText());
+            assert.ok(doc.getText().includes(String(Object.values(patch)[0]).replace('#', '')), doc.getText());
             assert.ok(doc.isDirty);
 
             // undo acts on the active custom editor.

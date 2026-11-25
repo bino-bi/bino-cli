@@ -9,5 +9,6 @@ tsconfig.json
 **/*.md
 eslint.config.mjs
 out/**
+scripts/**
 .vscode-test.mjs
 !media/walkthrough/*.md

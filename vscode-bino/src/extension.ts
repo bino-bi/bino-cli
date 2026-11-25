@@ -17,6 +17,8 @@ import { DataSourceWizardManager } from './wizard/wizardPanel';
 import { AddElementCommand } from './addElement';
 import { TreeEditorProvider } from './treeTableEditor';
 import { DesignerEditorProvider } from './designer/designerPanel';
+import { StyleEditorProvider } from './styles/styleEditor';
+import { RuleSetEditorProvider } from './styles/ruleSetEditor';
 import { PreviewTreeProvider } from './previewTree';
 import { EnvironmentTreeProvider } from './environmentTree';
 import { DependenciesTreeProvider } from './dependenciesTree';
@@ -37,6 +39,8 @@ let rowsPreviewManager: RowsPreviewManager | undefined;
 let wizardManager: DataSourceWizardManager | undefined;
 let treeTableEditorManager: TreeEditorProvider | undefined;
 let designerPanel: DesignerEditorProvider | undefined;
+let styleEditor: StyleEditorProvider | undefined;
+let ruleSetEditor: RuleSetEditorProvider | undefined;
 let daemonClient: DaemonClient | undefined;
 
 /**
@@ -497,6 +501,32 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
         })
     );
 
+    // Visual editors for ComponentStyle and RuleSet documents
+    styleEditor = new StyleEditorProvider(indexer, previewManager, context.extensionPath);
+    ruleSetEditor = new RuleSetEditorProvider(indexer, previewManager);
+    context.subscriptions.push(
+        { dispose: () => { styleEditor?.dispose(); ruleSetEditor?.dispose(); } },
+        vscode.window.registerCustomEditorProvider(StyleEditorProvider.viewType, styleEditor, {
+            webviewOptions: { retainContextWhenHidden: true },
+        }),
+        vscode.window.registerCustomEditorProvider(RuleSetEditorProvider.viewType, ruleSetEditor, {
+            webviewOptions: { retainContextWhenHidden: true },
+        })
+    );
+    // The editor title shows their buttons only on a file that holds such a document.
+    const updateEditorKindContext = (editor: vscode.TextEditor | undefined) => {
+        const text = editor?.document.languageId === 'yaml' ? editor.document.getText() : '';
+        void vscode.commands.executeCommand('setContext', 'bino.activeHasComponentStyle', /^kind:\s*ComponentStyle\s*$/m.test(text));
+        void vscode.commands.executeCommand('setContext', 'bino.activeHasRuleSet', /^kind:\s*RuleSet\s*$/m.test(text));
+    };
+    updateEditorKindContext(vscode.window.activeTextEditor);
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(updateEditorKindContext),
+        vscode.workspace.onDidSaveTextDocument(doc => {
+            if (doc === vscode.window.activeTextEditor?.document) { updateEditorKindContext(vscode.window.activeTextEditor); }
+        })
+    );
+
     // Register PRQL features (editor, SQL preview integration)
     registerPrqlFeatures(context);
 
@@ -519,6 +549,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
                 treeProvider.refresh();
                 treeTableEditorManager?.refreshAll();
                 designerPanel?.refreshAll();
+                styleEditor?.refreshAll();
             }
         });
     void daemonReady.then(() => {
@@ -779,6 +810,17 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
             // Tree menu passes a BinoTreeItem; palette passes an LSPDocument or nothing.
             const doc = (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
             await designerPanel?.open(doc?.kind ? doc : undefined);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.openStyleEditor', async (arg?: LSPDocument | BinoTreeItem) => {
+            const doc = (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
+            await styleEditor?.open(doc?.kind ? doc : undefined);
+        }),
+        vscode.commands.registerCommand('bino.openRuleSetEditor', async (arg?: LSPDocument | BinoTreeItem) => {
+            const doc = (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
+            await ruleSetEditor?.open(doc?.kind ? doc : undefined);
         })
     );
 
@@ -1295,6 +1337,10 @@ export function deactivate(): void {
     indexer = undefined;
     validator = undefined;
     designerPanel = undefined;
+    styleEditor?.dispose();
+    ruleSetEditor?.dispose();
+    styleEditor = undefined;
+    ruleSetEditor = undefined;
     treeTableEditorManager = undefined;
     previewManager = undefined;
 }

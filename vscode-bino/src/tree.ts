@@ -38,6 +38,9 @@ const KIND_ICONS: Record<string, string> = {
     Internationalization: 'globe',
 };
 
+/** Kinds with an editor of their own; their items get a contextValue per kind for its menu entry. */
+const EDITOR_KINDS = new Set(['ComponentStyle', 'RuleSet']);
+
 const CATEGORY_ICONS: Record<string, string> = {
     artefact: 'file',
     data: 'database',
@@ -103,7 +106,8 @@ export class BinoTreeItem extends vscode.TreeItem {
         } else if (document) {
             // This is a document item; embeddable kinds get a distinct contextValue
             // so the embedded-preview action only shows on documents that can render.
-            this.contextValue = isEmbeddableKind(document.kind) ? 'binoArtefact' : 'binoDocument';
+            this.contextValue = isEmbeddableKind(document.kind) ? 'binoArtefact'
+                : EDITOR_KINDS.has(document.kind) ? `binoDocument${document.kind}` : 'binoDocument';
             this.description = this.getRelativePath(document.file);
             this.tooltip = new vscode.MarkdownString(
                 `**${document.name}**\n\n` +

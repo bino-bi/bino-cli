@@ -3,6 +3,8 @@ import { getDesignerHtml } from '../designer/designerHtml';
 import { getTreeTableHtml, renderTreeContent, TreeDocument } from '../treeTableHtml';
 import { getWizardHtml } from '../wizard/wizardHtml';
 import { FieldDef } from '../schemaResolver';
+import { getStyleEditorHtml } from '../styles/styleEditorHtml';
+import { getRuleSetEditorHtml } from '../styles/ruleSetEditorHtml';
 
 const INLINE_HANDLER = /<[^>]*\son[a-z]+\s*=/i;
 
@@ -82,6 +84,14 @@ suite('webview HTML', () => {
         }
         for (const tag of html.match(/<(input|select)[^>]*>/g) ?? []) {
             assert.ok(tag.includes('aria-label='), `control without label: ${tag}`);
+        }
+    });
+
+    test('ComponentStyle and RuleSet editor pages use a nonce CSP and no inline handlers', () => {
+        for (const html of [getStyleEditorHtml('abc123'), getRuleSetEditorHtml('abc123')]) {
+            assertNonceCsp(html, 'abc123');
+            assert.ok(!INLINE_HANDLER.test(html), 'inline handler in editor HTML');
+            assert.ok(!html.includes('innerHTML'), 'editor builds DOM from HTML strings');
         }
     });
 
