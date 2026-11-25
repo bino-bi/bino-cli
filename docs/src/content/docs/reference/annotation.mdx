@@ -335,6 +335,8 @@ A tool that reads the HTML of `bino preview` or of a build can find the targets 
 - A direct child of a `Grid` and a node of a `Tree` that can be a target sit in an element with `data-bino-target-kind` and `data-bino-target-name`. These are `target.kind` and `target.name` as they are. A child that cannot be a target has neither.
 - Each panel of a `SmallMultiple` sits in an element with `data-bino-panel`: the label that `target.panel` takes. `kind` and `name` are those of the `SmallMultiple`.
 
+A mark knows its annotation too. From template engine **v1.0.0-next.88** on, each mark of `bn-annotation-layer` (a `g.mark` in its shadow root) and each entry of `bn-annotation-list` has `data-bino-annotation` with the `metadata.name` of its `Annotation`. Two annotations with the same target and point can so be told apart. In `bino preview` the `items` of the layer and the list also carry the file and line of each `Annotation` (`sourceFile`, `line`). An older engine draws the marks without the attribute.
+
 A document that sits on a page twice has the same target in both places, and the mark goes on both.
 
 ## Attribute reference

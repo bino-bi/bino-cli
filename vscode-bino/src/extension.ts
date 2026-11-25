@@ -565,7 +565,33 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
                 void form.open(undefined, { target });
             }
         }),
-        previewManager.onDidChangeAnnotate(on => form.setCanPick(on))
+        previewManager.onDidChangeAnnotate(on => form.setCanPick(on)),
+        // a click on a mark opens its annotation; with Cmd/Ctrl its YAML
+        previewManager.onDidRevealAnnotation(async msg => {
+            const entry = annotationEntries(await loadManifests(annotationsIndexer)).find(e => e.name === msg.name);
+            if (msg.source) {
+                const file = msg.sourceFile || entry?.file;
+                if (!file) { return; }
+                const doc = await vscode.workspace.openTextDocument(file);
+                const pos = new vscode.Position(msg.line && msg.line > 0 ? msg.line - 1 : entry?.startLine ?? 0, 0);
+                await vscode.window.showTextDocument(doc, { selection: new vscode.Range(pos, pos), viewColumn: vscode.ViewColumn.One });
+                return;
+            }
+            if (entry) { await form.open(entry); } else { vscode.window.showWarningMessage(`Bino: annotation ${msg.name} not found.`); }
+        }),
+        // the numbers the preview gave the annotations, for the view
+        previewManager.onDidReportAnnotations(report => {
+            const labels = new Map<string, { label?: string; placed: boolean }>();
+            for (const page of report.pages) {
+                for (const item of page.items) {
+                    const had = labels.get(item.name);
+                    // without mark names the page cannot tell what was placed
+                    const placed = !report.marks || item.placed || had?.placed === true;
+                    labels.set(item.name, { label: had?.label || item.label || undefined, placed });
+                }
+            }
+            annotationsView.setLabels(labels);
+        })
     );
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider('binoAnnotations', annotationsView),

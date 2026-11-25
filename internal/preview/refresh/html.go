@@ -344,7 +344,8 @@ func withRevealSource(doc []byte) []byte {
 	if idx == -1 {
 		return doc
 	}
-	return slices.Concat(doc[:idx], []byte(revealSourceScript), annotateScript, doc[idx:])
+	// annotate mode first: a click on a mark in the mode is its own, also with Cmd/Ctrl
+	return slices.Concat(doc[:idx], annotateScript, []byte(revealSourceScript), doc[idx:])
 }
 
 // cssLengthPattern accepts the margin lengths the preview mirrors into CSS

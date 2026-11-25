@@ -170,6 +170,70 @@ export async function readPick(path, x, y) {
 }
 
 /**
+ * The annotation a click on a mark or a list entry belongs to: its name, and
+ * its source location from the items of the layer or list that drew it. null
+ * when the path has no `data-bino-annotation` (no mark, or an engine before
+ * v1.0.0-next.88).
+ */
+export function annotationOnPath(path, x, y) {
+  const els = path.filter(isElement);
+  let el = els.find((e) => e.hasAttribute('data-bino-annotation'));
+  if (!el) return null;
+  // The wide hit line of an arrow is invisible and can lie over another mark:
+  // the visible mark under the cursor wins.
+  if (els[0] && els[0].classList && els[0].classList.contains('hit') && x !== undefined) {
+    const root = el.getRootNode();
+    const under = root && root.elementsFromPoint ? root.elementsFromPoint(x, y) : [];
+    const visible = under.find((e) => !e.classList.contains('hit') && e.closest && e.closest('[data-bino-annotation]'));
+    if (visible) el = visible.closest('[data-bino-annotation]');
+  }
+  const name = el.getAttribute('data-bino-annotation');
+  const found = { name };
+  const root = el.getRootNode && el.getRootNode();
+  const host = root && root.host;
+  try {
+    const items = JSON.parse((host && host.getAttribute('items')) || '[]');
+    const item = items.find((i) => i && i.name === name);
+    if (item && item.line > 0) {
+      found.sourceFile = item.sourceFile || '';
+      found.line = item.line;
+    }
+  } catch (e) { /* items are the engine's business: no source location then */ }
+  return found;
+}
+
+/**
+ * The annotations of each page: their number and whether the layer placed a
+ * mark. A mark the engine did not draw has no element with its name.
+ */
+export function annotationReport(doc) {
+  const pages = [];
+  doc.querySelectorAll('bn-layout-page').forEach((page) => {
+    const layer = page.querySelector('bn-annotation-layer');
+    if (!layer) return;
+    let items = [];
+    try { items = JSON.parse(layer.getAttribute('items') || '[]'); } catch (e) { return; }
+    const root = layer.shadowRoot;
+    const seen = new Set();
+    const out = [];
+    for (const item of items) {
+      if (!item || !item.name || seen.has(item.name)) continue;
+      seen.add(item.name);
+      const placed = !!(root && root.querySelector('[data-bino-annotation="' + CSS.escape(item.name) + '"]'));
+      out.push({ name: item.name, label: item.label || '', placed });
+    }
+    pages.push({ page: page.getAttribute('data-bino-page') || '', items: out });
+  });
+  return pages;
+}
+
+/** Whether the engine's annotation layer names its marks and can take clicks. */
+export function marksSupported(win) {
+  const ctor = win.customElements && win.customElements.get('bn-annotation-layer');
+  return !!ctor && 'interactive' in ctor.prototype;
+}
+
+/**
  * Start listening: `bino:annotateMode {on}` from the host turns the mode on
  * and off. The page tells the host it can do this with `bino:capabilities`.
  */
@@ -202,10 +266,40 @@ export function install(win) {
     b.style.display = 'block';
   };
 
+  // in the mode the marks take clicks; a preview that swaps its content gets new layers
+  const setInteractive = () => {
+    doc.querySelectorAll('bn-annotation-layer').forEach((layer) => {
+      if (on) layer.setAttribute('interactive', ''); else layer.removeAttribute('interactive');
+    });
+  };
+  let lastReport = '';
+  const pending = new Set();
+  const sendReport = () => {
+    const pages = annotationReport(doc);
+    const text = JSON.stringify(pages);
+    if (text === lastReport) return;
+    lastReport = text;
+    // an engine before the mark names draws marks without them: placed is unknown then
+    w.parent.postMessage({ type: 'bino:annotations', pages, marks: marksSupported(w) ? 1 : 0 }, '*');
+  };
+  // The page changes all the time (toolbar, inspector), so this is a throttle, not
+  // a debounce. A layer places its marks in its shadow root after the charts drew,
+  // which no observer here sees: a later second look catches them.
+  const report = () => {
+    for (const ms of [800, 3000]) {
+      if (pending.has(ms)) continue;
+      pending.add(ms);
+      setTimeout(() => { pending.delete(ms); sendReport(); }, ms);
+    }
+  };
+  new w.MutationObserver(() => { if (on) setInteractive(); report(); })
+    .observe(doc.documentElement, { childList: true, subtree: true });
+
   w.addEventListener('message', (e) => {
     if (!e.data || e.data.type !== 'bino:annotateMode') return;
     on = !!e.data.on;
     doc.documentElement.style.cursor = on ? 'crosshair' : '';
+    setInteractive();
     if (!on) hide();
   });
 
@@ -224,7 +318,16 @@ export function install(win) {
   }, true);
 
   doc.addEventListener('click', (e) => {
-    if (!on || e.metaKey || e.ctrlKey || e.button !== 0) return;
+    if (!on || e.button !== 0) return;
+    // a mark or list entry opens its own annotation; with Cmd/Ctrl its source
+    const note = annotationOnPath(e.composedPath(), e.clientX, e.clientY);
+    if (note) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      w.parent.postMessage(Object.assign({ type: 'bino:revealAnnotation', source: e.metaKey || e.ctrlKey }, note), '*');
+      return;
+    }
+    if (e.metaKey || e.ctrlKey) return;
     // the preview's own toolbar and anything outside a component keep their clicks
     if (!locate(e.composedPath())) return;
     e.preventDefault();
@@ -236,5 +339,11 @@ export function install(win) {
     });
   }, true);
 
-  w.parent.postMessage({ type: 'bino:capabilities', annotate: 1 }, '*');
+  // the engine may load after this script: ask once it has defined its elements
+  const announce = () => w.parent.postMessage({ type: 'bino:capabilities', annotate: 1, marks: marksSupported(w) ? 1 : 0 }, '*');
+  announce();
+  if (w.customElements && !marksSupported(w)) {
+    w.customElements.whenDefined('bn-annotation-layer').then(() => { if (marksSupported(w)) announce(); });
+  }
+  report();
 }

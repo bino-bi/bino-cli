@@ -1,3 +1,10 @@
+/**
+ * The first template engine that names the annotation of each mark, so a click
+ * on a mark can open it. A copy of AnnotationNamesMinVersion in bino-cli's
+ * internal/engine/compat.go; a test there keeps the two equal.
+ */
+export const ANNOTATION_NAMES_MIN_ENGINE = 'v1.0.0-next.88';
+
 /** The marks of an Annotation, `marker` first: it is the default. */
 export const MARKS = ['marker', 'frame', 'arrow', 'difference', 'pointer', 'bracket'];
 

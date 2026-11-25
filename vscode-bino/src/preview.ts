@@ -5,6 +5,7 @@ import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { DaemonClient } from './daemonClient';
 import { getEmbeddableKinds } from './embeddable';
 import { getNonce } from './webviewNonce';
+import { ANNOTATION_NAMES_MIN_ENGINE } from './annotations/annotationModel';
 import { getBinoPath } from './bino';
 import { fullPreviewPath, previewBaseUrl, urlOrigin } from './previewUrl';
 
@@ -26,6 +27,20 @@ export interface PickPointMessage {
     point?: Record<string, string>;
     sourceFile?: string;
     line?: number;
+}
+
+/** A click on an annotation mark: its name, and with `source` the user wants its YAML. */
+export interface RevealAnnotationMessage {
+    name: string;
+    source?: boolean;
+    sourceFile?: string;
+    line?: number;
+}
+
+/** The annotations a preview page drew, per page. `marks` is false when the engine does not name them. */
+export interface AnnotationsReport {
+    pages: { page: string; items: { name: string; label: string; placed: boolean }[] }[];
+    marks: boolean;
 }
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
@@ -70,6 +85,15 @@ export class BinoPreviewManager {
     private readonly annotateEmitter = new vscode.EventEmitter<boolean>();
     /** Whether a preview that can annotate is open, and its mode is on. */
     readonly onDidChangeAnnotate = this.annotateEmitter.event;
+    private readonly revealAnnotationEmitter = new vscode.EventEmitter<RevealAnnotationMessage>();
+    /** A click on an annotation mark or list entry in annotate mode. */
+    readonly onDidRevealAnnotation = this.revealAnnotationEmitter.event;
+    private readonly annotationsEmitter = new vscode.EventEmitter<AnnotationsReport>();
+    /** The numbers and placement of the annotations a preview page drew. */
+    readonly onDidReportAnnotations = this.annotationsEmitter.event;
+    /** Panels whose page can annotate but whose engine does not name its marks. */
+    private readonly marksMissing = new Set<vscode.WebviewPanel>();
+    private marksNoticeShown = false;
     /** Panels whose page said it can annotate, with the mode each one is in. */
     private readonly annotating = new Map<vscode.WebviewPanel, boolean>();
     private currentArtefact: { name: string; kind: string } | undefined;
@@ -796,7 +820,7 @@ ${annotateScript()}
         window.addEventListener('message', (event) => {
             const msg = event.data;
             if (event.source === frame.contentWindow) {
-                if (msg && (msg.type === 'bino:revealSource' || msg.type === 'bino:pickPoint')) {
+                if (msg && (msg.type === 'bino:revealSource' || msg.type === 'bino:pickPoint' || msg.type === 'bino:revealAnnotation' || msg.type === 'bino:annotations')) {
                     vscode.postMessage(msg);
                 } else if (msg && msg.type === 'bino:capabilities') {
                     annotateCapable(msg);
@@ -826,16 +850,27 @@ ${annotateScript()}
         if (msg.type === 'bino:capabilities') {
             // a new page in the webview starts with the mode its webview has, which a new webview has off
             this.annotating.set(panel, msg.on === true);
+            if (msg.marks === 1) { this.marksMissing.delete(panel); } else { this.marksMissing.add(panel); }
             this.annotateEmitter.fire(this.isAnnotating());
         } else if (msg.type === 'bino:annotateState') {
             this.annotating.set(panel, msg.on === true);
             this.annotateEmitter.fire(this.isAnnotating());
+            if (msg.on === true && this.marksMissing.has(panel) && !this.marksNoticeShown) {
+                this.marksNoticeShown = true;
+                void vscode.window.showInformationMessage(
+                    `Bino: to open an annotation by clicking its mark, update engine-version in bino.toml to ${ANNOTATION_NAMES_MIN_ENGINE} or newer. Clicks on data points work as they are.`);
+            }
+        } else if (msg.type === 'bino:revealAnnotation' && typeof msg.name === 'string') {
+            this.revealAnnotationEmitter.fire(msg as unknown as RevealAnnotationMessage);
+        } else if (msg.type === 'bino:annotations' && Array.isArray(msg.pages)) {
+            this.annotationsEmitter.fire({ pages: msg.pages as AnnotationsReport['pages'], marks: msg.marks === 1 });
         } else if (msg.type === 'bino:pickPoint' && typeof msg.kind === 'string' && typeof msg.name === 'string') {
             this.pickPointEmitter.fire(msg as unknown as PickPointMessage);
         }
     }
 
     private forgetAnnotate(panel: vscode.WebviewPanel): void {
+        this.marksMissing.delete(panel);
         if (this.annotating.delete(panel)) { this.annotateEmitter.fire(this.isAnnotating()); }
     }
 
@@ -1061,7 +1096,7 @@ ${annotateScript()}
             }
             // Click-to-source and picked points from the iframe go to the extension.
             if (event.source === frame.contentWindow) {
-                if (msg.type === 'bino:revealSource' || msg.type === 'bino:pickPoint') {
+                if (msg.type === 'bino:revealSource' || msg.type === 'bino:pickPoint' || msg.type === 'bino:revealAnnotation' || msg.type === 'bino:annotations') {
                     vscode.postMessage(msg);
                 } else if (msg.type === 'bino:capabilities') {
                     annotateCapable(msg);

@@ -528,6 +528,14 @@ next click fills `to`. **Pick in preview** in the form does the same for one
 end. Cmd/Ctrl+click still shows the source, in the mode too. A live report
 (`bino serve`) draws no annotations, so it has no button.
 
+With template engine **v1.0.0-next.88** or newer (`engine-version` in
+`bino.toml`), a click on a mark or a list entry in annotate mode opens that
+annotation in the form, even when two annotations look the same.
+Cmd/Ctrl+click on a mark shows its YAML. The Annotations view then also shows
+the number each annotation got, as in the PDF, and *not placed* for one whose
+point the engine did not find. With an older engine a click on a mark picks the
+point below it, and the extension says once which engine to pin.
+
 ---
 
 ## 10. DataSource Wizard

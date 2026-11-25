@@ -17,6 +17,8 @@ import (
 type annotationDoc struct {
 	name string
 	spec schema.AnnotationSpec
+	// doc is the manifest, for its source location in the preview.
+	doc config.Document
 }
 
 // annotationPage collects what a page's marks need while its children render.
@@ -54,13 +56,19 @@ type annotationData struct {
 
 // annotationLayerItem is one entry of the items attribute of bn-annotation-layer.
 type annotationLayerItem struct {
-	Label   string                  `json:"label,omitempty"`
-	Mark    string                  `json:"mark"`
-	Color   string                  `json:"color,omitempty"`
-	Target  string                  `json:"target"`
-	Point   *schema.AnnotationPoint `json:"point,omitempty"`
-	To      string                  `json:"to,omitempty"`
-	ToPoint *schema.AnnotationPoint `json:"toPoint,omitempty"`
+	// Name, SourceFile and Line say which Annotation a mark belongs to; the
+	// engine writes Name to data-bino-annotation. The source location is only
+	// known in the preview.
+	Name       string                  `json:"name,omitempty"`
+	SourceFile string                  `json:"sourceFile,omitempty"`
+	Line       int                     `json:"line,omitempty"`
+	Label      string                  `json:"label,omitempty"`
+	Mark       string                  `json:"mark"`
+	Color      string                  `json:"color,omitempty"`
+	Target     string                  `json:"target"`
+	Point      *schema.AnnotationPoint `json:"point,omitempty"`
+	To         string                  `json:"to,omitempty"`
+	ToPoint    *schema.AnnotationPoint `json:"toPoint,omitempty"`
 	// Text is the text a frame is drawn around.
 	Text string `json:"text,omitempty"`
 	// TextPosition is "above" when the text of a frame stands above a value label.
@@ -74,9 +82,12 @@ type annotationLayerItem struct {
 
 // annotationListItem is one entry of the items attribute of bn-annotation-list.
 type annotationListItem struct {
-	Label string `json:"label,omitempty"`
-	Title string `json:"title,omitempty"`
-	HTML  string `json:"html,omitempty"`
+	Name       string `json:"name,omitempty"`
+	SourceFile string `json:"sourceFile,omitempty"`
+	Line       int    `json:"line,omitempty"`
+	Label      string `json:"label,omitempty"`
+	Title      string `json:"title,omitempty"`
+	HTML       string `json:"html,omitempty"`
 }
 
 // withAnnotations prepares the annotations of this render. Serve mode shows
@@ -111,7 +122,7 @@ func collectAnnotations(docs []config.Document) ([]annotationDoc, error) {
 		if err != nil {
 			return nil, fmt.Errorf("render: parse annotation %s: %w", doc.Name, err)
 		}
-		out = append(out, annotationDoc{name: doc.Name, spec: s})
+		out = append(out, annotationDoc{name: doc.Name, spec: s, doc: doc})
 	}
 	return out, nil
 }
@@ -395,6 +406,18 @@ func (rc *renderCtx) annotationListPlaceholder(s schema.AnnotationListSpec) stri
 	return annotationListMarker(len(page.lists) - 1)
 }
 
+// annotationSource returns the file and 1-based line of an Annotation
+// document, or "" and 0 when unknown (always outside the preview).
+func (rc *renderCtx) annotationSource(a annotationDoc) (string, int) {
+	if rc.srcLines == nil || a.doc.File == "" {
+		return "", 0
+	}
+	if line := rc.srcLines.docLine(&a.doc); line > 0 {
+		return a.doc.File, line
+	}
+	return "", 0
+}
+
 func annotationListMarker(i int) string {
 	return fmt.Sprintf("<!--bino-annotation-list-%d-->", i)
 }
@@ -407,7 +430,7 @@ func (rc *renderCtx) finishAnnotationPage(b *strings.Builder, selectedStyle stri
 		return b.String(), nil
 	}
 	labels, placed := page.number(rc)
-	items := page.layerItems(labels, placed)
+	items := page.layerItems(rc, labels, placed)
 	if len(items) > 0 {
 		value, err := json.Marshal(items)
 		if err != nil {
@@ -554,7 +577,7 @@ func describeTarget(end schema.AnnotationTarget) string {
 
 // layerItems builds the marks. A component that sits on the page twice gets its
 // mark twice; an arrow pairs the places of its two ends in order.
-func (p *annotationPage) layerItems(labels map[string]string, placed map[string]bool) []annotationLayerItem {
+func (p *annotationPage) layerItems(rc *renderCtx, labels map[string]string, placed map[string]bool) []annotationLayerItem {
 	var items []annotationLayerItem
 	for _, a := range p.docs {
 		if !placed[a.name] {
@@ -567,13 +590,17 @@ func (p *annotationPage) layerItems(labels map[string]string, placed map[string]
 		}
 		count := max(len(ids), len(toIDs))
 		for i := range count {
+			file, line := rc.annotationSource(a)
 			item := annotationLayerItem{
-				Label:  labels[a.name],
-				Mark:   a.spec.Mark,
-				Color:  a.spec.Color,
-				Target: ids[min(i, len(ids)-1)],
-				Point:  a.spec.Target.Point,
-				Text:   a.spec.MarkText,
+				Name:       a.name,
+				SourceFile: file,
+				Line:       line,
+				Label:      labels[a.name],
+				Mark:       a.spec.Mark,
+				Color:      a.spec.Color,
+				Target:     ids[min(i, len(ids)-1)],
+				Point:      a.spec.Target.Point,
+				Text:       a.spec.MarkText,
 			}
 			if a.spec.MarkText != "" && a.spec.MarkTextPosition == "above" {
 				item.TextPosition = "above"
@@ -608,10 +635,14 @@ func (p *annotationPage) renderList(rc *renderCtx, list schema.AnnotationListSpe
 		if !p.onPage(a) || !annotation.HasContent(a.spec) {
 			continue
 		}
+		file, line := rc.annotationSource(a)
 		items = append(items, annotationListItem{
-			Label: labels[a.name],
-			Title: a.spec.Title,
-			HTML:  renderInlineMarkdown(a.spec.Text, rc.assetURLs),
+			Name:       a.name,
+			SourceFile: file,
+			Line:       line,
+			Label:      labels[a.name],
+			Title:      a.spec.Title,
+			HTML:       renderInlineMarkdown(a.spec.Text, rc.assetURLs),
 		})
 	}
 	if len(items) == 0 {

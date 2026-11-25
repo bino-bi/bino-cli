@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -504,5 +506,52 @@ func TestAnnotations_CardInATreeHasNoTargetAttributes(t *testing.T) {
 	out := renderAnnotations(t, ModeBuild, chartDoc, annotationTestPage(tree))
 	if !strings.Contains(out, "<bn-grid") || strings.Contains(out, "data-bino-target-") {
 		t.Fatalf("a Grid in a card in a Tree has no targets:\n%s", out)
+	}
+}
+
+func TestAnnotations_ItemsCarryTheName(t *testing.T) {
+	out := renderAnnotations(t, ModeBuild, chartDoc, marker2024, arrowNoText, annotationTestPage(chartRefChild+","+annotationsAll))
+	var names []string
+	for _, item := range layerItems(t, out) {
+		names = append(names, item.Name)
+		if item.SourceFile != "" || item.Line != 0 {
+			t.Fatalf("a build has no source location: %+v", item)
+		}
+	}
+	if strings.Join(names, ",") != "first,trend_arrow" {
+		t.Fatalf("layer names = %v", names)
+	}
+	if list := listItems(t, out); len(list) != 1 || list[0].Name != "first" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
+func TestAnnotations_PreviewItemsCarryTheSourceLocation(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, text string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("chart.yaml", "apiVersion: bino.bi/v1alpha1\nkind: ChartTime\nmetadata:\n  name: trend\nspec:\n  dataset: sales\n")
+	write("notes.yaml", "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: other\nspec:\n  value: x\n---\n"+
+		"apiVersion: bino.bi/v1alpha1\nkind: Annotation\nmetadata:\n  name: first\nspec:\n  target: {kind: ChartTime, name: trend, point: {date: \"2024-01-01\", scenario: ac1}}\n  title: First\n")
+	write("page.yaml", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: page\nspec:\n  children:\n    - kind: ChartTime\n      ref: trend\n    - kind: AnnotationList\n      metadata:\n        name: list\n      spec: {}\n")
+	docs, err := config.LoadDir(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, salesData, "en", "", "", ModePreview, nil, nil, "v1.0.0-next.30", nil, nil, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	notes := filepath.Join(dir, "notes.yaml")
+	layer := layerItems(t, string(result.HTML))
+	if len(layer) != 1 || layer[0].Name != "first" || layer[0].SourceFile != notes || layer[0].Line != 8 {
+		t.Fatalf("layer = %+v, want first at %s:8", layer, notes)
+	}
+	list := listItems(t, string(result.HTML))
+	if len(list) != 1 || list[0].SourceFile != notes || list[0].Line != 8 {
+		t.Fatalf("list = %+v", list)
 	}
 }

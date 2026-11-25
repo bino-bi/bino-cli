@@ -41,6 +41,14 @@ var SupportedEngineRanges = []string{
 // older engines.
 const AnnotationsMinVersion = "v1.0.0-next.30"
 
+// AnnotationNamesMinVersion is the first engine release that writes the name
+// of an annotation to data-bino-annotation on its mark and list entry, and
+// whose bn-annotation-layer has the interactive prop. It is a feature floor,
+// not an error: below it the preview works, and a click on a mark in annotate
+// mode lands on the component under it. The VS Code extension keeps a copy
+// for its notice (vscode-bino/src/annotations/annotationModel.ts).
+const AnnotationNamesMinVersion = "v1.0.0-next.88"
+
 // CheckAnnotationSupport returns an error when a project with annotations uses
 // an engine older than AnnotationsMinVersion. An empty or unreadable version
 // is no finding: there is nothing to compare, and CheckCompatibility reports it.

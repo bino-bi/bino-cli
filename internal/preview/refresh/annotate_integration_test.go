@@ -5,6 +5,7 @@ package refresh
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -328,5 +329,101 @@ func waitFor(t *testing.T, ok func() bool) {
 			t.Fatal("timeout")
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// a layer that names its marks like engine v1.0.0-next.88: an interactive
+// prop and data-bino-annotation on each mark
+const markFrame = `<!doctype html><html><head>%ANNOTATE%</head><body style="margin:0">
+<bn-layout-page data-bino-page="overview">
+  <div data-bino-kind="Table" data-bino-name="detail"><div style="width:400px;height:200px">table</div></div>
+  <bn-annotation-layer slot="annotations" items='[{"name":"peak","label":"1","mark":"marker","target":"t1","sourceFile":"/p/notes.yaml","line":12},{"name":"lost","label":"2","mark":"frame","target":"t1"}]'></bn-annotation-layer>
+</bn-layout-page>
+<script>
+customElements.define('bn-annotation-layer', class extends HTMLElement {
+  get interactive() { return this.hasAttribute('interactive'); }
+  connectedCallback() {
+    const root = this.attachShadow({mode:'open'});
+    root.innerHTML = '<style>:host{position:absolute;left:0;top:0;width:400px;height:200px;pointer-events:none}' +
+      ':host([interactive]) .mark{pointer-events:auto}</style>' +
+      '<svg width="400" height="200"><g class="mark marker" data-bino-annotation="peak"><circle id="peak" cx="50" cy="50" r="10"></circle></g>' +
+      // an arrow drawn later, whose invisible hit line lies over the marker
+      '<g class="mark arrow" data-bino-annotation="drop"><line class="hit" x1="0" y1="55" x2="200" y2="55" style="stroke:transparent;stroke-width:12;pointer-events:stroke"></line>' +
+      '<line x1="0" y1="55" x2="200" y2="55" style="stroke:black;stroke-width:1.5"></line></g></svg>';
+  }
+});
+</script></body></html>`
+
+func TestIntegration_AnnotateModeMarks(t *testing.T) {
+	ctx, done := annotateSetup(t, markFrame, nil)
+	defer done()
+	waitFor(t, func() bool {
+		for _, m := range messages(t, ctx) {
+			if m["type"] == "bino:annotations" {
+				return true
+			}
+		}
+		return false
+	})
+	var report, caps map[string]any
+	for _, m := range messages(t, ctx) {
+		switch m["type"] {
+		case "bino:annotations":
+			report = m
+		case "bino:capabilities":
+			caps = m
+		}
+	}
+	if caps["marks"] != float64(1) {
+		t.Fatalf("capabilities = %v, want marks 1 for an engine with mark names", caps)
+	}
+	got, _ := json.Marshal(report["pages"])
+	if want := `[{"items":[{"label":"1","name":"peak","placed":true},{"label":"2","name":"lost","placed":false}],"page":"overview"}]`; string(got) != want {
+		t.Fatalf("report = %s\nwant     %s", got, want)
+	}
+
+	if err := chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`annotate(true)`)); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	on, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.getElementById('f').contentDocument.querySelector('bn-annotation-layer').hasAttribute('interactive')`))
+	if err != nil || !on {
+		t.Fatalf("the layer is not interactive in annotate mode (err %v)", err)
+	}
+	mark := `d => d.querySelector('bn-annotation-layer').shadowRoot.getElementById('peak')`
+	pick := clickIn(t, ctx, mark, 0, 0, false)
+	if pick == nil {
+		pick = map[string]any{}
+	}
+	for _, m := range messages(t, ctx) {
+		if m["type"] == "bino:revealAnnotation" {
+			pick = m
+		}
+	}
+	gotPick, _ := json.Marshal(pick)
+	if want := `{"line":12,"name":"peak","source":false,"sourceFile":"/p/notes.yaml","type":"bino:revealAnnotation"}`; string(gotPick) != want {
+		t.Fatalf("click on a mark = %s\nwant              %s", gotPick, want)
+	}
+
+	// Ctrl+click on a mark asks for its source, not for the component's
+	before := len(messages(t, ctx))
+	clickIn(t, ctx, mark, 0, 0, true)
+	time.Sleep(300 * time.Millisecond)
+	var types []string
+	for _, m := range messages(t, ctx)[before:] {
+		types = append(types, m["type"].(string)+fmt.Sprint(m["source"]))
+	}
+	if strings.Join(types, ",") != "bino:revealAnnotationtrue" {
+		t.Fatalf("Ctrl+click on a mark posted %v", types)
+	}
+
+	// off: the layer lets clicks through again
+	if err := chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`annotate(false)`)); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	off, _ := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.getElementById('f').contentDocument.querySelector('bn-annotation-layer').hasAttribute('interactive')`))
+	if off {
+		t.Fatal("the layer stays interactive after annotate mode is off")
 	}
 }
