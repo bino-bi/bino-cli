@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/mcp"
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -467,13 +468,15 @@ func runLSPScaffold(ctx context.Context, dir string, payloadJSON []byte, out io.
 		return outputJSON(out, lspScaffoldResult{Version: version.Version, Files: []scaffoldFileResult{}, Error: fmt.Sprintf("parse payload: %v", err)})
 	}
 
-	return outputJSON(out, scaffoldManifests(ctx, absDir, payload))
+	return outputJSON(out, scaffoldManifests(ctx, absDir, payload, false))
 }
 
 // scaffoldManifests writes a DataSource (and optional DataSet) from a parsed
 // payload into absDir, choosing file placement by project convention. It is
 // shared by the lsp-helper `scaffold` command and the MCP scaffold_source tool.
-func scaffoldManifests(ctx context.Context, absDir string, payload scaffoldPayload) lspScaffoldResult {
+// With contain set (the MCP tool) it refuses a target that a symlink takes
+// out of absDir.
+func scaffoldManifests(ctx context.Context, absDir string, payload scaffoldPayload, contain bool) lspScaffoldResult {
 	result := lspScaffoldResult{Version: version.Version, Files: []scaffoldFileResult{}}
 
 	if payload.DataSource.Name == "" {
@@ -487,6 +490,12 @@ func scaffoldManifests(ctx context.Context, absDir string, payload scaffoldPaylo
 	dsPattern := DetectFilePattern(manifests, schema.KindDataSource)
 	dsPath := SuggestOutputPath(dsPattern, payload.DataSource.Name, schema.KindDataSource)
 	dsAppended := dsPattern.Mode == "multi-document"
+	if contain {
+		if _, err := pathutil.ResolveInRoot(absDir, dsPath); err != nil {
+			result.Error = fmt.Sprintf("write datasource: %v", err)
+			return result
+		}
+	}
 	dsDoc := buildDataSourceDocument(dataSourceManifestFromPayload(payload.DataSource, filepath.Dir(filepath.Join(absDir, dsPath))))
 	if err := WriteSchemaDocument(dsDoc, absDir, dsPath, dsAppended, io.Discard); err != nil {
 		result.Error = fmt.Sprintf("write datasource: %v", err)
@@ -514,6 +523,12 @@ func scaffoldManifests(ctx context.Context, absDir string, payload scaffoldPaylo
 		dsetPattern := DetectFilePattern(manifests, schema.KindDataSet)
 		dsetPath := SuggestOutputPath(dsetPattern, payload.DataSet.Name, schema.KindDataSet)
 		dsetAppended := dsetPattern.Mode == "multi-document"
+		if contain {
+			if _, err := pathutil.ResolveInRoot(absDir, dsetPath); err != nil {
+				result.Error = fmt.Sprintf("write dataset: %v", err)
+				return result
+			}
+		}
 		if err := WriteSchemaDocument(dsetDoc, absDir, dsetPath, dsetAppended, io.Discard); err != nil {
 			// The DataSource was written successfully; surface the error but keep it.
 			result.Error = fmt.Sprintf("write dataset: %v", err)

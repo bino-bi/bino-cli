@@ -60,6 +60,8 @@ func (h *handlers) registerPublishTool(srv *mcpsdk.Server) {
 	// check a package against the registry's gate before a human publishes it.
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_publish_check",
+		Title:       "Check a package before publish",
+		Annotations: readOnlyTool("Check a package before publish"),
 		Description: "Check this project's [package] against the registry's validation gate by running `bino publish --dry-run --json` (network). It uploads the package files for validation but mints no version, so it is safe to repeat. Run validate_project first; the registry's gate is the authority, so a package that validates locally can still be rejected - `output` then carries the gate findings to fix. Needs a credential; if none resolves the human must run `bino registry login` (never try to obtain one). In a GitHub Actions job with an OIDC token and no credential, `bino publish` uses Trusted Publishing by itself. Publishing itself is registry_publish, or `bino publish --bump <level>` run by the human.",
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, in registryPublishCheckInput) (*mcpsdk.CallToolResult, registryPublishOutput, error) {
 		return h.runPublish(ctx, req, registryPublishInput{Bump: in.Bump, DryRun: true})
@@ -70,6 +72,8 @@ func (h *handlers) registerPublishTool(srv *mcpsdk.Server) {
 	}
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_publish",
+		Title:       "Publish package version",
+		Annotations: destructiveTool("Publish package version"),
 		Description: "Publish this project's [package] to the registry by running `bino publish --json` - this is IRREVERSIBLE: it mints an immutable version that cannot be deleted, and a first publish with visibility=public makes the package public. Only available because the human started the server with --allow-publish. Use dry_run=true first: the registry runs its validation gate without minting anything. bump (patch|minor|major) is required unless dry_run. Republishing unchanged content succeeds with unchanged=true. To sign the release set sign_key (a private key file, optionally with sign_cert_chain) or, in CI only, sign_keyless; the result then names the signer and rootKind. When the registry rejects the package, `output` carries its gate findings - fix those, not the local lint. Needs a credential; if none resolves the human must run `bino registry login` (never try to obtain one). In a GitHub Actions job with an OIDC token and no credential, `bino publish` uses Trusted Publishing by itself.",
 	}, h.runPublish)
 }

@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"bino.bi/bino/internal/logx"
@@ -298,6 +299,9 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 // probeWritable creates dir and writes a probe file in it. MkdirAll alone
 // succeeds on an existing read-only dir.
 func probeWritable(dir string) error {
+	if projectCacheOff.Load() {
+		return errProjectCacheOff
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -307,6 +311,17 @@ func probeWritable(dir string) error {
 	}
 	return errors.Join(f.Close(), os.Remove(f.Name()))
 }
+
+var (
+	projectCacheOff    atomic.Bool
+	errProjectCacheOff = errors.New("project cache is off")
+)
+
+// DisableProjectCache keeps this process from writing the dataset cache and
+// inline CSV scratch files into the project: both then go to a temp dir. A
+// read-only daemon calls it, so it writes nothing into the tree even when
+// the tree is writable.
+func DisableProjectCache() { projectCacheOff.Store(true) }
 
 // readCache returns the cache file path for a dataset and its cached rows.
 // An empty cacheDir means the cache is off: no path, no read.

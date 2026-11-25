@@ -57,6 +57,11 @@ type Deps struct {
 	// preview_server_stop. The daemon passes the instance its /preview routes
 	// manage, so editor and agent share one preview.
 	Preview *daemon.PreviewProcess
+	// ReadOnly, when true, serves only tools that change nothing on disk and
+	// start no process: no authoring, registry, build, layout, publish, preview
+	// or introspect_source tools, whatever the other fields hold. For a host
+	// that runs bino on a tree it mounts read-only.
+	ReadOnly bool
 }
 
 const serverInstructions = `bino is "Report-as-Code": pixel-perfect PDF reports defined as YAML manifests + SQL.
@@ -110,17 +115,26 @@ func NewServer(deps Deps) *mcpsdk.Server {
 		Instructions: serverInstructions,
 	})
 
+	if deps.ReadOnly {
+		deps.Authoring = nil
+		deps.Packages = nil
+		deps.Preview = nil
+		deps.AllowPublish = false
+	}
 	h := &handlers{deps: deps}
 	h.registerResources(srv)
 	h.registerSkills(srv)
 	h.registerReadTools(srv)
 	h.registerSchemaTools(srv)
-	h.registerBuildTool(srv)
-	h.registerLayoutTool(srv)
 	h.registerAuthoringTools(srv)
 	h.registerPackagesTools(srv)
-	h.registerPublishTool(srv)
 	h.registerPreviewTools(srv)
+	if !deps.ReadOnly {
+		h.registerIntrospectTool(srv)
+		h.registerBuildTool(srv)
+		h.registerLayoutTool(srv)
+		h.registerPublishTool(srv)
+	}
 	return srv
 }
 
@@ -376,6 +390,8 @@ type KindInfo struct {
 func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "list_kinds",
+		Title:       "List manifest kinds",
+		Annotations: readOnlyTool("List manifest kinds"),
 		Description: "List every manifest kind (built-in + plugin) with its capability category.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, listKindsOutput, error) {
 		kinds, err := h.listKinds(ctx)
@@ -387,6 +403,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "describe_kind",
+		Title:       "Describe a kind schema",
+		Annotations: readOnlyTool("Describe a kind schema"),
 		Description: "Full spec JSON Schema for one manifest kind (self-contained, with $defs). Large - up to ~20k tokens for layout kinds. Prefer outline_kind first and scaffold_kind to start a document; use this only for a shape the outline leaves ambiguous.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in describeKindInput) (*mcpsdk.CallToolResult, describeKindOutput, error) {
 		raw, ok, err := h.specSchemaForKind(ctx, in.Kind)
@@ -404,6 +422,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "describe_project",
+		Title:       "Describe project documents",
+		Annotations: readOnlyTool("Describe project documents"),
 		Description: "List every document in the project: kind, name, file, and document position.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, daemon.IndexResult, error) {
 		st, err := h.state(ctx)
@@ -415,6 +435,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "describe_document",
+		Title:       "Describe documents in a file",
+		Annotations: readOnlyTool("Describe documents in a file"),
 		Description: "List the documents (kind, name, position) declared in a single manifest file.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in describeDocumentInput) (*mcpsdk.CallToolResult, describeDocumentOutput, error) {
 		st, err := h.state(ctx)
@@ -433,6 +455,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "validate_project",
+		Title:       "Validate project",
+		Annotations: readOnlyTool("Validate project"),
 		Description: "Validate the project on disk and return diagnostics. Set execute_queries to also run datasets and report data-validation warnings.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in validateProjectInput) (*mcpsdk.CallToolResult, daemon.ValidateResult, error) {
 		st, err := h.state(ctx)
@@ -444,6 +468,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "get_columns",
+		Title:       "Get dataset columns",
+		Annotations: readOnlyTool("Get dataset columns"),
 		Description: "Return the column names of a DataSet or DataSource. Prefix the name with '$' to force a DataSource lookup.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getColumnsInput) (*mcpsdk.CallToolResult, daemon.ColumnsResult, error) {
 		st, err := h.state(ctx)
@@ -455,6 +481,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "get_rows",
+		Title:       "Get sample rows",
+		Annotations: readOnlyTool("Get sample rows"),
 		Description: "Return a sample of rows from a DataSet or DataSource (default limit 100). Prefix the name with '$' to force a DataSource lookup.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getRowsInput) (*mcpsdk.CallToolResult, daemon.RowsResult, error) {
 		limit := in.Limit
@@ -470,6 +498,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "graph_deps",
+		Title:       "Get dependency graph",
+		Annotations: readOnlyTool("Get dependency graph"),
 		Description: "Traverse the dependency graph from a node. direction: 'out' (dependencies), 'in' (dependents), or 'both' (default). Component nodes list the dataset columns they read in `columns` (dataset, column, role, field); column 'auto' means the engine picks it from the data.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in graphDepsInput) (*mcpsdk.CallToolResult, daemon.GraphDepsResult, error) {
 		st, err := h.state(ctx)
@@ -481,6 +511,8 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "validate_draft",
+		Title:       "Validate draft YAML",
+		Annotations: readOnlyTool("Validate draft YAML"),
 		Description: "Validate manifest YAML in memory (no disk write) and return schema/constraint diagnostics. Use this to check a draft before create_manifest or write_manifest.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in validateDraftInput) (*mcpsdk.CallToolResult, daemon.ValidateResult, error) {
 		st, release, err := h.draftState(ctx)
@@ -497,9 +529,13 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 		}
 		return nil, daemon.ValidateResult{Valid: len(diags) == 0, Diagnostics: diags}, nil
 	})
+}
 
+func (h *handlers) registerIntrospectTool(srv *mcpsdk.Server) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "introspect_source",
+		Title:       "Probe a data source",
+		Annotations: readOnlyTool("Probe a data source"),
 		Description: "Probe a not-yet-registered data source (CSV/Excel/database) and return its columns, sample rows, Excel sheet names, and detected CSV options. Pass the bare DataSource spec object (no apiVersion/kind/metadata).",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in introspectSourceInput) (*mcpsdk.CallToolResult, introspectSourceOutput, error) {
 		st, release, err := h.draftState(ctx)
@@ -774,4 +810,43 @@ func rawJSONResource(uri string, raw json.RawMessage) *mcpsdk.ReadResourceResult
 			Text:     string(raw),
 		}},
 	}
+}
+
+// readOnlyTool marks a tool that changes nothing.
+func readOnlyTool(title string) *mcpsdk.ToolAnnotations {
+	return &mcpsdk.ToolAnnotations{Title: title, ReadOnlyHint: true}
+}
+
+// writeTool marks a tool that changes files or state but only adds to it.
+func writeTool(title string) *mcpsdk.ToolAnnotations {
+	return &mcpsdk.ToolAnnotations{Title: title, DestructiveHint: new(false)}
+}
+
+// destructiveTool marks a tool that can overwrite or delete.
+func destructiveTool(title string) *mcpsdk.ToolAnnotations {
+	return &mcpsdk.ToolAnnotations{Title: title, DestructiveHint: new(true)}
+}
+
+// ListTools returns the tools srv serves, in the order a client sees them.
+func ListTools(ctx context.Context, srv *mcpsdk.Server) ([]*mcpsdk.Tool, error) {
+	ct, st := mcpsdk.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, st, nil)
+	if err != nil {
+		return nil, fmt.Errorf("connect server: %w", err)
+	}
+	defer ss.Close() //nolint:errcheck // in-memory session teardown
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "bino-list-tools", Version: version.Version}, nil)
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		return nil, fmt.Errorf("connect client: %w", err)
+	}
+	defer cs.Close() //nolint:errcheck // in-memory session teardown
+	var tools []*mcpsdk.Tool
+	for t, err := range cs.Tools(ctx, nil) {
+		if err != nil {
+			return nil, fmt.Errorf("list tools: %w", err)
+		}
+		tools = append(tools, t)
+	}
+	return tools, nil
 }

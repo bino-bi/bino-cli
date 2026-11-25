@@ -50,7 +50,9 @@ type layoutStateOutput struct {
 
 func (h *handlers) registerLayoutTool(srv *mcpsdk.Server) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
-		Name: "get_layout_state",
+		Name:        "get_layout_state",
+		Title:       "Inspect rendered layout",
+		Annotations: writeTool("Inspect rendered layout"),
 		Description: "Inspect what a report ACTUALLY rendered, by building it with a layout capture (runs headless Chrome - slow, writes files). " +
 			"Reports per component the box, row/bar counts, resolved scaling and diagnostics, plus findings: components that rendered empty, " +
 			"content that overflows, fonts auto-fitted down, charts of the same measure left on diverging scales, " +

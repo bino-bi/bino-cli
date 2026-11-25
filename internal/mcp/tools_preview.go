@@ -41,6 +41,8 @@ func (h *handlers) registerPreviewTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "preview_server_start",
+		Title:       "Start live preview",
+		Annotations: writeTool("Start live preview"),
 		Description: "Start the live preview server for this project (`bino preview --no-open`, loopback on the machine that runs this server), or reuse the one this server already started, and wait until it has rendered. A preview started elsewhere (e.g. in a terminal) on the same port is not reused: pass another port. Returns url (the full preview UI) and, with name, embedding_url: one component, LayoutPage or artefact rendered alone, without the preview UI. Both reload when files change. Open the URL in a browser you can control (for example a built-in browser pane) to look at the result; this server cannot show it. ready=false means the first render is still running after the wait; the URL works once it finishes. A tool error carries the preview's reason: an unknown name lists the available names, a failed refresh names the cause (fix it, then call again).",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in previewStartInput) (*mcpsdk.CallToolResult, previewStartOutput, error) {
 		info, err := p.Start(in.Port, "--no-open")
@@ -75,6 +77,8 @@ func (h *handlers) registerPreviewTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "preview_server_stop",
+		Title:       "Stop live preview",
+		Annotations: writeTool("Stop live preview"),
 		Description: "Stop the live preview server. An editor that uses the same preview loses it too.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, previewStartOutput, error) {
 		p.Stop()

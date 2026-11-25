@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/version"
 )
@@ -23,6 +26,9 @@ func newMCPCommand() *cobra.Command {
 		workdir      string
 		noProxy      bool
 		allowPublish bool
+		readOnly     bool
+		listTools    bool
+		jsonOut      bool
 	)
 
 	cmd := &cobra.Command{
@@ -47,13 +53,20 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 			if err != nil {
 				return ConfigError(err)
 			}
+			if listTools {
+				return printMCPTools(ctx, cmd.OutOrStdout(), projectRoot, allowPublish, readOnly, jsonOut)
+			}
+			if readOnly {
+				dataset.DisableProjectCache()
+			}
 			if !initialized {
 				logger.Infof("No bino.toml found; starting MCP rooted at %s - not yet a bino project (use init_bundle to scaffold a bundle here)", projectRoot)
 			}
 
 			// Proxy to a running daemon when one exists, so the agent reuses the
 			// daemon's loaded State rather than spinning up a second DuckDB session.
-			if !noProxy {
+			// The daemon decides its own tool set, so a read-only server never proxies.
+			if !noProxy && !readOnly {
 				if pf, _ := daemon.ReadPortFile(projectRoot); pf != nil { //nolint:errcheck // a missing or unreadable port file means no daemon to proxy to
 					endpoint := fmt.Sprintf("http://127.0.0.1:%d/mcp", pf.Port)
 					logger.Infof("Proxying to daemon MCP at %s", endpoint)
@@ -68,13 +81,17 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 				}
 			}
 
-			return runMCPStandalone(ctx, logger, projectRoot, allowPublish)
+			return runMCPStandalone(ctx, logger, projectRoot, allowPublish, readOnly)
 		},
 	}
 
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory (project root)")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "Always run standalone, even if a daemon is running")
 	cmd.Flags().BoolVar(&allowPublish, "allow-publish", false, "Expose the registry_publish tool (irreversible: mints an immutable, possibly public, registry version)")
+	cmd.Flags().BoolVar(&readOnly, "read-only", false, "Serve only tools that change nothing: no authoring, registry, build, layout, publish, preview or source probe")
+	cmd.Flags().BoolVar(&listTools, "list-tools", false, "Print the tools this server offers and exit (honors --read-only and --allow-publish)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "With --list-tools: print name, title, annotations and input schema as JSON")
+	cmd.MarkFlagsMutuallyExclusive("read-only", "allow-publish")
 	return cmd
 }
 
@@ -102,7 +119,7 @@ func resolveMCPRoot(workdir string) (root string, initialized bool, err error) {
 
 // runMCPStandalone serves the MCP directly over stdio (no daemon involved). The
 // project State is opened on the first call that needs it (see lazyProject).
-func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot string, allowPublish bool) error {
+func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot string, allowPublish, readOnly bool) error {
 	// Plugins are loaded with the State so plugin kinds/linters appear in
 	// schema/validate (parity with the daemon and `bino schema`); the build tool
 	// shells out to `bino build`, which enforces engine-compat itself.
@@ -115,6 +132,7 @@ func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot strin
 	logger.Infof("bino MCP server ready (standalone) for %s", projectRoot)
 	deps := newStandaloneDeps(project, allowPublish)
 	deps.Preview = preview
+	deps.ReadOnly = readOnly
 	srv := mcp.NewServer(deps)
 	return srv.Run(ctx, &mcpsdk.StdioTransport{})
 }
@@ -205,6 +223,29 @@ func mirrorUpstream(ctx context.Context, local *mcpsdk.Server, upstream *mcpsdk.
 				return upstream.GetPrompt(ctx, &mcpsdk.GetPromptParams{Name: req.Params.Name, Arguments: req.Params.Arguments})
 			})
 		}
+	}
+	return nil
+}
+
+// printMCPTools lists the tools a server with these flags offers, without
+// opening the project: the tool set does not depend on its content.
+func printMCPTools(ctx context.Context, out io.Writer, projectRoot string, allowPublish, readOnly, jsonOut bool) error {
+	project := newLazyProject(ctx, logx.Nop(), projectRoot)
+	defer project.close()
+	deps := newStandaloneDeps(project, allowPublish)
+	deps.Preview = daemon.NewPreviewProcess(projectRoot, logx.Nop())
+	deps.ReadOnly = readOnly
+	tools, err := mcp.ListTools(ctx, mcp.NewServer(deps))
+	if err != nil {
+		return RuntimeError(err)
+	}
+	if jsonOut {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]any{"version": version.Version, "tools": tools})
+	}
+	for _, t := range tools {
+		fmt.Fprintf(out, "%-28s %s\n", t.Name, t.Title)
 	}
 	return nil
 }

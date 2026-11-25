@@ -59,11 +59,15 @@ func (a *cliAuthoring) CreateManifest(ctx context.Context, in mcp.CreateManifest
 		pattern := DetectFilePattern(manifests, in.Kind)
 		outputPath = SuggestOutputPath(pattern, in.Name, in.Kind)
 		appendMode = pattern.Mode == "multi-document"
-	} else {
-		abs := outputPath
-		if !filepath.IsAbs(abs) {
-			abs = filepath.Join(a.root, abs)
+		if _, err := pathutil.ResolveInRoot(a.root, outputPath); err != nil {
+			return mcp.WriteResult{}, err
 		}
+	} else {
+		abs, err := pathutil.ResolveInRoot(a.root, outputPath)
+		if err != nil {
+			return mcp.WriteResult{}, err
+		}
+		outputPath = abs
 		if _, err := os.Stat(abs); err == nil {
 			appendMode = true // existing file -> append a document to it
 		}
@@ -71,6 +75,9 @@ func (a *cliAuthoring) CreateManifest(ctx context.Context, in mcp.CreateManifest
 
 	if err := WriteSchemaDocument(doc, a.root, outputPath, appendMode, io.Discard); err != nil {
 		return mcp.WriteResult{}, err
+	}
+	if in.File != "" {
+		outputPath = in.File
 	}
 	return mcp.WriteResult{File: outputPath, Action: actionFor(appendMode)}, nil
 }
@@ -83,9 +90,9 @@ func (a *cliAuthoring) WriteManifest(ctx context.Context, in mcp.WriteManifestIn
 	if err := config.ValidateManifest(ctx, a.kinds, []byte(in.YAML)); err != nil {
 		return mcp.WriteResult{}, fmt.Errorf("invalid manifest: %w", err)
 	}
-	abs := in.File
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(a.root, abs)
+	abs, err := pathutil.ResolveInRoot(a.root, in.File)
+	if err != nil {
+		return mcp.WriteResult{}, err
 	}
 	if in.Append {
 		if err := AppendToManifest(abs, in.YAML); err != nil {
@@ -148,9 +155,9 @@ func (a *cliAuthoring) rewriteManifest(ctx context.Context, file string, positio
 		pos = 1
 	}
 
-	abs := file
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(a.root, abs)
+	abs, err := pathutil.ResolveInRoot(a.root, file)
+	if err != nil {
+		return mcp.WriteResult{}, err
 	}
 	content, err := os.ReadFile(abs) //nolint:gosec // G304: path under the project root, supplied by the local agent
 	if err != nil {
@@ -181,7 +188,7 @@ func (a *cliAuthoring) ScaffoldSource(ctx context.Context, payload json.RawMessa
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return mcp.ScaffoldResult{}, fmt.Errorf("parse payload: %w", err)
 	}
-	res := scaffoldManifests(ctx, a.root, p)
+	res := scaffoldManifests(ctx, a.root, p, true)
 	out := mcp.ScaffoldResult{OK: res.OK, Error: res.Error, Files: make([]mcp.ScaffoldFile, 0, len(res.Files))}
 	for _, f := range res.Files {
 		out.Files = append(out.Files, mcp.ScaffoldFile{Path: f.Path, Appended: f.Appended})
@@ -220,12 +227,17 @@ func (a *cliAuthoring) initBundle(ctx context.Context, in mcp.InitBundleInput) (
 	if err != nil {
 		return mcp.InitResult{}, err
 	}
-	dir := in.Directory
-	switch {
-	case dir == "":
-		dir = a.root
-	case !filepath.IsAbs(dir):
-		dir = filepath.Join(a.root, dir)
+	dir := a.root
+	if in.Directory != "" {
+		if dir, err = pathutil.ResolveInRoot(a.root, in.Directory); err != nil {
+			return mcp.InitResult{}, err
+		}
+	}
+	// The renderer writes through whatever is already in dir, so every file
+	// it writes is checked against the root.
+	check := func(p string) error {
+		_, err := pathutil.ResolveInRoot(a.root, p)
+		return err
 	}
 
 	if src.Kind == tmpl.SourceBuiltin {
@@ -243,7 +255,7 @@ func (a *cliAuthoring) initBundle(ctx context.Context, in mcp.InitBundleInput) (
 		if err != nil {
 			return mcp.InitResult{}, err
 		}
-		created, absDir, err := renderBuiltinBundle(src.Name, data, in.Force)
+		created, absDir, err := renderBuiltinBundleChecked(src.Name, data, in.Force, check)
 		if err != nil {
 			return mcp.InitResult{}, err
 		}
@@ -272,8 +284,11 @@ func (a *cliAuthoring) initBundle(ctx context.Context, in mcp.InitBundleInput) (
 	if err != nil {
 		return mcp.InitResult{}, err
 	}
-	created, err := tmpl.RenderTree(resolved.Root, resolved.Manifest, dir, vars, in.Force)
+	created, err := tmpl.RenderTreeChecked(resolved.Root, resolved.Manifest, dir, vars, in.Force, check)
 	if err != nil {
+		return mcp.InitResult{}, err
+	}
+	if err := check(pathutil.ProjectConfigPath(dir)); err != nil {
 		return mcp.InitResult{}, err
 	}
 	if err := pathutil.StampTemplateProvenance(dir, resolved.Provenance); err != nil {

@@ -65,6 +65,10 @@ type ServerConfig struct {
 	Preview *PreviewProcess
 	// Token is the secret every request must carry; empty generates one.
 	Token string
+	// ReadOnly refuses the routes that write files, start a process, reach
+	// the network or probe a source the caller names: preview, build,
+	// introspect-draft, preview-dataset and registry.
+	ReadOnly bool
 }
 
 // NewServer constructs a daemon HTTP server.
@@ -120,18 +124,24 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("POST /validate-draft", srv.handleValidateDraft)
 	mux.HandleFunc("GET /columns", srv.handleColumns)
 	mux.HandleFunc("GET /rows", srv.handleRows)
-	mux.HandleFunc("POST /introspect-draft", srv.handleIntrospectDraft)
 	mux.HandleFunc("POST /sqlgen/typed-select", srv.handleTypedSelect)
-	mux.HandleFunc("POST /preview-dataset", srv.handlePreviewDataSet)
 	mux.HandleFunc("GET /dataset-schema", srv.handleDatasetSchema)
 	mux.HandleFunc("GET /graph-deps", srv.handleGraphDeps)
-	mux.HandleFunc("GET /registry/packages", srv.handleRegistryPackages)
-	mux.HandleFunc("GET /registry/search", srv.handleRegistrySearch)
-	mux.HandleFunc("GET /registry/info", srv.handleRegistryInfo)
-	mux.HandleFunc("POST /preview/start", srv.handlePreviewStart)
-	mux.HandleFunc("POST /preview/stop", srv.handlePreviewStop)
-	mux.HandleFunc("GET /preview/status", srv.handlePreviewStatus)
-	mux.HandleFunc("POST /build", srv.handleBuild)
+	if cfg.ReadOnly {
+		for _, route := range readOnlyRefused {
+			mux.HandleFunc(route, srv.handleReadOnly)
+		}
+	} else {
+		mux.HandleFunc("POST /introspect-draft", srv.handleIntrospectDraft)
+		mux.HandleFunc("POST /preview-dataset", srv.handlePreviewDataSet)
+		mux.HandleFunc("GET /registry/packages", srv.handleRegistryPackages)
+		mux.HandleFunc("GET /registry/search", srv.handleRegistrySearch)
+		mux.HandleFunc("GET /registry/info", srv.handleRegistryInfo)
+		mux.HandleFunc("POST /preview/start", srv.handlePreviewStart)
+		mux.HandleFunc("POST /preview/stop", srv.handlePreviewStop)
+		mux.HandleFunc("GET /preview/status", srv.handlePreviewStatus)
+		mux.HandleFunc("POST /build", srv.handleBuild)
+	}
 	mux.HandleFunc("GET /events", srv.handleEvents)
 	mux.HandleFunc("POST /shutdown", srv.handleShutdown)
 
@@ -454,6 +464,23 @@ func (s *Server) RequestShutdown() {
 func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
 	s.writeJSON(w, map[string]string{"status": "shutting down"})
 	s.RequestShutdown()
+}
+
+// readOnlyRefused are the routes a read-only daemon answers with 403.
+var readOnlyRefused = []string{
+	"POST /introspect-draft",
+	"POST /preview-dataset",
+	"GET /registry/packages",
+	"GET /registry/search",
+	"GET /registry/info",
+	"POST /preview/start",
+	"POST /preview/stop",
+	"GET /preview/status",
+	"POST /build",
+}
+
+func (s *Server) handleReadOnly(w http.ResponseWriter, _ *http.Request) {
+	s.writeJSONError(w, http.StatusForbidden, errors.New("the daemon runs with --read-only"), "read_only")
 }
 
 // --- Preview subprocess management ---

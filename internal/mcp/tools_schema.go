@@ -59,6 +59,8 @@ type scaffoldKindOutput struct {
 func (h *handlers) registerSchemaTools(srv *mcpsdk.Server) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "outline_kind",
+		Title:       "Outline a kind",
+		Annotations: readOnlyTool("Outline a kind"),
 		Description: "Compact outline of a manifest kind's spec: one entry per field with its dotted path ([] marks array items, three levels deep), type, required flag, enum, default and full description. Layout kinds report the allowed child kinds as childKinds instead of expanding the children slot. Start here before writing a manifest; use describe_kind only for a shape the outline leaves ambiguous. Note: required on a nested field is true when any schema alternative requires it.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in outlineKindInput) (*mcpsdk.CallToolResult, outlineKindOutput, error) {
 		m, err := h.schemaModel(ctx)
@@ -70,6 +72,8 @@ func (h *handlers) registerSchemaTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "scaffold_kind",
+		Title:       "Scaffold a kind document",
+		Annotations: readOnlyTool("Scaffold a kind document"),
 		Description: "Starter YAML document for a manifest kind: apiVersion, kind, metadata.name and every required spec field, pre-filled with its default or first enum value. Fill in the placeholders, then validate_draft.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in scaffoldKindInput) (*mcpsdk.CallToolResult, scaffoldKindOutput, error) {
 		m, err := h.schemaModel(ctx)

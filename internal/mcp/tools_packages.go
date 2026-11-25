@@ -18,6 +18,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_packages",
+		Title:       "List project packages",
+		Annotations: readOnlyTool("List project packages"),
 		Description: "List the project's package dependencies fully offline: bino.lock entries merged with bino.toml [dependencies], whether each is installed under .bino/registry/, and the params each package declares. A package declared in bino.toml but missing from bino.lock is listed with installed=false (the human runs `bino registry install`).",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, registryPackagesOutput, error) {
 		pkgs, err := p.Packages(ctx)
@@ -29,6 +31,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_search",
+		Title:       "Search the registry",
+		Annotations: readOnlyTool("Search the registry"),
 		Description: "Search the package registry (network). Use it before authoring a component from scratch: a published predef may already provide it.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registrySearchInput) (*mcpsdk.CallToolResult, registry.SearchResult, error) {
 		res, err := p.Search(ctx, registry.SearchParams{
@@ -47,6 +51,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_info",
+		Title:       "Get package info",
+		Annotations: readOnlyTool("Get package info"),
 		Description: "Resolve one package spec (@scope/name[@version|@tag]) against the registry (network): resolved version, kinds, files, dependencies, and installedVersion when the project already locks it.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryInfoInput) (*mcpsdk.CallToolResult, daemon.RegistryInfoResult, error) {
 		spec, err := registry.ParseSpec(in.Spec)
@@ -62,6 +68,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_auth_status",
+		Title:       "Registry login status",
+		Annotations: readOnlyTool("Registry login status"),
 		Description: "Report the resolved registry URL, whether a credential is available, and where credentials are stored. Never returns the token. When not authenticated, the human must run `bino registry login`; do not try to obtain a token.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, RegistryAuthStatus, error) {
 		res, err := p.AuthStatus(ctx)
@@ -73,6 +81,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_add",
+		Title:       "Add registry packages",
+		Annotations: writeTool("Add registry packages"),
 		Description: "Add registry packages as project dependencies (network; writes bino.toml, bino.lock and .bino/registry/). Each spec is @scope/name[@version|@tag]; a bare name follows the latest tag. Resolves the transitive closure, verifies every download before writing anything, and reloads the project before returning. The result lists every package in the closure with its locked version before and after, non-blocking compat warnings, and nameCollisions: an installed document that shares kind and name with a local document fails the build's duplicate-name check - rename the local document. Package signatures are checked against bino.lock and the [trust] policy: a package whose signer changed, or that the policy rejects, fails the call; accepting a new signer is the human's decision (`bino registry trust accept <package>`), never work around it.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryAddInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
 		if len(in.Specs) == 0 {
@@ -83,6 +93,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_update",
+		Title:       "Update registry packages",
+		Annotations: writeTool("Update registry packages"),
 		Description: "Re-resolve tag-following dependencies to their newest versions and rewrite bino.lock (network). Pinned versions are held. With packages given, only those are re-resolved and every other direct dependency is held at its locked version. Package signatures are checked against bino.lock and the [trust] policy: a package whose signer changed, or that the policy rejects, fails the call; accepting a new signer is the human's decision (`bino registry trust accept <package>`), never work around it.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryUpdateInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
 		return h.mutatePackages(func() (RegistryMutationResult, error) { return p.Update(ctx, in.Packages) })
@@ -90,6 +102,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_remove",
+		Title:       "Remove registry packages",
+		Annotations: destructiveTool("Remove registry packages"),
 		Description: "Remove declared dependencies from bino.toml and sweep every locked package no longer reachable from the remaining declarations (offline). A transitive still required by another package is kept.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryRemoveInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
 		if len(in.Packages) == 0 {
@@ -100,6 +114,8 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_install",
+		Title:       "Install locked packages",
+		Annotations: writeTool("Install locked packages"),
 		Description: "Re-materialize .bino/registry/ exactly as pinned in bino.lock without re-resolving (idempotent). Fails when bino.lock disagrees with bino.toml [dependencies]; then run registry_update. Package signatures are checked against bino.lock and the [trust] policy: a package whose signer changed, or that the policy rejects, fails the call; accepting a new signer is the human's decision (`bino registry trust accept <package>`), never work around it.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
 		return h.mutatePackages(func() (RegistryMutationResult, error) { return p.Install(ctx) })

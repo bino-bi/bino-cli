@@ -18,8 +18,8 @@ Follow `bino-packaging`. This MCP server only serves its own project root.
    **Existing project:** add the `[package]` table to `bino.toml`, rename the documents to ship to
    `@scope/name/<part>` (and every `ref` to them), move artefacts and sample data to `mocks/`, and set
    `include`.
-   **Separate directory:** call `init_bundle` with an absolute directory outside this project, set the
-   license there, then stop: tell the human to open a new session in that directory. Do not run
+   **Separate directory:** the MCP tools only write inside this project, so stop here: tell the human
+   to create the directory, open a new session in it and run `/bino:package` again. Do not run
    `validate_project` or `/bino:publish` here; they would check the current project.
 4. `validate_project()` and fix the package findings.
 5. Suggest next steps: author the components (`bino-authoring`), then `/bino:publish`.

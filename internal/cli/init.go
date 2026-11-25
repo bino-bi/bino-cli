@@ -949,6 +949,12 @@ func renderFieldDefault(fld tmpl.Field, vars map[string]any) (string, error) {
 // renderBuiltinBundle renders a built-in template (minimal, predef or standard) into the
 // target directory via the shared template engine.
 func renderBuiltinBundle(name string, data initTemplateData, force bool) (created []string, dir string, err error) {
+	return renderBuiltinBundleChecked(name, data, force, nil)
+}
+
+// renderBuiltinBundleChecked is renderBuiltinBundle with a check on every
+// target path (see template.RenderTreeChecked).
+func renderBuiltinBundleChecked(name string, data initTemplateData, force bool, check func(string) error) (created []string, dir string, err error) {
 	root, err := tmpl.BuiltinRoot(name)
 	if err != nil {
 		return nil, "", err
@@ -957,7 +963,7 @@ func renderBuiltinBundle(name string, data initTemplateData, force bool) (create
 	if err != nil {
 		return nil, "", err
 	}
-	created, err = tmpl.RenderTree(root, manifest, data.Directory, data.renderVars(), force)
+	created, err = tmpl.RenderTreeChecked(root, manifest, data.Directory, data.renderVars(), force, check)
 	if err != nil {
 		return nil, "", err
 	}
