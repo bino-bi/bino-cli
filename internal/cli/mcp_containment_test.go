@@ -180,3 +180,26 @@ func TestInitBundleIgnoresUnrelatedSymlinks(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// The JSON skill listing carries every served skill with its file texts.
+func TestListSkillsJSON(t *testing.T) {
+	var buf bytes.Buffer
+	if err := printMCPSkills(&buf, true); err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Skills []mcp.SkillEntry `json:"skills"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	want, _ := mcp.SkillCatalog()
+	if len(out.Skills) != len(want) || len(out.Skills) == 0 {
+		t.Fatalf("%d skills listed, catalog has %d", len(out.Skills), len(want))
+	}
+	for i, s := range out.Skills {
+		if s.URI != want[i].URI || len(s.Files) != len(want[i].Files) || s.Files[0].Text == "" {
+			t.Errorf("skill %d: %s with %d files", i, s.URI, len(s.Files))
+		}
+	}
+}
