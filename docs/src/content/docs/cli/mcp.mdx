@@ -33,6 +33,14 @@ Flags:
 - `--no-proxy` - always run standalone, even if a daemon is running.
 - `--allow-publish` - also expose the `registry_publish` tool (see [Security](#security)). When
   `bino mcp` proxies to a running daemon, the daemon's `--mcp-allow-publish` flag decides instead.
+- `--read-only` - serve only the tools that change nothing (see [Read-only mode](#read-only-mode)).
+  A read-only server never proxies to a daemon.
+- `--list-tools` - print the tools this server would offer and exit, without opening the project.
+  It honours `--read-only` and `--allow-publish`. Add `--json` for each tool's name, title,
+  annotations and input schema, so another program can check what an installed bino offers.
+
+Every tool has a `title` and the hints `readOnlyHint` or `destructiveHint`, so a client can
+decide when to ask the user before a call.
 
 Clients that speak MCP over HTTP can instead point straight at a running daemon's endpoint,
 `http://127.0.0.1:<port>/mcp`. The daemon mounts `/mcp` by default on loopback - pass
@@ -222,7 +230,32 @@ to the human.
 8. build({artefacts:["q3"]})          → q3.pdf
 ```
 
+## Read-only mode
+
+`bino daemon --read-only` (and `bino mcp --read-only`) is for a host that runs bino next to a
+project it mounts read-only, for example a container in a hosted service. In this mode:
+
+- Only tools that change nothing are served: `list_kinds`, `describe_kind`, `outline_kind`,
+  `scaffold_kind`, `describe_project`, `describe_document`, `validate_project`, `validate_draft`,
+  `get_columns`, `get_rows` and `graph_deps`, plus the resources and skills.
+- The authoring, registry, `build`, `get_layout_state`, publish, preview and `introspect_source`
+  tools are not registered. The daemon answers its `/build`, `/preview/*`, `/registry/*` and
+  `/introspect-draft` routes with `403`.
+- The daemon writes no port file. Scratch files go to `$TMPDIR`, never to the project.
+- The daemon takes its token from the `BINO_DAEMON_TOKEN` environment variable, which is
+  required in this mode.
+
+```bash
+BINO_DAEMON_TOKEN=... bino daemon -w /work --read-only --listen-addr 0.0.0.0 --port 8080
+```
+
+`BINO_DAEMON_TOKEN` also works without `--read-only`: the daemon then uses it instead of making a
+new token, and still writes it to the port file.
+
 ## Security
+
+The authoring tools only read and write files inside the project root. They refuse an absolute
+path elsewhere, a `..` path that leaves the root, and a symlink that points out of it.
 
 The server runs SQL, reads the filesystem, and (via `build`) launches headless Chrome. This is
 intended for **local** use over stdio and a loopback HTTP endpoint. The daemon accepts only

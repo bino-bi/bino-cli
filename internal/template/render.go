@@ -33,6 +33,12 @@ func Render(name string, src []byte, data any) ([]byte, error) {
 // results under destDir. It returns the created relative paths, sorted. The same
 // path serves both built-in (embed.FS) and remote (os.DirFS) templates.
 func RenderTree(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any, force bool) ([]string, error) {
+	return RenderTreeChecked(srcFS, manifest, destDir, data, force, nil)
+}
+
+// RenderTreeChecked is RenderTree with check called on every absolute target
+// path before anything is written there; an error from it stops the render.
+func RenderTreeChecked(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any, force bool, check func(absPath string) error) ([]string, error) {
 	var created []string
 	walkErr := fs.WalkDir(srcFS, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -74,6 +80,11 @@ func RenderTree(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any
 		cleanDest := filepath.Clean(destDir)
 		if !strings.HasPrefix(absPath, cleanDest) || (absPath != cleanDest && !strings.HasPrefix(absPath, cleanDest+string(os.PathSeparator))) {
 			return fmt.Errorf("rendered path %q escapes the target directory", renderedPath)
+		}
+		if check != nil {
+			if err := check(absPath); err != nil {
+				return err
+			}
 		}
 		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
 			return fmt.Errorf("create directory %s: %w", filepath.Dir(absPath), err)

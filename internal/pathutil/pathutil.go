@@ -280,3 +280,73 @@ func DefaultGlobPattern(format string) string {
 		return "*"
 	}
 }
+
+// ErrOutsideRoot is returned by ResolveInRoot for a path that leaves the root.
+var ErrOutsideRoot = errors.New("path is outside the project root")
+
+// ResolveInRoot resolves p against root and refuses any path that ends up
+// outside root: an absolute path elsewhere, a ".." escape, or a symlink (on any
+// existing part of the path) that points out. The file itself may not exist yet.
+// It returns the cleaned absolute path.
+func ResolveInRoot(root, p string) (string, error) {
+	if strings.TrimSpace(p) == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve root: %w", err)
+	}
+	abs := p
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(absRoot, abs)
+	}
+	abs = filepath.Clean(abs)
+
+	realRoot, err := evalExistingPrefix(absRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve root: %w", err)
+	}
+	resolved, err := evalExistingPrefix(abs)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", p, err)
+	}
+	if !within(realRoot, resolved) {
+		return "", fmt.Errorf("%s: %w", p, ErrOutsideRoot)
+	}
+	return abs, nil
+}
+
+// evalExistingPrefix resolves symlinks in the longest existing prefix of p and
+// appends the part that does not exist yet.
+func evalExistingPrefix(p string) (string, error) {
+	rest := ""
+	cur := p
+	for {
+		resolved, err := filepath.EvalSymlinks(cur)
+		if err == nil {
+			return filepath.Join(resolved, rest), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		// A symlink whose target is missing would be created on write,
+		// wherever it points.
+		if info, lerr := os.Lstat(cur); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("%s is a dangling symlink: %w", cur, ErrOutsideRoot)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p, nil
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
+}
+
+func within(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}

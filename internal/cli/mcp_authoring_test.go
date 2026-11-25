@@ -245,8 +245,8 @@ func TestScaffoldSource(t *testing.T) {
 }
 
 func TestInitBundle(t *testing.T) {
-	cs, _ := newAuthoringClient(t)
-	dir := filepath.Join(t.TempDir(), "newbundle")
+	cs, root := newAuthoringClient(t)
+	dir := filepath.Join(root, "newbundle")
 
 	res := callTool(t, cs, "init_bundle", map[string]any{"directory": dir})
 	if res.IsError {

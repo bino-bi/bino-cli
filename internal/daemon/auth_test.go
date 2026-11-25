@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -131,5 +132,29 @@ func TestPortFileHoldsTokenPrivately(t *testing.T) {
 	}
 	if mode := info.Mode().Perm(); mode != 0o600 {
 		t.Errorf("port file mode = %o, want 600", mode)
+	}
+}
+
+func TestConfiguredTokenAndReadOnlyRoutes(t *testing.T) {
+	srv, err := NewServer(ServerConfig{ListenAddr: "127.0.0.1:0", Token: "fixed", ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = srv.Start(ctx) }()
+
+	if got := doAuth(t, srv, "GET", "/health", map[string]string{"Authorization": "Bearer other"}); got != http.StatusUnauthorized {
+		t.Errorf("other token: %d", got)
+	}
+	auth := map[string]string{"Authorization": "Bearer fixed"}
+	for _, route := range []string{
+		"POST /introspect-draft", "POST /preview-dataset", "GET /registry/packages", "GET /registry/search",
+		"GET /registry/info", "POST /preview/start", "POST /preview/stop", "GET /preview/status", "POST /build",
+	} {
+		method, path, _ := strings.Cut(route, " ")
+		if got := doAuth(t, srv, method, path, auth); got != http.StatusForbidden {
+			t.Errorf("%s: %d, want 403", route, got)
+		}
 	}
 }

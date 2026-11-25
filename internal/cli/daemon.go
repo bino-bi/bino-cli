@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/signal"
 	"sync/atomic"
 	"syscall"
@@ -16,6 +17,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/plugin"
+	"bino.bi/bino/internal/report/dataset"
 )
 
 // connCounter wraps an http.Handler and tracks the number of in-flight requests,
@@ -35,6 +37,10 @@ func (c *connCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (c *connCounter) active() int64 { return c.n.Load() }
 
 const defaultInactivityTimeout = 5 * time.Minute
+
+// daemonTokenEnv names the env var that sets the daemon's auth token, so a
+// program that starts the daemon knows the token without reading the port file.
+const daemonTokenEnv = "BINO_DAEMON_TOKEN" //nolint:gosec // G101: env var name, not a credential
 
 // watchIdle calls onIdle once active has reported zero on every check for
 // longer than timeout. It returns after onIdle or when ctx is done.
@@ -66,6 +72,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 		listenAddr      string
 		mcpEnabled      bool
 		mcpAllowPublish bool
+		readOnly        bool
 	)
 
 	cmd := &cobra.Command{
@@ -80,6 +87,15 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			// still use it; a log write to its closed pipe must not kill us.
 			signal.Ignore(syscall.SIGPIPE)
 
+			// Without a port file the env token is the only way to learn it.
+			if readOnly && os.Getenv(daemonTokenEnv) == "" {
+				return ConfigErrorf("--read-only needs the auth token in %s", daemonTokenEnv)
+			}
+
+			if readOnly {
+				dataset.DisableProjectCache()
+			}
+
 			env, err := initEditorCommandEnv(ctx, cmd, workdir, "preview", logger)
 			if err != nil {
 				return err
@@ -87,9 +103,10 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 
 			logger.Infof("Starting daemon for %s", env.ProjectRoot)
 
-			// Check for existing daemon
+			// Check for existing daemon. A read-only daemon writes no port file,
+			// so it neither registers itself nor collides with an editor's daemon.
 			existing, _ := daemon.ReadPortFile(env.ProjectRoot) //nolint:errcheck // a missing or unreadable port file means no daemon is running
-			if existing != nil {
+			if existing != nil && !readOnly {
 				return ConfigErrorf("daemon already running on port %d (pid %d)", existing.Port, existing.PID)
 			}
 
@@ -135,6 +152,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 					Packages:     newCLIPackages(state),
 					AllowPublish: mcpAllowPublish,
 					Preview:      preview,
+					ReadOnly:     readOnly,
 					// server is assigned below; the callback only runs once a
 					// tool call has gone through the mounted handler.
 					RegistryChanged: func() {
@@ -166,16 +184,19 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				PluginRegistry: env.PluginRegistry,
 				MCPHandler:     mcpHandler,
 				Preview:        preview,
+				Token:          os.Getenv(daemonTokenEnv),
+				ReadOnly:       readOnly,
 			})
 			if err != nil {
 				return RuntimeError(err)
 			}
 
-			// Write port file
-			if err := daemon.WritePortFile(env.ProjectRoot, server.Port(), server.Token()); err != nil {
-				return RuntimeError(err)
+			if !readOnly {
+				if err := daemon.WritePortFile(env.ProjectRoot, server.Port(), server.Token()); err != nil {
+					return RuntimeError(err)
+				}
+				defer daemon.RemovePortFile(env.ProjectRoot)
 			}
-			defer daemon.RemovePortFile(env.ProjectRoot)
 			defer preview.Shutdown(5 * time.Second)
 
 			logger.Infof("Daemon listening on %s:%d", listenAddr, server.Port())
@@ -250,6 +271,8 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 	cmd.Flags().StringVar(&listenAddr, "listen-addr", "127.0.0.1", "Address to listen on (use 0.0.0.0 to accept connections from a container network)")
 	cmd.Flags().BoolVar(&mcpEnabled, "mcp", true, "Mount the MCP server at /mcp (Streamable HTTP); use --mcp=false to disable")
 	cmd.Flags().BoolVar(&mcpAllowPublish, "mcp-allow-publish", false, "Expose the registry_publish MCP tool (irreversible: mints an immutable, possibly public, registry version)")
+	cmd.Flags().BoolVar(&readOnly, "read-only", false, "Serve only tools and routes that change nothing: no authoring, registry, build, layout, publish, preview or source probe; no port file")
+	cmd.MarkFlagsMutuallyExclusive("read-only", "mcp-allow-publish")
 
 	return cmd
 }

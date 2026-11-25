@@ -22,6 +22,8 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "create_manifest",
+		Title:       "Create manifest",
+		Annotations: writeTool("Create manifest"),
 		Description: "Create a new manifest of any kind from a spec object: builds the apiVersion/kind/metadata/spec envelope, validates it against the schema, and writes it atomically (auto-placing the file by project convention unless `file` is given). Read bino://schema/{kind} for the spec shape; validate_draft first if unsure.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in CreateManifestInput) (*mcpsdk.CallToolResult, WriteResult, error) {
 		res, err := a.CreateManifest(ctx, in)
@@ -33,6 +35,8 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "write_manifest",
+		Title:       "Write manifest file",
+		Annotations: destructiveTool("Write manifest file"),
 		Description: "Persist a full manifest document (one apiVersion/kind/metadata/spec YAML document), validated against the schema before writing. Set append=true to add it to an existing multi-document file. Writes are atomic.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in WriteManifestInput) (*mcpsdk.CallToolResult, WriteResult, error) {
 		res, err := a.WriteManifest(ctx, in)
@@ -44,6 +48,8 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "edit_manifest",
+		Title:       "Edit manifest",
+		Annotations: destructiveTool("Edit manifest"),
 		Description: "Edit one document in an existing manifest file in place, preserving comments and key order. Applies dotted-path edits (e.g. spec.title, spec.columns[0]) to document `position` (1-based, default 1). The edited document is validated against the schema before the file is written atomically. Set dryRun=true to validate and return the rewritten file (in the result's `content`) without writing.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in EditManifestInput) (*mcpsdk.CallToolResult, WriteResult, error) {
 		res, err := a.EditManifest(ctx, in)
@@ -55,6 +61,8 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "remove_manifest_fields",
+		Title:       "Remove manifest fields",
+		Annotations: destructiveTool("Remove manifest fields"),
 		Description: "Delete one or more dotted paths from one document in a manifest file in place, preserving comments and key order. A trailing [index] removes a sequence element (e.g. spec.columns[2]); otherwise the mapping key and its value are removed. The edited document is validated against the schema before the file is written atomically. Set dryRun=true to validate and return the rewritten file (in the result's `content`) without writing.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in RemoveManifestPathsInput) (*mcpsdk.CallToolResult, WriteResult, error) {
 		res, err := a.RemoveManifestPaths(ctx, in)
@@ -66,6 +74,8 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "reorder_manifest_sequence",
+		Title:       "Reorder manifest sequence",
+		Annotations: destructiveTool("Reorder manifest sequence"),
 		Description: "Move an element within a sequence in one document of a manifest file in place, preserving comments and key order. `path` addresses the sequence (e.g. spec.columns); the element at `from` (0-based) is moved so it ends up at `to`. The edited document is validated against the schema before the file is written atomically. Set dryRun=true to validate and return the rewritten file (in the result's `content`) without writing.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in ReorderManifestSequenceInput) (*mcpsdk.CallToolResult, WriteResult, error) {
 		res, err := a.ReorderManifestSequence(ctx, in)
@@ -77,6 +87,8 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "scaffold_source",
+		Title:       "Scaffold data source",
+		Annotations: writeTool("Scaffold data source"),
 		Description: "Scaffold a DataSource (and optionally a typed DataSet that selects from it) in one step, choosing file placement by project convention. Validates before writing.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in scaffoldSourceInput) (*mcpsdk.CallToolResult, ScaffoldResult, error) {
 		payload, err := json.Marshal(in)
@@ -92,6 +104,8 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "init_bundle",
+		Title:       "Create report bundle",
+		Annotations: destructiveTool("Create report bundle"),
 		Description: "Bootstrap a new bino report bundle (bino.toml + sample manifests + ignore files) in a target directory, so the project can be built or previewed immediately.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in InitBundleInput) (*mcpsdk.CallToolResult, InitResult, error) {
 		res, err := a.InitBundle(ctx, in)
