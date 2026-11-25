@@ -1,0 +1,9 @@
+# Hooks for https://pre-commit.com. They need bino on PATH.
+- id: bino-lint
+  name: bino lint
+  description: Validate bino manifests with bino lint before a commit.
+  # The lint log goes to a temp dir, so the hook leaves no files in the work tree.
+  entry: sh -c 'd=$(mktemp -d) || exit 1; bino lint --out-dir "$d" "$@"; s=$?; rm -rf "$d"; exit $s' bino-lint
+  language: system
+  pass_filenames: false
+  files: \.(ya?ml|toml|sql|csv)$
