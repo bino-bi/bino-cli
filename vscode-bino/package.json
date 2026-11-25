@@ -139,6 +139,11 @@
           "when": "bino.projectDetected"
         },
         {
+          "id": "binoAnnotations",
+          "name": "Annotations",
+          "when": "bino.projectDetected"
+        },
+        {
           "id": "binoDependencies",
           "name": "Dependencies",
           "when": "bino.projectDetected"
@@ -456,10 +461,49 @@
         "command": "bino.openSettings",
         "title": "Open Bino Settings",
         "category": "Bino"
+      },
+      {
+        "command": "bino.newAnnotation",
+        "title": "New Annotation",
+        "category": "Bino",
+        "icon": "$(add)"
+      },
+      {
+        "command": "bino.openAnnotationForm",
+        "title": "Edit Annotation",
+        "category": "Bino",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "bino.revealAnnotation",
+        "title": "Show Annotation in YAML",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.deleteAnnotation",
+        "title": "Delete Annotation",
+        "category": "Bino",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "bino.refreshAnnotations",
+        "title": "Refresh Annotations",
+        "category": "Bino",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "bino.newAnnotation",
+          "when": "view == binoAnnotations",
+          "group": "navigation@0"
+        },
+        {
+          "command": "bino.refreshAnnotations",
+          "when": "view == binoAnnotations",
+          "group": "navigation@1"
+        },
         {
           "command": "bino.addElement",
           "when": "view == binoDocuments",
@@ -499,6 +543,26 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "bino.newAnnotation",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.openAnnotationForm",
+          "when": "false"
+        },
+        {
+          "command": "bino.revealAnnotation",
+          "when": "false"
+        },
+        {
+          "command": "bino.deleteAnnotation",
+          "when": "false"
+        },
+        {
+          "command": "bino.refreshAnnotations",
+          "when": "bino.projectDetected"
+        },
         {
           "command": "bino.openStyleEditor",
           "when": "bino.projectDetected"
@@ -617,6 +681,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "bino.openAnnotationForm",
+          "when": "view == binoAnnotations && viewItem == binoAnnotation",
+          "group": "inline"
+        },
+        {
+          "command": "bino.openAnnotationForm",
+          "when": "view == binoAnnotations && viewItem == binoAnnotation",
+          "group": "annotation@1"
+        },
+        {
+          "command": "bino.deleteAnnotation",
+          "when": "view == binoAnnotations && viewItem == binoAnnotation",
+          "group": "annotation@2"
+        },
         {
           "command": "bino.openStyleEditor",
           "when": "view == binoDocuments && viewItem == binoDocumentComponentStyle",

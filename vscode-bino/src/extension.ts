@@ -19,6 +19,9 @@ import { TreeEditorProvider } from './treeTableEditor';
 import { DesignerEditorProvider } from './designer/designerPanel';
 import { StyleEditorProvider } from './styles/styleEditor';
 import { RuleSetEditorProvider } from './styles/ruleSetEditor';
+import { AnnotationsViewProvider, AnnotationEntry, annotationEntries, loadManifests } from './annotations/annotationsView';
+import { AnnotationFormPanel } from './annotations/annotationForm';
+import { documentLines } from './annotations/annotationModel';
 import { PreviewTreeProvider } from './previewTree';
 import { EnvironmentTreeProvider } from './environmentTree';
 import { DependenciesTreeProvider } from './dependenciesTree';
@@ -41,6 +44,7 @@ let treeTableEditorManager: TreeEditorProvider | undefined;
 let designerPanel: DesignerEditorProvider | undefined;
 let styleEditor: StyleEditorProvider | undefined;
 let ruleSetEditor: RuleSetEditorProvider | undefined;
+let annotationForm: AnnotationFormPanel | undefined;
 let daemonClient: DaemonClient | undefined;
 
 /**
@@ -535,6 +539,51 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
 
     // Register PRQL completions/snippets in YAML
     registerPrqlCompletion(context);
+
+    // Annotations view and form
+    const annotationsIndexer = indexer;
+    const annotationsView = new AnnotationsViewProvider(annotationsIndexer);
+    annotationForm = new AnnotationFormPanel(indexer, () => annotationsView.refresh());
+    const form = annotationForm;
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('binoAnnotations', annotationsView),
+        { dispose: () => annotationForm?.dispose() },
+        indexer.onDidUpdateIndex(() => annotationsView.refresh()),
+        vscode.languages.onDidChangeDiagnostics(() => annotationsView.refresh()),
+        vscode.commands.registerCommand('bino.refreshAnnotations', () => annotationsView.refresh()),
+        vscode.commands.registerCommand('bino.newAnnotation', () => form.open()),
+        vscode.commands.registerCommand('bino.openAnnotationForm', async (arg?: AnnotationEntry | { entry?: AnnotationEntry }) => {
+            const entry = (arg as { entry?: AnnotationEntry })?.entry ?? (arg as AnnotationEntry | undefined);
+            if (entry?.name) { await form.open(entry); }
+        }),
+        vscode.commands.registerCommand('bino.revealAnnotation', async (arg?: AnnotationEntry | { entry?: AnnotationEntry }) => {
+            const entry = (arg as { entry?: AnnotationEntry })?.entry ?? (arg as AnnotationEntry | undefined);
+            if (!entry?.file) { return; }
+            const doc = await vscode.workspace.openTextDocument(entry.file);
+            const pos = new vscode.Position(entry.startLine, 0);
+            await vscode.window.showTextDocument(doc, { selection: new vscode.Range(pos, pos), preview: true });
+        }),
+        vscode.commands.registerCommand('bino.deleteAnnotation', async (arg?: AnnotationEntry | { entry?: AnnotationEntry }) => {
+            const picked = (arg as { entry?: AnnotationEntry })?.entry ?? (arg as AnnotationEntry | undefined);
+            if (!picked?.name) { return; }
+            const answer = await vscode.window.showWarningMessage(`Delete the annotation ${picked.name}?`, { modal: true }, 'Delete');
+            if (answer !== 'Delete') { return; }
+            // read again: the file may have changed since the view was built
+            const entry = annotationEntries(await loadManifests(annotationsIndexer)).find(e => e.name === picked.name && e.file === picked.file);
+            const doc = entry && await vscode.workspace.openTextDocument(entry.file);
+            const lines = doc && entry && documentLines(doc.getText(), entry.position);
+            if (!doc || !lines) {
+                vscode.window.showErrorMessage(`Bino: annotation ${picked.name} not found.`);
+                return;
+            }
+            const edit = new vscode.WorkspaceEdit();
+            const end = lines[1] >= doc.lineCount ? doc.lineAt(doc.lineCount - 1).range.end : new vscode.Position(lines[1], 0);
+            edit.delete(doc.uri, new vscode.Range(new vscode.Position(lines[0], 0), end));
+            await vscode.workspace.applyEdit(edit);
+            await doc.save();
+            annotationsView.refresh();
+        })
+    );
 
     // Register tree view for Bino Documents (sidebar panel)
     const treeProvider = new BinoTreeProvider(indexer, validator);
@@ -1345,6 +1394,8 @@ export function deactivate(): void {
     ruleSetEditor?.dispose();
     styleEditor = undefined;
     ruleSetEditor = undefined;
+    annotationForm?.dispose();
+    annotationForm = undefined;
     treeTableEditorManager = undefined;
     previewManager = undefined;
 }
