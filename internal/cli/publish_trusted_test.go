@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -340,4 +341,52 @@ func TestPublishKeylessUnderTrustedPublishingClaimsOIDC(t *testing.T) {
 		t.Errorf("channel = %+v\nwant      %+v", ch, want)
 	}
 	assertNoTokens(t, out)
+}
+
+// --trusted-publishing ignores a bino.toml token whose variable is unset, as
+// after a workflow dropped the secret.
+func TestPublishForcedTrustedPublishingIgnoresAnUnsetTokenVariable(t *testing.T) {
+	srv, capture := fakeSignedPublishServer(t, "public")
+	tr := &trustedRegistry{}
+	srv.Config.Handler = tr.wrap(srv.Config.Handler)
+	newTrustedKitProject(t, srv.URL, "${BINO_TP_TEST_UNSET}")
+	onGitHubActions(t)
+
+	if _, err := execPublish(t, "--bump", "patch"); err == nil {
+		t.Fatal("publish without --trusted-publishing: want the unset variable to fail")
+	}
+	if _, err := execPublish(t, "--bump", "patch", "--trusted-publishing"); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if capture.auth != "Bearer publish-jwt-1" {
+		t.Errorf("publish sent %q, want the publish token", capture.auth)
+	}
+}
+
+// The anonymous probe cannot see a private package, so Trusted Publishing
+// sends "private" without claiming the package is new.
+func TestPublishTrustedPublishingSkipsTheFirstPublishNote(t *testing.T) {
+	srv, capture := fakeSignedPublishServer(t, "public")
+	tr := &trustedRegistry{}
+	srv.Config.Handler = tr.wrap(srv.Config.Handler)
+	newTrustedKitProject(t, srv.URL, "")
+	toml := fmt.Sprintf("report-id = \"test\"\n\n[registry]\nurl = %q\n\n[package]\nname = \"@acme/kit\"\nlicense = \"MIT\"\n", srv.URL)
+	if err := os.WriteFile("bino.toml", []byte(toml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	onGitHubActions(t)
+
+	stderr, err := captureStderr(t, func() error {
+		_, err := execPublish(t, "--bump", "patch", "--json")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if capture.manifest.Visibility != "private" {
+		t.Errorf("visibility = %q, want private", capture.manifest.Visibility)
+	}
+	if strings.Contains(stderr, "does not exist yet") {
+		t.Errorf("the note claims the package is new:\n%s", stderr)
+	}
 }

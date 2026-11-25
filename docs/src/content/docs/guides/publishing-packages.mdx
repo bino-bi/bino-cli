@@ -228,6 +228,11 @@ can request OIDC tokens and no registry token is configured (in `bino.toml`,
 in `BINO_REGISTRY_TOKEN` or from `bino registry login`). A configured token
 wins, so add `--trusted-publishing` to use Trusted Publishing anyway.
 
+The publish token only works for publishing, so bino checks whether the
+package exists without it and cannot see a private package. Keep
+`[package].visibility` equal to the package's visibility, or leave it out
+after the first publish; a value that differs is refused by the registry.
+
 `--sign --keyless` asks GitHub for a second OIDC token, for Sigstore. The
 signature then names the publish channel `oidc` and the run, as the Sigstore
 certificate states it. `--sign` is optional; Trusted Publishing also works

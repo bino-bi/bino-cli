@@ -121,7 +121,7 @@ type publishOptions struct {
 	dryRun     bool
 	visibility string
 	jsonOut    bool
-	trusted    bool
+	trusted    bool // --trusted-publishing, then whether Trusted Publishing is in use
 	signing    signOptions
 }
 
@@ -158,6 +158,7 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 	if err != nil {
 		return err
 	}
+	opts.trusted = trusted
 	if signing != nil {
 		signing.trusted = trusted
 	}
@@ -231,7 +232,12 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 // job with an OIDC token uses Trusted Publishing. force (--trusted-publishing)
 // skips the configured token.
 func publishClient(ctx context.Context, p registryProject, force bool) (*registry.Client, bool, error) {
-	cfg, err := registry.ResolveConfig(p.Cfg.Registry.URL, p.Cfg.Registry.Token)
+	rawToken := p.Cfg.Registry.Token
+	if force {
+		// A "${VAR}" token whose secret was removed must not block it.
+		rawToken = ""
+	}
+	cfg, err := registry.ResolveConfig(p.Cfg.Registry.URL, rawToken)
 	if err != nil {
 		return nil, false, ConfigError(err)
 	}
@@ -275,12 +281,12 @@ func trustedPublishingError(err error, name, url string) error {
 	switch apiErr.Status {
 	case http.StatusForbidden:
 		return ExternalErrorWithHint(err, fmt.Sprintf(
-			"add this repository and workflow as a trusted publisher in the settings of scope @%s on %s", scope, url))
+			"add this repository and workflow as a trusted publisher in the settings of scope @%s on %s; if the registry says Trusted Publishing is not configured, ask its operator", scope, url))
 	case http.StatusNotFound, http.StatusMethodNotAllowed:
 		return ExternalErrorWithHint(fmt.Errorf("%s does not support Trusted Publishing", url),
 			"upgrade the registry, or publish with a token from 'bino registry login' or "+registry.EnvToken)
 	case http.StatusUnauthorized:
-		return ExternalErrorWithHint(err, "only jobs for a branch or a tag can publish, not pull request jobs")
+		return ExternalErrorWithHint(err, "only jobs for a branch or a tag can publish, not pull request jobs, and [registry].url must be the registry's public URL")
 	}
 	return ExternalError(err)
 }
@@ -366,6 +372,12 @@ func publishVisibility(ctx context.Context, client *registry.Client, p registryP
 	exists, known := client.PackageExists(ctx, scope, base)
 	if declared == "" {
 		if known && !exists {
+			// Under Trusted Publishing the probe is anonymous, so an existing
+			// private package looks new. "private" still matches it; only the
+			// note would be wrong.
+			if opts.trusted {
+				return "private", nil
+			}
 			p.Out.Info(fmt.Sprintf("%s does not exist yet and will be created as private. To make it public, publish with --visibility public or set visibility = \"public\" in [package]. After the first publish, change it in the registry's package settings.", p.Cfg.Package.Name))
 			return "private", nil
 		}
