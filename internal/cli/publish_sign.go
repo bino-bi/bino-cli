@@ -36,6 +36,7 @@ type publishSigning struct {
 	key     *registry.ReleaseSigner
 	keyless bool
 	actions bool // the token comes from GitHub Actions, not SIGSTORE_ID_TOKEN
+	trusted bool // the publish authenticates with Trusted Publishing
 }
 
 func (s *publishSigning) rootKind() string {
@@ -63,7 +64,7 @@ func newPublishSigning(o signOptions) (*publishSigning, error) {
 		if os.Getenv(envSigstoreIDToken) != "" {
 			return &publishSigning{keyless: true}, nil
 		}
-		if os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" && os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != "" {
+		if actionsOIDC() {
 			return &publishSigning{keyless: true, actions: true}, nil
 		}
 		return nil, wrapErrorWithHint(ErrorKindConfig,
@@ -108,7 +109,7 @@ func signRelease(ctx context.Context, s *publishSigning, pkg, ver, digest string
 	if err != nil {
 		return nil, nil, ConfigError(err)
 	}
-	pred, err := registryattest.NewPredicate(publishChannel(s.actions), "https://bino.bi/cli@"+version.Version)
+	pred, err := registryattest.NewPredicate(publishChannel(s), "https://bino.bi/cli@"+version.Version)
 	if err != nil {
 		return nil, nil, RuntimeError(err)
 	}
@@ -133,15 +134,18 @@ func signRelease(ctx context.Context, s *publishSigning, pkg, ver, digest string
 	return bundle, signer, nil
 }
 
-// publishChannel is the channel record of a publish. Every publish today
-// authenticates with a token from `bino registry login` (or the environment);
-// Trusted Publishing, which exchanges a CI OIDC token instead, will claim
-// registryattest.ChannelOIDC here. On GitHub Actions the record names the run
-// as the signing certificate does, since the registry refuses a claim the
-// certificate does not back; without such a certificate it claims no run.
-func publishChannel(actions bool) registryattest.PublishChannel {
+// publishChannel is the channel record of a publish: ChannelOIDC under
+// Trusted Publishing, ChannelPAT for a token from `bino registry login` (or
+// the environment). When the keyless token comes from GitHub Actions the
+// record names the run as the signing certificate does, since the registry
+// refuses a claim the certificate does not back; without such a certificate
+// it claims no run.
+func publishChannel(s *publishSigning) registryattest.PublishChannel {
 	ch := registryattest.PublishChannel{Channel: registryattest.ChannelPAT}
-	if !actions {
+	if s.trusted {
+		ch.Channel = registryattest.ChannelOIDC
+	}
+	if !s.actions {
 		return ch
 	}
 	env := os.Getenv
@@ -168,12 +172,24 @@ func keylessToken(ctx context.Context, actions bool) (string, error) {
 	if !actions {
 		return os.Getenv(envSigstoreIDToken), nil
 	}
+	return actionsIDToken(ctx, "sigstore")
+}
+
+// actionsOIDC reports whether this is a GitHub Actions job that may request
+// OIDC tokens (one with 'permissions: id-token: write').
+func actionsOIDC() bool {
+	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" && os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
+}
+
+// actionsIDToken requests a GitHub Actions OIDC token for audience. Every
+// call returns a new token.
+func actionsIDToken(ctx context.Context, audience string) (string, error) {
 	u, err := url.Parse(os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL"))
 	if err != nil {
 		return "", ConfigErrorf("ACTIONS_ID_TOKEN_REQUEST_URL is not a URL")
 	}
 	q := u.Query()
-	q.Set("audience", "sigstore")
+	q.Set("audience", audience)
 	u.RawQuery = q.Encode()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

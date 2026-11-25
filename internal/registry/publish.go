@@ -136,9 +136,12 @@ func (c *Client) PublishDryRun(ctx context.Context, m PublishManifest, files []P
 // whose part NAME is the file's tree path. The body is produced as it is
 // written, so a large tree is never buffered.
 func (c *Client) publish(ctx context.Context, m PublishManifest, files []PublishFile, attestation []byte) ([]byte, error) {
-	auth, err := c.bearer(ctx)
-	if err != nil {
-		return nil, err
+	auth := c.publishToken
+	if auth == "" {
+		var err error
+		if auth, err = c.bearer(ctx); err != nil {
+			return nil, err
+		}
 	}
 	if auth == "" {
 		return nil, fmt.Errorf("registry: publishing requires authentication - run 'bino registry login'")

@@ -9,7 +9,7 @@ Follow `bino-packaging`. Publishing is irreversible, so the human confirms the e
 
 1. `validate_project()`. Stop on any error; fix package findings first.
 2. `registry_auth_status()`. If not authenticated, tell the human to run `bino registry login` and
-   stop.
+   stop. A GitHub Actions job needs no login: without a token, `bino publish` uses Trusted Publishing.
 3. Pick the bump: use the argument, or propose one from the changes (see `bino-packaging`) and let the
    human choose.
 4. `registry_publish_check(bump)`. On a rejection, show the gate findings and fix them; repeat at most
@@ -18,5 +18,6 @@ Follow `bino-packaging`. Publishing is irreversible, so the human confirms the e
    visibility. Ask: publish now?
 6. Only on yes: call `registry_publish(bump, visibility?)` if the server offers it. Otherwise give the
    human the command `bino publish --bump <bump>` (the tool needs `bino mcp --allow-publish`, or
-   `bino daemon --mcp-allow-publish` when a daemon runs).
+   `bino daemon --mcp-allow-publish` when a daemon runs). To sign, set `sign_key` (or `sign_keyless`
+   in CI); on the command line that is `--sign --key <file>` or `--sign --keyless`.
 7. Report the minted version and digest, or `unchanged` when the content was already published.

@@ -20,12 +20,22 @@ Flags:
 - `--dry-run` - run the registry's validation without creating a version.
 - `--visibility` - `public` or `private`. Only used when the package is created; ignored afterwards. Without it (and without `[package].visibility`) a new package is created private, and the first publish prints a note saying so.
 - `--json` - print the result as JSON on stdout (progress goes to stderr). A signed publish adds `signer` and `rootKind` (`keyless`, `x509` or `key`).
-- `--sign` - sign the release (bino v0.116.0 and later). Needs one of:
+- `--trusted-publishing` - authenticate with the GitHub Actions OIDC token, even when a registry token is configured (bino v0.120.0 and later). Fails outside GitHub Actions. See [Credentials](#credentials).
+- `--sign` - sign the release (bino v0.117.0 and later). Needs one of:
   - `--keyless` - Sigstore keyless signing through the public Sigstore. Needs an OIDC token: on GitHub Actions bino requests one itself (the job needs `permissions: id-token: write`); elsewhere set `SIGSTORE_ID_TOKEN`. The signature is written to the public Rekor log, so it only works for public packages.
   - `--key <file>` - sign with a long-lived ed25519 or ECDSA P-256 key, an unencrypted PKCS #8 PEM file (`-----BEGIN PRIVATE KEY-----`). Encrypted keys and KMS keys are not supported.
   - `--key <file> --cert-chain <file>` - sign with a key and a certificate from a company CA. The chain file holds the certificate for the key first, then the intermediates. A root in the file is dropped.
 
 See [Signing a release](/guides/publishing-packages/#signing-a-release).
+
+## Credentials
+
+`bino publish` picks one way to authenticate, in this order:
+
+1. **A configured token**, when there is one: `[registry].token` in `bino.toml`, then `BINO_REGISTRY_TOKEN`, then the token stored by `bino registry login`.
+2. **Trusted Publishing**, when there is no configured token and the command runs in a GitHub Actions job with `permissions: id-token: write` (bino v0.120.0 and later). bino requests an OIDC token for the registry's URL, swaps it at the registry for a token that may only publish this package for 15 minutes, and publishes with that.
+
+`--trusted-publishing` skips step 1, so a configured token is ignored. Outside GitHub Actions it fails. A registry without Trusted Publishing, or a scope without a matching trusted publisher, fails the publish with a hint; bino does not fall back to another credential. See [Trusted Publishing from GitHub Actions](/guides/publishing-packages/#trusted-publishing-from-github-actions).
 
 ## What is published
 
@@ -83,6 +93,12 @@ Publish from CI:
 ```bash
 export BINO_REGISTRY_TOKEN="bino_pat_..."
 bino publish --bump minor --json
+```
+
+Publish from GitHub Actions with Trusted Publishing, without a token secret:
+
+```bash
+bino publish --bump patch --sign --keyless
 ```
 
 Sign a release with a key:

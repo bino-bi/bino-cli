@@ -52,6 +52,8 @@ type Client struct {
 	exchJWT  string
 	exchErr  error
 
+	publishToken string // see UsePublishToken
+
 	// v2 caches whether this registry serves the v2 routes: v2Unknown until
 	// the first v2 request answers. It is a property of the server, not of a
 	// package - a v1 version resolves through v2 as a one-file tree - so one

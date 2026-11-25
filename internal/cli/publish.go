@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -40,6 +41,7 @@ func newPublishCommand() *cobra.Command {
 		dryRun     bool
 		visibility string
 		jsonOut    bool
+		trusted    bool
 		signing    signOptions
 	)
 	cmd := &cobra.Command{
@@ -69,6 +71,15 @@ registry validates it; a publish without one warns.
 Republishing an unchanged package is not an error: the registry recognizes the
 identical content and reports the version that already carries it.
 
+Credentials: a configured token (bino.toml [registry].token,
+BINO_REGISTRY_TOKEN, or 'bino registry login') is used when there is one. On
+GitHub Actions with 'permissions: id-token: write' and no configured token,
+bino uses Trusted Publishing: it swaps the job's OIDC token for a short-lived
+token that may only publish this package. --trusted-publishing forces that
+even when a token is configured, and fails outside GitHub Actions. The scope
+owner must add the repository and workflow as a trusted publisher on the
+registry first.
+
 --sign signs the release, so consumers can check who published it:
   --sign --keyless          Sigstore keyless, from CI (GitHub Actions, or
                             SIGSTORE_ID_TOKEN); public packages only
@@ -89,7 +100,7 @@ then publishes with the signature.`,
 				return ConfigErrorf("invalid --visibility %q: expected public or private", visibility)
 			}
 			return runPublish(cmd, publishOptions{
-				bump: bump, dryRun: dryRun, visibility: visibility, jsonOut: jsonOut, signing: signing,
+				bump: bump, dryRun: dryRun, visibility: visibility, jsonOut: jsonOut, trusted: trusted, signing: signing,
 			})
 		},
 	}
@@ -97,6 +108,7 @@ then publishes with the signature.`,
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate against the registry without publishing")
 	cmd.Flags().StringVar(&visibility, "visibility", "", "Visibility for a first publish: public or private (default private)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print the result as JSON")
+	cmd.Flags().BoolVar(&trusted, "trusted-publishing", false, "Authenticate with the GitHub Actions OIDC token, even when a registry token is configured")
 	cmd.Flags().BoolVar(&signing.sign, "sign", false, "Sign the release (with --keyless or --key)")
 	cmd.Flags().BoolVar(&signing.keyless, "keyless", false, "With --sign: sign keyless through the public Sigstore, from CI")
 	cmd.Flags().StringVar(&signing.key, "key", "", "With --sign: unencrypted PKCS #8 PEM private key to sign with (ed25519 or ECDSA P-256)")
@@ -109,6 +121,7 @@ type publishOptions struct {
 	dryRun     bool
 	visibility string
 	jsonOut    bool
+	trusted    bool // --trusted-publishing, then whether Trusted Publishing is in use
 	signing    signOptions
 }
 
@@ -141,9 +154,13 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 	warnPreviewOutsidePackage(p, pkg, files)
 	runPublishLint(ctx, p)
 
-	client, err := p.client()
+	client, trusted, err := publishClient(ctx, p, opts.trusted)
 	if err != nil {
 		return err
+	}
+	opts.trusted = trusted
+	if signing != nil {
+		signing.trusted = trusted
 	}
 	manifest, err := buildPublishManifest(ctx, client, p, opts, entries)
 	if err != nil {
@@ -207,6 +224,71 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 		outcome.Signer, outcome.RootKind = signer.Signer, signer.RootKind
 	}
 	return emitPublishOutcome(cmd, outcome, opts.jsonOut, p)
+}
+
+// publishClient returns the client to publish with and whether it uses
+// Trusted Publishing. A configured token wins, so adding a secret to a
+// workflow never changes the channel silently; without one a GitHub Actions
+// job with an OIDC token uses Trusted Publishing. force (--trusted-publishing)
+// skips the configured token.
+func publishClient(ctx context.Context, p registryProject, force bool) (*registry.Client, bool, error) {
+	rawToken := p.Cfg.Registry.Token
+	if force {
+		// A "${VAR}" token whose secret was removed must not block it.
+		rawToken = ""
+	}
+	cfg, err := registry.ResolveConfig(p.Cfg.Registry.URL, rawToken)
+	if err != nil {
+		return nil, false, ConfigError(err)
+	}
+	switch {
+	case force && !actionsOIDC():
+		return nil, false, wrapErrorWithHint(ErrorKindConfig,
+			errors.New("--trusted-publishing needs a GitHub Actions OIDC token, and none is available"),
+			"run it in a GitHub Actions job with 'permissions: id-token: write', or publish with a token from 'bino registry login' or "+registry.EnvToken)
+	case !force && (cfg.Token != "" || !actionsOIDC()):
+		return registry.NewClient(cfg), false, nil
+	}
+	cfg.Token = ""
+	client := registry.NewClient(cfg)
+	name := p.Cfg.Package.Name
+	p.Out.Step("Trusted Publishing: exchanging the GitHub Actions OIDC token...")
+	// The registry's audience is its URL; ResolveConfig trimmed the slash.
+	oidc, err := actionsIDToken(ctx, cfg.URL)
+	if err != nil {
+		return nil, false, err
+	}
+	res, err := client.ExchangeOIDC(ctx, oidc, name)
+	if err != nil {
+		return nil, false, trustedPublishingError(err, name, cfg.URL)
+	}
+	if res.Token == "" {
+		return nil, false, ExternalErrorf("trusted publishing: %s answered without a publish token", cfg.URL)
+	}
+	client.UsePublishToken(res.Token)
+	p.Out.StepDone("Trusted Publishing: authenticated for "+name, 0)
+	return client, true, nil
+}
+
+// trustedPublishingError renders a failed OIDC exchange with what to do about it.
+func trustedPublishingError(err error, name, url string) error {
+	err = fmt.Errorf("trusted publishing: %w", err)
+	var apiErr *registry.APIError
+	if !errors.As(err, &apiErr) {
+		return ExternalError(err)
+	}
+	scope, _, _ := registry.ParseName(name) //nolint:errcheck // publishProjectSetup validated the name
+	switch apiErr.Status {
+	case http.StatusForbidden:
+		return ExternalErrorWithHint(err, fmt.Sprintf(
+			"add this repository and workflow as a trusted publisher in the settings of scope @%s on %s; if the registry says Trusted Publishing is not configured, ask its operator", scope, url))
+	case http.StatusNotFound, http.StatusMethodNotAllowed:
+		return ExternalErrorWithHint(fmt.Errorf("%s does not support Trusted Publishing", url),
+			"upgrade the registry, or publish with a token from 'bino registry login' or "+registry.EnvToken)
+	case http.StatusUnauthorized:
+		return ExternalErrorWithHint(err, "only jobs for a branch or a tag can publish, not pull request jobs, and [registry].url must be the registry's public URL")
+	}
+	return ExternalError(err)
 }
 
 // diagnosticsOutput is an Output that writes everything to stderr, for
@@ -290,6 +372,12 @@ func publishVisibility(ctx context.Context, client *registry.Client, p registryP
 	exists, known := client.PackageExists(ctx, scope, base)
 	if declared == "" {
 		if known && !exists {
+			// Under Trusted Publishing the probe is anonymous, so an existing
+			// private package looks new. "private" still matches it; only the
+			// note would be wrong.
+			if opts.trusted {
+				return "private", nil
+			}
 			p.Out.Info(fmt.Sprintf("%s does not exist yet and will be created as private. To make it public, publish with --visibility public or set visibility = \"public\" in [package]. After the first publish, change it in the registry's package settings.", p.Cfg.Package.Name))
 			return "private", nil
 		}
