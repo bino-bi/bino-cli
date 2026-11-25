@@ -275,6 +275,33 @@ Pinning means nothing changes by itself. These two jobs tell you when there is s
 
 Engine releases are pre-releases named like `v1.0.0-next.88`. With `semver` versioning, a project on a `v1.0.0-next.N` pin is offered the newest `v1.0.0-next.N`, and the old `0.x` releases in the same repository are never offered, because they are lower. `managerFilePatterns` needs Renovate 41 or newer; older versions call it `fileMatch` and take the pattern without the slashes.
 
+To check only this rule and no other dependencies, add `"enabledManagers": ["custom.regex"]`. Without the Renovate GitHub App, Renovate can run as a scheduled workflow in the repository itself:
+
+```yaml
+# .github/workflows/renovate.yml
+name: Renovate
+on:
+  schedule:
+    - cron: "41 4 * * 1" # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: renovatebot/github-action@v46.3.15
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+```
+
 <Aside type="caution">
   If you build with the [container image](/guides/docker/), the engine comes with the image and a pin in
   `bino.toml` must match it. Move the image tag instead and do not use this rule.
@@ -315,7 +342,7 @@ jobs:
         run: bino registry update
 
       - name: Open a pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: bino/update-packages
           add-paths: bino.lock
