@@ -26,7 +26,7 @@ For the same reason, pin the template engine with `engine-version` in `bino.toml
 On GitHub Actions, use the official action (see the [example](#github-actions-example) below). Everywhere else, install a fixed release with `install.sh`:
 
 ```bash
-BINO_VERSION=v0.121.0
+BINO_VERSION=v0.124.0
 curl -fsSL "https://github.com/bino-bi/bino-cli-releases/releases/download/${BINO_VERSION}/install.sh" -o install.sh
 bash install.sh --yes --tag "${BINO_VERSION}"
 ```
@@ -50,7 +50,7 @@ If your runner can run containers, the image already contains bino and Chromium:
 docker run --rm \
   -v "$PWD:/work" \
   -e POSTGRES_PASSWORD \
-  ghcr.io/bino-bi/bino-cli:v0.121.0 build --out-dir dist/
+  ghcr.io/bino-bi/bino-cli:v0.124.0 build --out-dir dist/
 ```
 
 <Aside type="note">
@@ -97,7 +97,7 @@ jobs:
       - name: Lint and build reports
         uses: bino-bi/cli-action@v2
         with:
-          version: v0.121.0
+          version: v0.124.0
           command: both
           execute-queries: "true"
 
@@ -143,7 +143,7 @@ build-reports:
   image: ubuntu:24.04
   variables:
     CI: "1"
-    BINO_VERSION: v0.121.0
+    BINO_VERSION: v0.124.0
   script:
     - apt-get update && apt-get install -y curl ca-certificates python3
     - curl -fsSL "https://github.com/bino-bi/bino-cli-releases/releases/download/${BINO_VERSION}/install.sh" -o install.sh
@@ -164,7 +164,7 @@ Chrome headless shell needs some system libraries that a bare `ubuntu` image may
 ```yaml
 build-reports:
   image:
-    name: ghcr.io/bino-bi/bino-cli:v0.121.0
+    name: ghcr.io/bino-bi/bino-cli:v0.124.0
     entrypoint: [""]
   variables:
     CI: "1"
@@ -189,14 +189,14 @@ bino keeps Chrome headless shell (about 280 MB) in `~/.bino/chrome-headless-shel
     path: |
       ~/.bino/chrome-headless-shell
       ~/.bino/cdn
-    key: bino-${{ runner.os }}-v0.121.0
+    key: bino-${{ runner.os }}-v0.124.0
 ```
   </TabItem>
   <TabItem label="GitLab CI">
 ```yaml
 build-reports:
   variables:
-    BINO_VERSION: v0.121.0
+    BINO_VERSION: v0.124.0
     # GitLab caches only paths inside the project. bino skips .bino/ when it reads manifests.
     HOME: $CI_PROJECT_DIR/.bino/ci-home
   cache:
@@ -248,7 +248,7 @@ With [pre-commit](https://pre-commit.com), `bino lint` runs on each `git commit`
 ```yaml
 repos:
   - repo: https://github.com/bino-bi/bino-cli
-    rev: v0.121.0
+    rev: v0.124.0
     hooks:
       - id: bino-lint
         # optional, passed to bino lint:
@@ -257,7 +257,7 @@ repos:
 
 Then run `pre-commit install` once. Notes:
 
-- The hook exists from bino v0.121.0 on, so `rev` must be that release or newer.
+- The hook exists from bino v0.124.0 on, so `rev` must be that release or newer.
 - The hook calls the `bino` on your `PATH`; it does not install bino. Use the same version as `rev`.
 - `bino lint` does not start Chrome and runs no queries unless you add `--execute-queries`, so the hook is fast.
 - The hook writes the lint log to a temp directory, not to `dist/`, so it leaves no files behind.
@@ -344,7 +344,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: "1"
-      BINO_VERSION: v0.121.0
+      BINO_VERSION: v0.124.0
     steps:
       - uses: actions/checkout@v4
 
