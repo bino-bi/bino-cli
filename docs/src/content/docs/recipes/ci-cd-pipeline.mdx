@@ -31,7 +31,7 @@ curl -fsSL "https://github.com/bino-bi/bino-cli-releases/releases/download/${BIN
 bash install.sh --yes --tag "${BINO_VERSION}"
 ```
 
-`install.sh` checks the download against the release's `checksums.txt` and then runs `bino setup`, which installs Chrome headless shell for PDF rendering. It needs `curl` and `python3` on the runner and installs to `~/.local/bin` (change it with `--install-dir`).
+`install.sh` checks the download against the release's `checksums.txt` (it prints a warning and skips the check when it cannot look the file up through the GitHub API) and then runs `bino setup`, which installs Chrome headless shell for PDF rendering. It needs `curl` and `python3` on the runner and installs to `~/.local/bin` (change it with `--install-dir`).
 
 <Aside type="tip">
   Set `CI=1` in your environment to disable the interactive update check.
@@ -159,11 +159,26 @@ build-reports:
     - if: $CI_COMMIT_BRANCH == "main"
 ```
 
-Chrome headless shell needs some system libraries that a bare `ubuntu` image may not have. If the build fails to start Chrome, use the [container image](/guides/docker/) as the job image instead: it has bino and Chromium inside.
+Chrome headless shell needs some system libraries that a bare `ubuntu` image may not have. If the build fails to start Chrome, use the [container image](/guides/docker/) as the job image instead: it has bino and Chromium inside. Its entrypoint is `bino`, so GitLab needs it cleared, and the install lines go away:
+
+```yaml
+build-reports:
+  image:
+    name: ghcr.io/bino-bi/bino-cli:v0.120.0
+    entrypoint: [""]
+  variables:
+    CI: "1"
+  script:
+    - bino registry install
+    - bino build --out-dir dist/
+  artifacts:
+    paths:
+      - dist/*.pdf
+```
 
 ## Caching Chrome headless shell
 
-bino keeps Chrome headless shell (about 280 MB) in `~/.bino/chrome-headless-shell` and the template engine in `~/.bino/cdn`. The GitHub Action caches both for you. In other pipelines, cache them yourself, and put the bino version in the cache key, so a new bino release does not start from an old cache:
+bino keeps Chrome headless shell (about 280 MB) in `~/.bino/chrome-headless-shell` and the template engine in `~/.bino/cdn`. The GitHub Action caches both for you. In other pipelines, cache them yourself, and put the bino version in the cache key, so a new bino release does not start from an old cache. `bino setup` always fetches the newest stable Chrome, so a new Chrome release is downloaded again until the key changes:
 
 <Tabs>
   <TabItem label="GitHub Actions (without the action)">
@@ -233,7 +248,7 @@ With [pre-commit](https://pre-commit.com), `bino lint` runs on each `git commit`
 ```yaml
 repos:
   - repo: https://github.com/bino-bi/bino-cli
-    rev: v0.120.0
+    rev: v0.121.0
     hooks:
       - id: bino-lint
         # optional, passed to bino lint:
@@ -242,6 +257,7 @@ repos:
 
 Then run `pre-commit install` once. Notes:
 
+- The hook exists from bino v0.121.0 on, so `rev` must be that release or newer.
 - The hook calls the `bino` on your `PATH`; it does not install bino. Use the same version as `rev`.
 - `bino lint` does not start Chrome and runs no queries unless you add `--execute-queries`, so the hook is fast.
 - The hook writes the lint log to a temp directory, not to `dist/`, so it leaves no files behind.
