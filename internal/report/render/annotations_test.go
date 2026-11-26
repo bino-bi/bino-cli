@@ -486,8 +486,8 @@ func TestAnnotations_GridChildAndTreeNodeCarryTheirTarget(t *testing.T) {
 	// No annotation on the page: a client needs the target before there is one.
 	out := renderAnnotations(t, ModeBuild, chartDoc, annotationTestPage(grid+","+tree))
 	for _, want := range []string{
-		`<div slot='[^']*' data-bino-target-kind='ChartTime' data-bino-target-name='trend'><bn-chart-time`,
-		`<div slot='[^']*' data-bino-target-kind='Table' data-bino-target-name='inline_t'><bn-table`,
+		`<div slot='[^']*' id='bino-charttime-trend' data-bino-target-kind='ChartTime' data-bino-target-name='trend'><bn-chart-time`,
+		`<div slot='[^']*' id='bino-table-inline_t' data-bino-target-kind='Table' data-bino-target-name='inline_t'><bn-table`,
 		`<div slot='n' data-bino-target-kind='ChartTime' data-bino-target-name='trend'>`,
 		`<div slot='m'>`, // an inline node cannot be a target
 	} {

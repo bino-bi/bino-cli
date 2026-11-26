@@ -1627,6 +1627,9 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 		cells.WriteString("'")
 		child.writeCellAttrs(&cells)
 		writeAttr(&cells, "data-bino-panel", child.panel)
+		if child.panel == "" {
+			writeComponentID(&cells, child.Kind, child.Ref, child.Metadata.Name)
+		}
 		if child.Kind != "LayoutCard" {
 			target := child.annotationTarget
 			if target == "" {
@@ -1814,15 +1817,19 @@ func writeSourceAttrs(b *strings.Builder, child layoutChild) {
 	writeAttr(b, "data-bino-kind", child.Kind)
 	// For ref children, use the ref as the name (points to standalone document).
 	// For inline children, use the metadata name.
-	if child.Ref != "" {
-		writeAttr(b, "data-bino-ref", child.Ref)
-		writeAttr(b, "id", "bino-"+strings.ToLower(child.Kind)+"-"+child.Ref)
+	writeAttr(b, "data-bino-ref", child.Ref)
+	writeAttr(b, "data-bino-name", child.Metadata.Name)
+	writeComponentID(b, child.Kind, child.Ref, child.Metadata.Name)
+}
+
+// writeComponentID writes the id a screenshot ref finds a page child by:
+// bino-<kind>-<ref>, or bino-<kind>-<metadata.name> for a child without a ref.
+func writeComponentID(b *strings.Builder, kind, refName, name string) {
+	if refName != "" {
+		name = refName
 	}
-	if child.Metadata.Name != "" {
-		writeAttr(b, "data-bino-name", child.Metadata.Name)
-		if child.Ref == "" {
-			writeAttr(b, "id", "bino-"+strings.ToLower(child.Kind)+"-"+child.Metadata.Name)
-		}
+	if name != "" {
+		writeAttr(b, "id", "bino-"+strings.ToLower(kind)+"-"+name)
 	}
 }
 

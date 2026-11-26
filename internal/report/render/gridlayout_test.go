@@ -73,3 +73,27 @@ func TestGridCellLayout_SkippedChildGetsNoCaption(t *testing.T) {
 		t.Fatalf("only the rendered cell has a caption: %s", tag)
 	}
 }
+
+// A Grid cell carries the id a screenshot ref finds it by: the ref when set.
+func TestGridCell_WritesComponentID(t *testing.T) {
+	out, _, err := renderLayoutChild(layoutChild{Kind: "Grid", Spec: json.RawMessage(`{
+		"rowHeaders": ["A"], "columnHeaders": ["X", "Y"],
+		"children": [
+			{"row": 0, "column": 0, "kind": "Text", "metadata": {"name": "inline_note"}, "spec": {"value": "a"}},
+			{"row": 0, "column": 1, "kind": "Text", "ref": "shared_note", "metadata": {"name": "alias"}}
+		]
+	}`)}, newRenderCtx(context.Background(), []config.Document{
+		makeTestDoc("Text", "shared_note", json.RawMessage(`{"kind":"Text","metadata":{"name":"shared_note"},"spec":{"value":"b"}}`)),
+	}, nil, nil, nil, nil, "build"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`id='bino-text-inline_note'`, `id='bino-text-shared_note'`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %s in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "bino-text-alias") {
+		t.Errorf("a ref cell must use the ref as id:\n%s", out)
+	}
+}

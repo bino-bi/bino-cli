@@ -32,10 +32,17 @@ const maxBuildOutput = 16 * 1024
 // larger one is only listed by path.
 const maxInlineScreenshot = 1 << 20
 
+// maxInlineTotal and maxInlineImages cap all inline PNGs of one result, so a
+// report with many pages does not make a result of many megabytes.
+const (
+	maxInlineTotal  = 4 << 20
+	maxInlineImages = 10
+)
+
 type buildInput struct {
 	Artefacts   []string `json:"artefacts,omitempty" jsonschema:"metadata.name entries to build (default: all)"`
 	OutDir      string   `json:"out_dir,omitempty" jsonschema:"output directory relative to the project root (default: dist)"`
-	Screenshots []string `json:"screenshots,omitempty" jsonschema:"PNG screenshots to render: ReportArtefact/<name> (every page), LayoutPage/<name>, <ComponentKind>/<name>, or a page or report name. Without artefacts only the screenshots are built. Images up to 1 MB are returned inline."`
+	Screenshots []string `json:"screenshots,omitempty" jsonschema:"PNG screenshots to render: ReportArtefact/<name> (every page), LayoutPage/<name>, <ComponentKind>/<name>, or a page or report name. Without artefacts only the screenshots are built. Images up to 1 MB are returned inline, at most 10 and 4 MB in total; the rest by path."`
 }
 
 type buildOutput struct {
@@ -46,6 +53,8 @@ type buildOutput struct {
 	Screenshots []buildlog.ScreenshotEntry `json:"screenshots,omitempty"`
 	Warnings    []string                   `json:"warnings,omitempty"`
 	LogPath     string                     `json:"logPath,omitempty"`
+	// ScreenshotNote says how many screenshots are not inline and why.
+	ScreenshotNote string `json:"screenshotNote,omitempty"`
 }
 
 func (h *handlers) registerBuildTool(srv *mcpsdk.Server) {
@@ -154,19 +163,46 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 			out.Screenshots = log.Screenshots
 		}
 	}
-	return screenshotResult(out), out, nil
+	res := screenshotResult(&out)
+	return res, out, nil
 }
 
 // screenshotResult returns the screenshots as image content after the JSON
 // output, or nil (the SDK then sends the JSON alone) when there are none.
-func screenshotResult(out buildOutput) *mcpsdk.CallToolResult {
+// Images are inlined in order until the total budget is used; it sets
+// out.ScreenshotNote when some are only listed by path.
+func screenshotResult(out *buildOutput) *mcpsdk.CallToolResult {
 	var images []mcpsdk.Content
+	total, tooBig, overBudget := 0, 0, 0
 	for _, s := range out.Screenshots {
-		data, err := os.ReadFile(s.Path)
-		if err != nil || len(data) > maxInlineScreenshot {
+		if overBudget > 0 {
+			overBudget++
 			continue
 		}
+		data, err := os.ReadFile(s.Path)
+		if err != nil {
+			continue
+		}
+		if len(data) > maxInlineScreenshot {
+			tooBig++
+			continue
+		}
+		if len(images) == maxInlineImages || total+len(data) > maxInlineTotal {
+			overBudget++
+			continue
+		}
+		total += len(data)
 		images = append(images, &mcpsdk.ImageContent{Data: data, MIMEType: "image/png"})
+	}
+	var notes []string
+	if tooBig > 0 {
+		notes = append(notes, fmt.Sprintf("%d screenshot(s) are over 1 MB", tooBig))
+	}
+	if overBudget > 0 {
+		notes = append(notes, fmt.Sprintf("%d screenshot(s) are over the limit of %d images and 4 MB in one result", overBudget, maxInlineImages))
+	}
+	if len(notes) > 0 {
+		out.ScreenshotNote = strings.Join(notes, "; ") + ". They are not inline: read them from their path."
 	}
 	if len(images) == 0 {
 		return nil

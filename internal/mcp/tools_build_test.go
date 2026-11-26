@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -65,7 +67,7 @@ func TestNewestBuildLog(t *testing.T) {
 }
 
 func TestScreenshotResult(t *testing.T) {
-	if res := screenshotResult(buildOutput{}); res != nil {
+	if res := screenshotResult(&buildOutput{}); res != nil {
 		t.Errorf("no screenshots: want nil result, got %+v", res)
 	}
 
@@ -78,7 +80,7 @@ func TestScreenshotResult(t *testing.T) {
 	if err := os.WriteFile(big, make([]byte, maxInlineScreenshot+1), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	res := screenshotResult(buildOutput{Screenshots: []buildlog.ScreenshotEntry{{Ref: "LayoutPage/a", Path: small}, {Ref: "LayoutPage/b", Path: big}}})
+	res := screenshotResult(&buildOutput{Screenshots: []buildlog.ScreenshotEntry{{Ref: "LayoutPage/a", Path: small}, {Ref: "LayoutPage/b", Path: big}}})
 	if res == nil || len(res.Content) != 2 {
 		t.Fatalf("want JSON text plus one image, got %+v", res)
 	}
@@ -87,5 +89,42 @@ func TestScreenshotResult(t *testing.T) {
 	}
 	if img, ok := res.Content[1].(*mcpsdk.ImageContent); !ok || img.MIMEType != "image/png" {
 		t.Errorf("second content is %T, want a PNG image", res.Content[1])
+	}
+}
+
+// A report with many pages must not make a result of many megabytes.
+func TestScreenshotResult_TotalBudget(t *testing.T) {
+	dir := t.TempDir()
+	shots := make([]buildlog.ScreenshotEntry, 0, 6)
+	for i := range 6 {
+		p := filepath.Join(dir, fmt.Sprintf("page-%d.png", i))
+		if err := os.WriteFile(p, make([]byte, 900<<10), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shots = append(shots, buildlog.ScreenshotEntry{Ref: "ReportArtefact/r", Page: i + 1, Path: p})
+	}
+	out := buildOutput{Screenshots: shots}
+	res := screenshotResult(&out)
+	if res == nil || len(res.Content) != 1+4 {
+		t.Fatalf("want JSON text plus 4 images (4 MB budget), got %+v", res)
+	}
+	if !strings.Contains(out.ScreenshotNote, "2 screenshot(s) are over the limit") {
+		t.Errorf("note = %q", out.ScreenshotNote)
+	}
+	if text := res.Content[0].(*mcpsdk.TextContent).Text; !strings.Contains(text, out.ScreenshotNote) {
+		t.Errorf("text part does not carry the note: %s", text)
+	}
+
+	// The image count is capped too.
+	small := filepath.Join(dir, "small.png")
+	if err := os.WriteFile(small, []byte("\x89PNG"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	many := buildOutput{}
+	for range maxInlineImages + 3 {
+		many.Screenshots = append(many.Screenshots, buildlog.ScreenshotEntry{Path: small})
+	}
+	if res := screenshotResult(&many); len(res.Content) != 1+maxInlineImages || !strings.Contains(many.ScreenshotNote, "3 screenshot(s)") {
+		t.Errorf("got %d parts, note %q", len(res.Content), many.ScreenshotNote)
 	}
 }

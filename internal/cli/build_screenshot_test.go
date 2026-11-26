@@ -181,3 +181,114 @@ func TestResolveScreenshotJobs_Errors(t *testing.T) {
 		t.Errorf("ambiguous name: got %v", err)
 	}
 }
+
+// The documented Grid pattern: a ref child with its own metadata.name. The
+// renderer writes the id from the ref, so the capture must use the ref.
+func TestResolveScreenshotJobs_RefChildUsesRef(t *testing.T) {
+	docs := loadScreenshotDocs(t, `apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: grid_page
+spec:
+  children:
+    - kind: Grid
+      metadata:
+        name: grid
+      spec:
+        rowHeaders: [electronics]
+        columnHeaders: [q1]
+        children:
+          - row: electronics
+            column: q1
+            kind: ChartStructure
+            ref: detailed-chart
+            metadata:
+              name: detailed-electronics-q1
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: detailed-chart
+spec:
+  dataset: sales
+`)
+	for _, value := range []string{"ChartStructure/detailed-chart", "ChartStructure/detailed-electronics-q1"} {
+		jobs, err := resolveScreenshotJobs(docs, []string{value})
+		if err != nil {
+			t.Fatalf("%s: %v", value, err)
+		}
+		if got := jobs[0].Capture.Name; got != "detailed-chart" {
+			t.Errorf("%s: capture name %q, want the ref detailed-chart", value, got)
+		}
+		if jobs[0].Report == nil || jobs[0].Report.Spec.LayoutPages[0].Page != "grid_page" {
+			t.Errorf("%s: want a render of grid_page, got %+v", value, jobs[0])
+		}
+	}
+}
+
+const constrainedScreenshotYAML = `apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: overview
+spec:
+  children:
+    - kind: Text
+      metadata:
+        name: detail_note
+        constraints:
+          - labels.detail == high
+      spec:
+        value: "only in detailed reports"
+    - kind: Text
+      metadata:
+        name: plain_note
+      spec:
+        value: "always"
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: a_summary
+  labels:
+    detail: low
+spec:
+  format: xga
+  filename: summary.pdf
+  title: Summary
+  layoutPages: [overview]
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: b_detailed
+  labels:
+    detail: high
+spec:
+  format: xga
+  filename: detailed.pdf
+  title: Detailed
+  layoutPages: [overview]
+`
+
+func TestResolveScreenshotJobs_ComponentPicksReportThatKeepsIt(t *testing.T) {
+	docs := loadScreenshotDocs(t, constrainedScreenshotYAML)
+	jobs, err := resolveScreenshotJobs(docs, []string{"Text/detail_note", "Text/plain_note", "LayoutPage/overview"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"b_detailed", "a_summary", "a_summary"}
+	for i, job := range jobs {
+		if job.Report == nil || job.Report.Document.Name != want[i] {
+			t.Errorf("%s: rendered in %+v, want %s", job.Ref, job.Report, want[i])
+		}
+	}
+}
+
+func TestResolveScreenshotJobs_ComponentFilteredEverywhere(t *testing.T) {
+	yaml := strings.Replace(constrainedScreenshotYAML, "detail: high\nspec", "detail: medium\nspec", 1)
+	docs := loadScreenshotDocs(t, yaml)
+	_, err := resolveScreenshotJobs(docs, []string{"Text/detail_note"})
+	if err == nil || !strings.Contains(err.Error(), "no ReportArtefact that lists its page renders the component") {
+		t.Fatalf("got %v", err)
+	}
+}
