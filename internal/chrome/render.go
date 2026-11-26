@@ -416,10 +416,10 @@ func capturePages(ctx context.Context, opts ScreenshotOptions, refIndex int, ref
 	tag := fmt.Sprintf("%d-", refIndex)
 	script := fmt.Sprintf(`(() => {
   const want = %s;
-  const pages = Array.from(document.querySelectorAll('bn-layout-page'))
-    .filter((p) => want === '' || p.getAttribute('data-bino-page') === want);
-  pages.forEach((p, i) => p.setAttribute('data-bino-shot', %s + (i + 1)));
-  return pages.map((p) => p.getAttribute('data-bino-page') || '');
+  const pages = Array.from(document.querySelectorAll("bn-layout-page"))
+    .filter((p) => want === "" || p.getAttribute("data-bino-page") === want);
+  pages.forEach((p, i) => p.setAttribute("data-bino-shot", %s + (i + 1)));
+  return pages.map((p) => p.getAttribute("data-bino-page") || "");
 })()`, jsString(ref.Name), jsString(tag))
 	names, err := chromedp.Run(ctx, chromedp.Evaluate[[]string](script))
 	if err != nil {
