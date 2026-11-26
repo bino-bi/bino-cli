@@ -3,6 +3,7 @@ package chrome
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -414,13 +415,14 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 // selector names exactly one page even when a page is rendered more than once.
 func capturePages(ctx context.Context, opts ScreenshotOptions, refIndex int, ref ScreenshotRef) ([]ScreenshotResult, error) {
 	tag := fmt.Sprintf("%d-", refIndex)
+	// The page name travels as base64, so no name can end the JS literal.
 	script := fmt.Sprintf(`(() => {
-  const want = %s;
+  const want = new TextDecoder().decode(Uint8Array.from(atob("%s"), (c) => c.charCodeAt(0)));
   const pages = Array.from(document.querySelectorAll("bn-layout-page"))
     .filter((p) => want === "" || p.getAttribute("data-bino-page") === want);
-  pages.forEach((p, i) => p.setAttribute("data-bino-shot", %s + (i + 1)));
+  pages.forEach((p, i) => p.setAttribute("data-bino-shot", "%d-" + (i + 1)));
   return pages.map((p) => p.getAttribute("data-bino-page") || "");
-})()`, jsString(ref.Name), jsString(tag))
+})()`, base64.StdEncoding.EncodeToString([]byte(ref.Name)), refIndex)
 	names, err := chromedp.Run(ctx, chromedp.Evaluate[[]string](script))
 	if err != nil {
 		return nil, fmt.Errorf("find pages: %w", err)
