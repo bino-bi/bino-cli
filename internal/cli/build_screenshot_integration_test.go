@@ -58,3 +58,58 @@ func TestBuildScreenshots(t *testing.T) {
 		t.Errorf("page size %dx%d, want 2048x1536", e.Width, e.Height)
 	}
 }
+
+// A Grid cell with a ref and its own metadata.name is captured by either name.
+func TestBuildScreenshots_GridRefChild(t *testing.T) {
+	engineVersion, cacheDir, chromePath := renderStack(t)
+	dir := t.TempDir()
+	docs := loadScreenshotDocs(t, statelessSampleYAML+`---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: grid-chart
+spec:
+  dataset: revenue_by_region
+  scenarios: [ac1]
+  level: category
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: grid-page
+spec:
+  children:
+    - kind: Grid
+      metadata:
+        name: grid
+      spec:
+        rowHeaders: [r]
+        columnHeaders: [c]
+        children:
+          - row: 0
+            column: 0
+            kind: ChartStructure
+            ref: grid-chart
+            metadata:
+              name: grid-cell
+`)
+	jobs, err := resolveScreenshotJobs(docs, []string{"ChartStructure/grid-chart", "ChartStructure/grid-cell"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := NewOutput(OutputConfig{Stdout: io.Discard, Stderr: io.Discard, NoColor: true})
+	entries, _, err := runScreenshotJobs(context.Background(), out, docs, jobs, 1, buildExecutionConfig{
+		Builder:    &pipeline.Builder{Workdir: dir, EngineVersion: engineVersion, CacheDir: cacheDir},
+		Logger:     logx.Nop(),
+		OutputDir:  dir,
+		ChromePath: chromePath,
+		Stdout:     io.Discard,
+		NoColor:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("got %d screenshots, want 2: %+v", len(entries), entries)
+	}
+}

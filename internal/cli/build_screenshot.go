@@ -9,9 +9,11 @@ package cli
 //   - LayoutPage/<name>: one page, rendered in the first ReportArtefact (by
 //     name) that lists it, so it has the report's format, language and style.
 //     A page no report lists is rendered alone with its own pageFormat.
-//   - <ComponentKind>/<name>: one component, rendered on its page like a
-//     LayoutPage ref. A standalone component that is on no page is rendered
-//     the way a ScreenshotArtefact renders it.
+//   - <ComponentKind>/<name>: one component, rendered on its page in the
+//     first ReportArtefact that lists the page and keeps the component after
+//     constraints. <name> is the child's ref, or its metadata.name. A
+//     standalone component that is on no page is rendered the way a
+//     ScreenshotArtefact renders it.
 //   - <name>: a LayoutPage, or else a ReportArtefact, with that name.
 
 import (
@@ -31,6 +33,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/report/pipeline"
+	reportspec "bino.bi/bino/internal/report/spec"
 )
 
 // screenshotDirName is the folder below --out-dir that holds --screenshot PNGs.
@@ -47,10 +50,26 @@ type screenshotJob struct {
 
 // screenshotIndex is what --screenshot refs can name in a project.
 type screenshotIndex struct {
+	docs       []config.Document
 	reports    []config.Artifact
 	pages      map[string]config.Document
-	components map[string]string // "Kind/Name" of a page child -> first page that has it
-	standalone map[string]bool   // "Kind/Name" of a standalone component document
+	components map[string][]componentSite // "Kind/Name" of a page child -> where it is
+	standalone map[string]bool            // "Kind/Name" of a standalone component document
+}
+
+// componentSite is one place a component is on a page.
+type componentSite struct {
+	page string
+	// id is the name in the element id the renderer writes: the ref when
+	// set, else metadata.name.
+	id    string
+	isRef bool
+	// alias marks a metadata.name entry of a ref child. A ref or an inline
+	// name with the same key wins over it.
+	alias bool
+	// constraints are the metadata.constraints of the child and of each
+	// parent on the page.
+	constraints [][]any
 }
 
 func newScreenshotIndex(docs []config.Document) (*screenshotIndex, error) {
@@ -59,9 +78,10 @@ func newScreenshotIndex(docs []config.Document) (*screenshotIndex, error) {
 		return nil, err
 	}
 	idx := &screenshotIndex{
+		docs:       docs,
 		reports:    reports,
 		pages:      map[string]config.Document{},
-		components: map[string]string{},
+		components: map[string][]componentSite{},
 		standalone: map[string]bool{},
 	}
 	for _, doc := range docs {
@@ -76,7 +96,7 @@ func newScreenshotIndex(docs []config.Document) (*screenshotIndex, error) {
 				continue
 			}
 			if m, ok := root.(map[string]any); ok {
-				collectPageChildren(m["spec"], doc.Name, idx.components)
+				collectPageChildren(m["spec"], doc.Name, nil, idx.components)
 			}
 		case embed.IsRootRenderable(doc.Kind) && doc.Name != "":
 			idx.standalone[doc.Kind+"/"+doc.Name] = true
@@ -86,31 +106,40 @@ func newScreenshotIndex(docs []config.Document) (*screenshotIndex, error) {
 }
 
 // collectPageChildren records every object below v that has a kind and a
-// name (metadata.name, or ref for a reference), at any depth, so components
-// inside cards and grids are found too.
-func collectPageChildren(v any, page string, out map[string]string) {
+// name, at any depth, so components inside cards and grids are found too.
+// The name is the ref when set, as in the element id the renderer writes; a
+// ref child's metadata.name is recorded as an alias for it.
+func collectPageChildren(v any, page string, parents [][]any, out map[string][]componentSite) {
 	switch t := v.(type) {
 	case []any:
 		for _, item := range t {
-			collectPageChildren(item, page, out)
+			collectPageChildren(item, page, parents, out)
 		}
 	case map[string]any:
 		if kind, ok := t["kind"].(string); ok && kind != "" {
-			name, _ := t["ref"].(string)
-			if md, ok := t["metadata"].(map[string]any); ok {
-				if n, ok := md["name"].(string); ok && n != "" {
-					name = n
-				}
+			ref, _ := t["ref"].(string)
+			md, _ := t["metadata"].(map[string]any)
+			name, _ := md["name"].(string)
+			if c, ok := md["constraints"].([]any); ok && len(c) > 0 {
+				parents = append(parents[:len(parents):len(parents)], c)
 			}
-			if name != "" {
-				key := kind + "/" + name
-				if _, seen := out[key]; !seen {
-					out[key] = page
-				}
+			site := componentSite{page: page, id: cmpOr(ref, name), isRef: ref != "", constraints: parents}
+			if site.id != "" {
+				out[kind+"/"+site.id] = append(out[kind+"/"+site.id], site)
+			}
+			if ref != "" && name != "" && name != ref {
+				site.alias = true
+				out[kind+"/"+name] = append(out[kind+"/"+name], site)
 			}
 		}
-		for _, child := range t {
-			collectPageChildren(child, page, out)
+		// Sorted keys keep the site order, and so the chosen report, stable.
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			collectPageChildren(t[k], page, parents, out)
 		}
 	}
 }
@@ -189,13 +218,20 @@ func (idx *screenshotIndex) resolve(value string) (screenshotJob, error) {
 		}, nil
 	}
 
-	capture := pipeline.ScreenshotRef{Kind: kind, Name: name, FileBase: fileBase}
-	if pageName, ok := idx.components[ref]; ok {
-		report := idx.reportForPage(idx.pages[pageName])
-		return screenshotJob{Ref: ref, Report: &report, Capture: capture}, nil
+	if sites := idx.componentSites(ref); len(sites) > 0 {
+		for _, site := range sites {
+			for _, report := range idx.pageReports(idx.pages[site.page]) {
+				if idx.keeps(report, site, kind) {
+					capture := pipeline.ScreenshotRef{Kind: kind, Name: site.id, FileBase: fileBase}
+					return screenshotJob{Ref: ref, Report: &report, Capture: capture}, nil
+				}
+			}
+		}
+		return screenshotJob{}, fmt.Errorf("--screenshot %q: no ReportArtefact that lists its page renders the component; constraints on it, a parent, the page or the document it refers to leave it out, or that document is missing", value)
 	}
 	if idx.standalone[ref] {
 		shot := standaloneComponentShot(kind, name)
+		capture := pipeline.ScreenshotRef{Kind: kind, Name: name, FileBase: fileBase}
 		return screenshotJob{Ref: ref, Shot: &shot, Capture: capture}, nil
 	}
 	return screenshotJob{}, idx.unknown(value)
@@ -211,15 +247,77 @@ func (idx *screenshotIndex) report(name string) (config.Artifact, bool) {
 }
 
 // reportForPage returns the first report that lists page, cut down to that
-// page, or a report of only that page when none lists it.
+// page, or a report of only that page when none lists it. Constraints are not
+// checked: a page ref shows the page as that report renders it.
 func (idx *screenshotIndex) reportForPage(page config.Document) config.Artifact {
+	return idx.pageReports(page)[0]
+}
+
+// pageReports returns every report that lists page, in order, each cut down
+// to that page, or a report of only that page when none lists it.
+func (idx *screenshotIndex) pageReports(page config.Document) []config.Artifact {
+	var out []config.Artifact
 	for _, r := range idx.reports {
 		if refs := pageRefsFor(r.Spec.LayoutPages, page.Name); len(refs) > 0 {
 			r.Spec.LayoutPages = refs
-			return r
+			out = append(out, r)
 		}
 	}
-	return pageOnlyReport(page)
+	if len(out) == 0 {
+		out = append(out, pageOnlyReport(page))
+	}
+	return out
+}
+
+// componentSites returns where the component key is on a page. Aliases count
+// only when no child has key as its ref or inline name.
+func (idx *screenshotIndex) componentSites(key string) []componentSite {
+	var direct, aliases []componentSite
+	for _, s := range idx.components[key] {
+		if s.alias {
+			aliases = append(aliases, s)
+		} else {
+			direct = append(direct, s)
+		}
+	}
+	if len(direct) > 0 {
+		return direct
+	}
+	return aliases
+}
+
+// keeps reports whether report renders the component at site: the page, the
+// child and its parents pass their constraints, and for a ref child a
+// document it names passes its own. It evaluates as the build render does.
+func (idx *screenshotIndex) keeps(report config.Artifact, site componentSite, kind string) bool {
+	specMap, err := reportspec.ToMap(report.Document.Raw)
+	if err != nil {
+		return false
+	}
+	ctx := &reportspec.ConstraintContext{Labels: report.Labels, Spec: specMap, Mode: reportspec.ModeBuild, ArtefactKind: "report"}
+	if ok, err := reportspec.EvaluateParsedConstraints(idx.pages[site.page].Constraints, ctx); err != nil || !ok {
+		return false
+	}
+	for _, raw := range site.constraints {
+		parsed, err := reportspec.ParseMixedConstraints(raw)
+		if err != nil {
+			return false
+		}
+		if ok, err := reportspec.EvaluateParsedConstraints(parsed, ctx); err != nil || !ok {
+			return false
+		}
+	}
+	if !site.isRef {
+		return true
+	}
+	for _, doc := range idx.docs {
+		if doc.Kind == kind && doc.Name == site.id {
+			if ok, err := reportspec.EvaluateParsedConstraints(doc.Constraints, ctx); err == nil && ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // pageRefsFor keeps the layoutPages entries that select page. A glob entry
