@@ -11,19 +11,20 @@ import (
 
 // JSONBuildLog represents the complete JSON build log structure.
 type JSONBuildLog struct {
-	RunID         string          `json:"run_id"`
-	ReportID      string          `json:"report_id,omitempty"`
-	EngineVersion string          `json:"engine_version,omitempty"`
-	Started       time.Time       `json:"started"`
-	Completed     time.Time       `json:"completed"`
-	DurationMs    int64           `json:"duration_ms"`
-	Workdir       string          `json:"workdir"`
-	Documents     []DocumentEntry `json:"documents"`
-	Artifacts     []ArtefactEntry `json:"artefacts"`
-	Queries       []QueryEntry    `json:"queries"`
-	ExecutionPlan []ExecutionStep `json:"execution_plan,omitempty"`
-	Lint          []LintEntry     `json:"lint,omitempty"`
-	Warnings      []string        `json:"warnings,omitempty"`
+	RunID         string            `json:"run_id"`
+	ReportID      string            `json:"report_id,omitempty"`
+	EngineVersion string            `json:"engine_version,omitempty"`
+	Started       time.Time         `json:"started"`
+	Completed     time.Time         `json:"completed"`
+	DurationMs    int64             `json:"duration_ms"`
+	Workdir       string            `json:"workdir"`
+	Documents     []DocumentEntry   `json:"documents"`
+	Artifacts     []ArtefactEntry   `json:"artefacts"`
+	Screenshots   []ScreenshotEntry `json:"screenshots,omitempty"`
+	Queries       []QueryEntry      `json:"queries"`
+	ExecutionPlan []ExecutionStep   `json:"execution_plan,omitempty"`
+	Lint          []LintEntry       `json:"lint,omitempty"`
+	Warnings      []string          `json:"warnings,omitempty"`
 }
 
 // LintEntry represents a lint finding in the build log.
@@ -51,6 +52,24 @@ type ArtefactEntry struct {
 	Name  string `json:"name"`
 	PDF   string `json:"pdf"`
 	Graph string `json:"graph,omitempty"`
+}
+
+// ScreenshotEntry is one PNG written by the build: from `bino build
+// --screenshot`, or from a ScreenshotArtefact.
+type ScreenshotEntry struct {
+	// Ref is what was asked for, as Kind/Name (e.g. "LayoutPage/sales").
+	Ref string `json:"ref"`
+	// Artefact is the ScreenshotArtefact name; empty for --screenshot.
+	Artefact string `json:"artefact,omitempty"`
+	// Page is the 1-based page number when a ref shows more than one page.
+	Page int `json:"page,omitempty"`
+	// LayoutPage is the page shown, for page screenshots.
+	LayoutPage string `json:"layout_page,omitempty"`
+	Path       string `json:"path"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	// LayoutState is the layout snapshot of the render, with --layout-state.
+	LayoutState string `json:"layout_state,omitempty"`
 }
 
 // QueryEntry represents a query execution in the build log.

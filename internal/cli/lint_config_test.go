@@ -433,7 +433,7 @@ func TestLoadBuildManifests_AppliesLintConfig(t *testing.T) {
 			})
 			var buf bytes.Buffer
 			out := NewOutput(OutputConfig{Stdout: &buf, Stderr: &buf, NoColor: true})
-			if _, err := loadBuildManifests(context.Background(), out, logx.Nop(), dir, nil, nil, false, true, nil, nil); err != nil {
+			if _, err := loadBuildManifests(context.Background(), out, logx.Nop(), dir, nil, nil, false, true, false, nil, nil); err != nil {
 				t.Fatalf("loadBuildManifests: %v\n%s", err, buf.String())
 			}
 			if got := strings.Contains(buf.String(), "[artefact-layoutpage-required]"); got != tc.reported {
@@ -451,7 +451,7 @@ func TestLoadBuildManifests_LintCannotHideLoadFailure(t *testing.T) {
 		map[string]string{"bad.yaml": lintCfgBadSchema})
 
 	out := NewOutput(OutputConfig{Stdout: io.Discard, Stderr: io.Discard, NoColor: true})
-	_, err := loadBuildManifests(context.Background(), out, logx.Nop(), dir, nil, nil, false, true, nil, nil)
+	_, err := loadBuildManifests(context.Background(), out, logx.Nop(), dir, nil, nil, false, true, false, nil, nil)
 	if err == nil {
 		t.Fatal("expected loadBuildManifests to reject a schema-invalid bundle")
 	}

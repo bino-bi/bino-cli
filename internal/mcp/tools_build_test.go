@@ -4,6 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"bino.bi/bino/internal/report/buildlog"
 )
 
 func TestProgressMessage(t *testing.T) {
@@ -57,5 +61,31 @@ func TestNewestBuildLog(t *testing.T) {
 	// A log already present before the build (in the exclude set) is ignored.
 	if _, log := newestBuildLog(dir, map[string]struct{}{logPath: {}}); log != nil {
 		t.Error("expected pre-existing log to be excluded")
+	}
+}
+
+func TestScreenshotResult(t *testing.T) {
+	if res := screenshotResult(buildOutput{}); res != nil {
+		t.Errorf("no screenshots: want nil result, got %+v", res)
+	}
+
+	dir := t.TempDir()
+	small := filepath.Join(dir, "small.png")
+	big := filepath.Join(dir, "big.png")
+	if err := os.WriteFile(small, []byte("\x89PNG"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(big, make([]byte, maxInlineScreenshot+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res := screenshotResult(buildOutput{Screenshots: []buildlog.ScreenshotEntry{{Ref: "LayoutPage/a", Path: small}, {Ref: "LayoutPage/b", Path: big}}})
+	if res == nil || len(res.Content) != 2 {
+		t.Fatalf("want JSON text plus one image, got %+v", res)
+	}
+	if _, ok := res.Content[0].(*mcpsdk.TextContent); !ok {
+		t.Errorf("first content is %T, want text", res.Content[0])
+	}
+	if img, ok := res.Content[1].(*mcpsdk.ImageContent); !ok || img.MIMEType != "image/png" {
+		t.Errorf("second content is %T, want a PNG image", res.Content[1])
 	}
 }

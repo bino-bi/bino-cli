@@ -94,6 +94,8 @@ The JSON log is written when you use:
 }
 ```
 
+`screenshots` lists every PNG the build wrote (from `--screenshot` or a `ScreenshotArtefact`), with `ref`, `path`, `width` and `height`. It is left out when there are none. See [Screenshots](/cli/build/#screenshots) for all fields.
+
 `graph` is the PDF path with `.bngraph` appended. The file is a plain text table of the artefact's dependency graph (columns `KIND`, `NAME`, `HASH`, `DEPENDS ON`, `DETAILS`), the flat view of [`bino graph`](/cli/graph/), not a Graphviz file.
 
 ## CSV Data Embedding
