@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/spec"
 )
@@ -97,11 +98,14 @@ func documentStartLine(file string, position int) int {
 }
 
 // logGeneratedJSON names every built PDF with its path, so a caller can open it.
-func logGeneratedJSON(logger *logx.JSONLogger, reports []artefactResult, documents []documentArtefactResult) {
+func logGeneratedJSON(logger *logx.JSONLogger, reports []artefactResult, documents []documentArtefactResult, screenshots []buildlog.ScreenshotEntry) {
 	for _, r := range reports {
 		logger.Record("info", "Generated "+r.Name, map[string]any{"artefact": r.Name, "path": r.PDFPath})
 	}
 	for _, d := range documents {
 		logger.Record("info", "Generated "+d.Name, map[string]any{"artefact": d.Name, "path": d.PDFPath})
+	}
+	for _, sh := range screenshots {
+		logger.Record("info", "Generated "+sh.Ref, map[string]any{"screenshot": sh.Ref, "path": sh.Path, "width": sh.Width, "height": sh.Height})
 	}
 }

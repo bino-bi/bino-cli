@@ -1,13 +1,18 @@
 package chrome
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image/png"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -225,19 +230,39 @@ type ScreenshotOptions struct {
 	// WaitForPlugins and AllowIncompletePlugins work as in PDFOptions.
 	WaitForPlugins         bool
 	AllowIncompletePlugins bool
+	// OnLayoutState works as in PDFOptions.
+	OnLayoutState func(snapshot []byte)
+	// PaperViewport sizes the viewport to a paper Format (a4, letter, ...)
+	// instead of the XGA fallback, so a paper page lays out as in its PDF.
+	PaperViewport bool
 }
 
 // ScreenshotRef identifies a component to capture a screenshot of.
+//
+// Kind "LayoutPage" captures every rendered page with that name, or every
+// page when Name is empty. Each page is one result.
 type ScreenshotRef struct {
 	Kind string
 	Name string
+	// FileBase, when set, is the file name without ".png" and replaces
+	// FilenamePrefix and FilenamePattern. Page captures add "-001", "-002", ...
+	// when Name is empty or the page is rendered more than once.
+	FileBase string
 }
 
 // ScreenshotResult contains the result of a single screenshot capture.
 type ScreenshotResult struct {
 	Ref      ScreenshotRef
 	FilePath string
-	Error    error
+	// Page is the 1-based position of a page capture among the pages the ref
+	// matched; 0 for a component.
+	Page int
+	// PageName is the LayoutPage shown by a page capture.
+	PageName string
+	// Width and Height are the image size in pixels.
+	Width  int
+	Height int
+	Error  error
 }
 
 // RenderScreenshots loads the provided URL in a headless Chrome and captures screenshots of specified elements.
@@ -269,6 +294,9 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 	viewportWidth, viewportHeight := 1024, 768 // default XGA
 	if w, h, ok := customFormatDimensions(opts.Format); ok {
 		viewportWidth, viewportHeight = w, h
+	} else if pw, ph := PaperSizeInches(opts.Format); opts.PaperViewport && pw > 0 {
+		// Paper sizes are portrait; the swap below turns them for portrait.
+		viewportWidth, viewportHeight = int(math.Round(ph*96)), int(math.Round(pw*96))
 	}
 	if strings.EqualFold(opts.Orientation, "portrait") {
 		viewportWidth, viewportHeight = viewportHeight, viewportWidth
@@ -323,11 +351,29 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 		}
 	}
 
+	if opts.OnLayoutState != nil {
+		if snapshot, err := captureLayoutState(taskCtx, logger); err != nil {
+			logger.Warnf("layout-state capture skipped: %v", err)
+		} else if len(snapshot) > 0 {
+			opts.OnLayoutState(snapshot)
+		}
+	}
+
 	// Capture screenshots for each ref
 	results := make([]ScreenshotResult, 0, len(opts.Refs))
 	for i, ref := range opts.Refs {
 		if err := ctx.Err(); err != nil {
 			return results, err
+		}
+
+		if ref.Kind == "LayoutPage" {
+			pageResults, err := capturePages(taskCtx, opts, i, ref)
+			if err != nil {
+				results = append(results, ScreenshotResult{Ref: ref, Error: err})
+				continue
+			}
+			results = append(results, pageResults...)
+			continue
 		}
 
 		result := ScreenshotResult{Ref: ref}
@@ -336,31 +382,100 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 
 		// Build output filename (always PNG)
 		var filename string
-		if opts.FilenamePattern == "index" {
+		switch {
+		case ref.FileBase != "":
+			filename = ref.FileBase + ".png"
+		case opts.FilenamePattern == "index":
 			filename = fmt.Sprintf("%s-%03d.png", opts.FilenamePrefix, i+1)
-		} else {
+		default:
 			filename = fmt.Sprintf("%s-%s.png", opts.FilenamePrefix, filenamePart(ref.Name))
 		}
 		result.FilePath = filepath.Join(opts.OutputDir, filename)
 
-		// Take screenshot of element
-		buf, err := chromedp.Run(taskCtx, chromedp.Screenshot(chromedp.CSS(selector)))
+		// The screenshot action waits until the element shows up, so a
+		// component that is not on the page would hold until the timeout.
+		found, err := chromedp.Run(taskCtx, chromedp.Evaluate[bool](fmt.Sprintf("document.querySelector(%s) !== null", jsString(selector))))
+		if err == nil && !found {
+			err = errors.New("element not found on the rendered page")
+		}
 		if err != nil {
-			result.Error = fmt.Errorf("capture screenshot of %s: %w", selector, err)
+			result.Error = fmt.Errorf("capture screenshot of %s/%s: %w", ref.Kind, ref.Name, err)
 			results = append(results, result)
 			continue
 		}
 
-		if err := os.WriteFile(result.FilePath, buf, 0o644); err != nil { //nolint:gosec // G306: screenshot output files need standard read perms
-			result.Error = fmt.Errorf("write screenshot %s: %w", result.FilePath, err)
-			results = append(results, result)
-			continue
-		}
-
-		results = append(results, result)
+		results = append(results, captureElement(taskCtx, result, selector))
 	}
 
 	return results, nil
+}
+
+// capturePages captures every bn-layout-page that matches ref, in document
+// order. Each page gets a unique data-bino-shot attribute first, so one
+// selector names exactly one page even when a page is rendered more than once.
+func capturePages(ctx context.Context, opts ScreenshotOptions, refIndex int, ref ScreenshotRef) ([]ScreenshotResult, error) {
+	tag := fmt.Sprintf("%d-", refIndex)
+	// The page name travels as base64, so no name can end the JS literal.
+	script := fmt.Sprintf(`(() => {
+  const want = new TextDecoder().decode(Uint8Array.from(atob("%s"), (c) => c.charCodeAt(0)));
+  const pages = Array.from(document.querySelectorAll("bn-layout-page"))
+    .filter((p) => want === "" || p.getAttribute("data-bino-page") === want);
+  pages.forEach((p, i) => p.setAttribute("data-bino-shot", "%d-" + (i + 1)));
+  return pages.map((p) => p.getAttribute("data-bino-page") || "");
+})()`, base64.StdEncoding.EncodeToString([]byte(ref.Name)), refIndex)
+	names, err := chromedp.Run(ctx, chromedp.Evaluate[[]string](script))
+	if err != nil {
+		return nil, fmt.Errorf("find pages: %w", err)
+	}
+	if len(names) == 0 {
+		if ref.Name == "" {
+			return nil, errors.New("no page was rendered")
+		}
+		return nil, fmt.Errorf("page %s was not rendered (check its pageFormat and constraints)", ref.Name)
+	}
+
+	base := ref.FileBase
+	if base == "" {
+		base = opts.FilenamePrefix + "-" + filenamePart(ref.Name)
+	}
+	numbered := ref.Name == "" || len(names) > 1
+	results := make([]ScreenshotResult, 0, len(names))
+	for i, name := range names {
+		result := ScreenshotResult{Ref: ref, Page: i + 1, PageName: name}
+		filename := base + ".png"
+		if numbered {
+			filename = fmt.Sprintf("%s-%03d.png", base, i+1)
+		} else {
+			result.Page = 0
+		}
+		result.FilePath = filepath.Join(opts.OutputDir, filename)
+		selector := `[data-bino-shot="` + tag + strconv.Itoa(i+1) + `"]`
+		results = append(results, captureElement(ctx, result, selector))
+	}
+	return results, nil
+}
+
+// captureElement screenshots the element at selector into result.FilePath and
+// records the image size.
+func captureElement(ctx context.Context, result ScreenshotResult, selector string) ScreenshotResult {
+	buf, err := chromedp.Run(ctx, chromedp.Screenshot(chromedp.CSS(selector)))
+	if err != nil {
+		result.Error = fmt.Errorf("capture screenshot of %s: %w", selector, err)
+		return result
+	}
+	if cfg, err := png.DecodeConfig(bytes.NewReader(buf)); err == nil {
+		result.Width, result.Height = cfg.Width, cfg.Height
+	}
+	if err := os.WriteFile(result.FilePath, buf, 0o644); err != nil { //nolint:gosec // G306: screenshot output files need standard read perms
+		result.Error = fmt.Errorf("write screenshot %s: %w", result.FilePath, err)
+	}
+	return result
+}
+
+// jsString quotes s as a JavaScript string literal.
+func jsString(s string) string {
+	b, _ := json.Marshal(s) //nolint:errcheck // a string always marshals
+	return string(b)
 }
 
 // newExecAllocator creates a chromedp ExecAllocator with the appropriate flags.

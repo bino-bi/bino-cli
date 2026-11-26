@@ -349,12 +349,19 @@ func (b *Builder) SetPDFInfo(pdfPath string, info pdf.Info) error {
 type ScreenshotRef struct {
 	Kind string
 	Name string
+	// FileBase works as in chrome.ScreenshotRef.
+	FileBase string
 }
 
 // ScreenshotCaptureResult holds the result of capturing a single screenshot.
 type ScreenshotCaptureResult struct {
 	Ref      ScreenshotRef
 	FilePath string
+	// Page, PageName, Width and Height work as in chrome.ScreenshotResult.
+	Page     int
+	PageName string
+	Width    int
+	Height   int
 	Error    error
 }
 
@@ -373,6 +380,10 @@ type ScreenshotRenderOptions struct {
 	Scale                 float64
 	// AllowIncompletePlugins works as in PDFRenderOptions.
 	AllowIncompletePlugins bool
+	// OnLayoutState works as in PDFRenderOptions.
+	OnLayoutState func(snapshot []byte)
+	// PaperViewport works as in chrome.ScreenshotOptions.
+	PaperViewport bool
 }
 
 // CaptureScreenshots starts an ephemeral HTTP server with the given HTML and
@@ -393,7 +404,7 @@ func (b *Builder) CaptureScreenshotsWithData(ctx context.Context, html []byte, a
 	// Convert our refs to chrome refs
 	chromeRefs := make([]chrome.ScreenshotRef, len(opts.Refs))
 	for i, ref := range opts.Refs {
-		chromeRefs[i] = chrome.ScreenshotRef{Kind: ref.Kind, Name: ref.Name}
+		chromeRefs[i] = chrome.ScreenshotRef{Kind: ref.Kind, Name: ref.Name, FileBase: ref.FileBase}
 	}
 
 	chromeOpts := chrome.ScreenshotOptions{
@@ -412,6 +423,8 @@ func (b *Builder) CaptureScreenshotsWithData(ctx context.Context, html []byte, a
 		Scale:                  opts.Scale,
 		WaitForPlugins:         b.waitForPlugins(opts.WaitForComponentReady),
 		AllowIncompletePlugins: opts.AllowIncompletePlugins,
+		OnLayoutState:          opts.OnLayoutState,
+		PaperViewport:          opts.PaperViewport,
 	}
 
 	chromeResults, screenshotErr := chrome.RenderScreenshots(ctx, chromeOpts)
@@ -428,8 +441,12 @@ func (b *Builder) CaptureScreenshotsWithData(ctx context.Context, html []byte, a
 	results := make([]ScreenshotCaptureResult, len(chromeResults))
 	for i, r := range chromeResults {
 		results[i] = ScreenshotCaptureResult{
-			Ref:      ScreenshotRef{Kind: r.Ref.Kind, Name: r.Ref.Name},
+			Ref:      ScreenshotRef{Kind: r.Ref.Kind, Name: r.Ref.Name, FileBase: r.Ref.FileBase},
 			FilePath: r.FilePath,
+			Page:     r.Page,
+			PageName: r.PageName,
+			Width:    r.Width,
+			Height:   r.Height,
 			Error:    r.Error,
 		}
 	}

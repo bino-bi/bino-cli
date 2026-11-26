@@ -28,18 +28,24 @@ var buildMu sync.Mutex
 // maxBuildOutput caps the captured build output returned to the agent.
 const maxBuildOutput = 16 * 1024
 
+// maxInlineScreenshot caps the size of one PNG returned as image content; a
+// larger one is only listed by path.
+const maxInlineScreenshot = 1 << 20
+
 type buildInput struct {
-	Artefacts []string `json:"artefacts,omitempty" jsonschema:"metadata.name entries to build (default: all)"`
-	OutDir    string   `json:"out_dir,omitempty" jsonschema:"output directory relative to the project root (default: dist)"`
+	Artefacts   []string `json:"artefacts,omitempty" jsonschema:"metadata.name entries to build (default: all)"`
+	OutDir      string   `json:"out_dir,omitempty" jsonschema:"output directory relative to the project root (default: dist)"`
+	Screenshots []string `json:"screenshots,omitempty" jsonschema:"PNG screenshots to render: ReportArtefact/<name> (every page), LayoutPage/<name>, <ComponentKind>/<name>, or a page or report name. Without artefacts only the screenshots are built. Images up to 1 MB are returned inline."`
 }
 
 type buildOutput struct {
-	Success   bool                     `json:"success"`
-	ExitCode  int                      `json:"exitCode"`
-	Output    string                   `json:"output"`
-	Artefacts []buildlog.ArtefactEntry `json:"artefacts,omitempty"`
-	Warnings  []string                 `json:"warnings,omitempty"`
-	LogPath   string                   `json:"logPath,omitempty"`
+	Success     bool                       `json:"success"`
+	ExitCode    int                        `json:"exitCode"`
+	Output      string                     `json:"output"`
+	Artefacts   []buildlog.ArtefactEntry   `json:"artefacts,omitempty"`
+	Screenshots []buildlog.ScreenshotEntry `json:"screenshots,omitempty"`
+	Warnings    []string                   `json:"warnings,omitempty"`
+	LogPath     string                     `json:"logPath,omitempty"`
 }
 
 func (h *handlers) registerBuildTool(srv *mcpsdk.Server) {
@@ -47,7 +53,7 @@ func (h *handlers) registerBuildTool(srv *mcpsdk.Server) {
 		Name:        "build",
 		Title:       "Build report artefacts",
 		Annotations: writeTool("Build report artefacts"),
-		Description: "Build report artefacts by running `bino build` (renders PDFs via headless Chrome - slow, writes files). Streams progress; returns the exit code, build output, and the produced artefacts.",
+		Description: "Build report artefacts by running `bino build` (renders PDFs via headless Chrome - slow, writes files). Streams progress; returns the exit code, build output, and the produced artefacts. With screenshots, renders PNGs of pages or components instead and returns them as images.",
 	}, h.runBuild)
 }
 
@@ -71,6 +77,9 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 	args := []string{"build", "--work-dir", h.root(), "--out-dir", outDir, "--log-format", "json", "--build-log-format", "json"}
 	for _, a := range in.Artefacts {
 		args = append(args, "--artefact", a)
+	}
+	for _, s := range in.Screenshots {
+		args = append(args, "--screenshot", s)
 	}
 
 	cmd := exec.CommandContext(ctx, exe, args...) //nolint:gosec // G204: exe is our own binary, args are controlled
@@ -141,8 +150,32 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 		out.Artefacts = log.Artifacts
 		out.Warnings = log.Warnings
 		out.LogPath = logPath
+		if len(in.Screenshots) > 0 {
+			out.Screenshots = log.Screenshots
+		}
 	}
-	return nil, out, nil
+	return screenshotResult(out), out, nil
+}
+
+// screenshotResult returns the screenshots as image content after the JSON
+// output, or nil (the SDK then sends the JSON alone) when there are none.
+func screenshotResult(out buildOutput) *mcpsdk.CallToolResult {
+	var images []mcpsdk.Content
+	for _, s := range out.Screenshots {
+		data, err := os.ReadFile(s.Path)
+		if err != nil || len(data) > maxInlineScreenshot {
+			continue
+		}
+		images = append(images, &mcpsdk.ImageContent{Data: data, MIMEType: "image/png"})
+	}
+	if len(images) == 0 {
+		return nil
+	}
+	text, err := json.Marshal(out)
+	if err != nil {
+		return nil
+	}
+	return &mcpsdk.CallToolResult{Content: append([]mcpsdk.Content{&mcpsdk.TextContent{Text: string(text)}}, images...)}
 }
 
 // progressMessage extracts a human-readable message from a build output line.

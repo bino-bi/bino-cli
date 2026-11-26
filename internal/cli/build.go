@@ -101,6 +101,10 @@ func newBuildCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathere
 		// Stateless single-shot mode (see build_stateless.go).
 		stateless       bool
 		statelessFormat string
+
+		// PNGs without a ScreenshotArtefact (see build_screenshot.go).
+		screenshots     []string
+		screenshotScale int
 	)
 
 	cmd := &cobra.Command{
@@ -120,9 +124,14 @@ query errors to warnings and render the report with the remaining data.
 Set SOURCE_DATE_EPOCH (unix seconds) to normalize PDF timestamps and document
 IDs for byte-reproducible builds.
 
-Use --artefact/--exclude-artefact to control which metadata.name entries produce output.`),
+Use --artefact/--exclude-artefact to control which metadata.name entries produce output.
+
+Use --screenshot to write PNGs of report pages or components to <out-dir>/screenshots
+without a ScreenshotArtefact manifest. Without --artefact, only the screenshots are built.`),
 		Example: strings.TrimSpace(`  bino build
-  bino build --work-dir ./reports --artefact weekly --artefact monthly --out-dir dist`),
+  bino build --work-dir ./reports --artefact weekly --artefact monthly --out-dir dist
+  bino build --screenshot ReportArtefact/weekly --build-log-format json
+  bino build --screenshot LayoutPage/overview --screenshot ChartStructure/revenue --screenshot-scale 2`),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
@@ -130,6 +139,9 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// read a self-contained YAML, render it, stream bytes to stdout, and
 			// report any error as JSON on stderr. See build_stateless.go.
 			if stateless {
+				if len(screenshots) > 0 {
+					return ConfigErrorf("--screenshot cannot be combined with --stateless")
+				}
 				var inputArg string
 				if len(args) > 0 {
 					inputArg = args[0]
@@ -198,6 +210,13 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			include = env.Resolver.ResolveStringSlice("artefact", "artefact", include)
 			exclude = env.Resolver.ResolveStringSlice("exclude-artefact", "exclude-artefact", exclude)
 
+			if screenshotScale != 1 && screenshotScale != 2 {
+				return ConfigErrorf("invalid --screenshot-scale %d: expected 1 or 2", screenshotScale)
+			}
+			// Only an explicit --artefact adds normal artefacts to a screenshot
+			// run; an artefact list in bino.toml does not.
+			screenshotOnly := len(screenshots) > 0 && !cmd.Flags().Changed("artefact")
+
 			// Check for cancellation before starting expensive manifest loading
 			if err := ctx.Err(); err != nil {
 				return err
@@ -208,12 +227,20 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			if env.PluginRegistry != nil {
 				pluginLinters = plugin.NewLinterRegistry(env.PluginRegistry)
 			}
-			manifests, err := loadBuildManifests(ctx, out, logger, env.ProjectRoot, include, exclude, noLint, noGraph, env.PluginRegistry, pluginLinters)
+			manifests, err := loadBuildManifests(ctx, out, logger, env.ProjectRoot, include, exclude, noLint, noGraph, screenshotOnly, env.PluginRegistry, pluginLinters)
 			if err != nil {
 				return err
 			}
 			documents := manifests.Documents
 			lintFindings := manifests.LintFindings
+
+			var screenshotJobs []screenshotJob
+			if len(screenshots) > 0 {
+				screenshotJobs, err = resolveScreenshotJobs(documents, screenshots)
+				if err != nil {
+					return ConfigError(err)
+				}
+			}
 
 			outputDir := pipeline.ResolveOutputDir(env.ProjectRoot, outDir)
 			if err := pathutil.EnsureDir(outputDir); err != nil {
@@ -371,7 +398,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				KindProvider:             env.PluginRegistry,
 			}
 
-			buildResults, err := buildAllArtefacts(ctx, out, manifests, buildExecutionConfig{
+			execCfg := buildExecutionConfig{
 				CaptureLayoutState: layoutState,
 				Builder:            builder,
 				Logger:             logger,
@@ -383,9 +410,13 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				HookRunner:         env.HookRunner,
 				HookEnv:            buildHookEnv,
 				HostService:        hostSvc,
-			})
-			if err != nil {
-				return err
+			}
+			buildResults := &buildAllResults{}
+			if !screenshotOnly {
+				buildResults, err = buildAllArtefacts(ctx, out, manifests, execCfg)
+				if err != nil {
+					return err
+				}
 			}
 			results := buildResults.Reports
 			screenshotResults := buildResults.Screenshots
@@ -394,6 +425,16 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			for _, r := range results {
 				buildWarnings = append(buildWarnings, r.RenderWarnings...)
 				buildWarnings = append(buildWarnings, r.LayoutWarnings...)
+			}
+
+			var screenshotEntries []buildlog.ScreenshotEntry
+			if len(screenshotJobs) > 0 {
+				var shotWarnings []string
+				screenshotEntries, shotWarnings, err = runScreenshotJobs(ctx, out, documents, screenshotJobs, float64(screenshotScale), execCfg)
+				if err != nil {
+					return err
+				}
+				buildWarnings = append(buildWarnings, shotWarnings...)
 			}
 
 			// Run post-build hooks
@@ -412,15 +453,21 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			if buildLogFormat == "json" || embedDataCSV {
 				jsonLogPath = filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.json", shortRunID))
 				jsonLog := assembleJSONBuildLog(runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
+				jsonLog.Screenshots = append(screenshotArtefactEntries(screenshotResults), screenshotEntries...)
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
 					logger.Warnf("failed to write JSON build log: %v", err)
 				}
 			}
 
 			// Print results
-			printBuildSummary(ctx, out, env.ProjectRoot, results, screenshotResults, documentResults)
+			if !screenshotOnly {
+				printBuildSummary(ctx, out, env.ProjectRoot, results, screenshotResults, documentResults)
+			}
+			if len(screenshotEntries) > 0 {
+				printScreenshotSummary(ctx, out, env.ProjectRoot, screenshotEntries)
+			}
 			if jl, ok := logger.(*logx.JSONLogger); ok {
-				logGeneratedJSON(jl, results, documentResults)
+				logGeneratedJSON(jl, results, documentResults, screenshotEntries)
 			}
 
 			// Print final success
@@ -489,6 +536,11 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 		"Stateless single-shot mode: read a self-contained report YAML from [<file>|-], render it, and write the artifact bytes to stdout (JSON error on stderr, no files written)")
 	cmd.Flags().StringVar(&statelessFormat, "format", "pdf",
 		"Stateless output format: 'pdf' or 'png' (only used with --stateless)")
+
+	cmd.Flags().StringSliceVar(&screenshots, "screenshot", nil,
+		"Write a PNG of ReportArtefact/<name> (every page), LayoutPage/<name>, <ComponentKind>/<name>, or a bare page or report name to <out-dir>/screenshots (repeatable; without --artefact only screenshots are built)")
+	cmd.Flags().IntVar(&screenshotScale, "screenshot-scale", 1,
+		"Device scale factor for --screenshot: 1 or 2 (sharper, twice the pixels)")
 
 	// Accept both UK and US spellings for artefact flags
 	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
@@ -1026,6 +1078,8 @@ type screenshotArtefactResult struct {
 	RefKind      string
 	RefName      string
 	FilePath     string
+	Width        int
+	Height       int
 	Error        error
 }
 
@@ -1124,6 +1178,8 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 			RefKind:      r.Ref.Kind,
 			RefName:      r.Ref.Name,
 			FilePath:     r.FilePath,
+			Width:        r.Width,
+			Height:       r.Height,
 			Error:        r.Error,
 		}
 	}
@@ -1291,7 +1347,8 @@ type buildManifestData struct {
 
 // loadBuildManifests loads YAML documents, validates them, collects and filters
 // artifacts, and builds the dependency graph. It prints progress to out.
-func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, projectRoot string, include, exclude []string, noLint, noGraph bool, kindProvider config.KindProvider, pluginLinters lint.PluginLinterRegistry) (*buildManifestData, error) {
+// With screenshotOnly it stops after lint: no artefact is selected or needed.
+func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, projectRoot string, include, exclude []string, noLint, noGraph, screenshotOnly bool, kindProvider config.KindProvider, pluginLinters lint.PluginLinterRegistry) (*buildManifestData, error) {
 	out.Step("Loading manifests...")
 	loadStart := time.Now()
 	documents, err := config.LoadDirWithOptions(ctx, projectRoot, config.LoadOptions{KindProvider: kindProvider})
@@ -1338,6 +1395,9 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, pr
 			printLintFindings(out, lintFindings, projectRoot)
 			out.Blank()
 		}
+	}
+	if screenshotOnly {
+		return &buildManifestData{Documents: documents, LintFindings: lintFindings}, nil
 	}
 
 	artifacts, err := config.CollectArtefacts(documents)
@@ -1471,6 +1531,24 @@ func assembleJSONBuildLog(runID, reportID, engineVersion string, startTime time.
 		Lint:          findingsToLintEntries(lintFindings),
 		Warnings:      buildWarnings,
 	}
+}
+
+// screenshotArtefactEntries lists the PNGs that ScreenshotArtefacts wrote.
+func screenshotArtefactEntries(results []screenshotArtefactResult) []buildlog.ScreenshotEntry {
+	var entries []buildlog.ScreenshotEntry
+	for _, r := range results {
+		if r.Error != nil {
+			continue
+		}
+		entries = append(entries, buildlog.ScreenshotEntry{
+			Ref:      r.RefKind + "/" + r.RefName,
+			Artefact: r.ArtefactName,
+			Path:     r.FilePath,
+			Width:    r.Width,
+			Height:   r.Height,
+		})
+	}
+	return entries
 }
 
 // printBuildSummary prints the build results to the structured output.

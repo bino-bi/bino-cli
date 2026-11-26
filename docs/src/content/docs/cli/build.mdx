@@ -25,6 +25,8 @@ Common flags:
 - `--layout-state` - write `<artefact>.layout.json` describing the rendered report and report render issues (empty components, overflow, diverging scales) as build warnings. Without it a build reports only content that is lost: cut off (`layout-overflow`) or not drawn because of an error (`layout-component-error`), one line per component. See [Layout State](/cli/layout-state/).
 - `--data-validation` - data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
 - `--warn-on-query-errors` - downgrade a failed dataset query to a warning and render the report with the remaining data. By default a failed query fails the build.
+- `--screenshot` - write a PNG of a report, page or component to `<out-dir>/screenshots/`, with no `ScreenshotArtefact` needed (can be repeated). See [Screenshots](#screenshots).
+- `--screenshot-scale` - device scale factor for `--screenshot`: `1` (default) or `2` for twice the pixels.
 
 Build log flags:
 
@@ -38,6 +40,59 @@ Build log flags:
 - `--detailed-execution-plan` - include step-by-step timing.
 
 See [Build Logs](/cli/build-logs/) for full documentation on JSON logs, CSV embedding, and execution plan tracking.
+
+## Screenshots
+
+`--screenshot` renders PNGs of the project without a `ScreenshotArtefact` manifest. Nothing is
+written to your manifests. Each value is one of:
+
+| Value                     | Captures                                                                                                                                             | File in `<out-dir>/screenshots/`                            |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `ReportArtefact/<name>`   | Every page of the report, as in its PDF.                                                                                                             | `reportartefact-<name>-001.png`, `-002.png`, ...            |
+| `LayoutPage/<name>`       | One page, rendered in the first `ReportArtefact` (by name) that lists it, so it has that report's format, language and style. A page that no report lists is rendered alone with its own `pageFormat`. | `layoutpage-<name>.png` (numbered if the page renders more than once, for example with params) |
+| `<ComponentKind>/<name>`  | One component, such as `ChartStructure/revenue`, rendered on its page like a `LayoutPage`. A standalone component that is on no page is rendered the way a [`ScreenshotArtefact`](/reference/screenshot-artefact/) renders it. | `<kind>-<name>.png`, kind in lower case                     |
+| `<name>`                  | The `LayoutPage` with that name, or else the `ReportArtefact`. A name that is both fails; write the kind.                                            | as above                                                    |
+
+Names are percent-encoded in file names, so `Text/@acme/kit/note` becomes `text-@acme%2Fkit%2Fnote.png`.
+A value that names nothing fails the build with exit code 1 and lists every value that would work.
+
+Without `--artefact`, a build with `--screenshot` produces only the screenshots: no PDF, no
+`ScreenshotArtefact`, no `DocumentArtefact`. An `artefact` list in `bino.toml` does not change this.
+Pass `--artefact` to build those artefacts in the same run.
+
+With `--layout-state`, each value also writes `<file>.layout.json` next to its PNGs. Render issues
+are reported as build warnings in both cases, as for a PDF.
+
+With `--build-log-format json`, the build log lists every PNG in `screenshots`. `page` is set when a
+value captures more than one page, and `layout_page` names the page shown:
+
+```json
+"screenshots": [
+  {
+    "ref": "ReportArtefact/sales-dashboard",
+    "page": 1,
+    "layout_page": "sales-dashboard-page",
+    "path": "/work/dist/screenshots/reportartefact-sales-dashboard-001.png",
+    "width": 1024,
+    "height": 768,
+    "layout_state": "/work/dist/screenshots/reportartefact-sales-dashboard.layout.json"
+  },
+  {
+    "ref": "ChartStructure/revenue_chart",
+    "path": "/work/dist/screenshots/chartstructure-revenue_chart.png",
+    "width": 512,
+    "height": 306
+  }
+]
+```
+
+`width` and `height` are in pixels, so they double with `--screenshot-scale 2`. PNGs from
+`ScreenshotArtefact` manifests are listed here too, with their `artefact` name.
+
+```bash
+bino build --screenshot ReportArtefact/monthly --build-log-format json
+bino build --screenshot overview --screenshot ChartStructure/revenue --screenshot-scale 2
+```
 
 ## Default Arguments via bino.toml
 
