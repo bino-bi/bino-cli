@@ -168,7 +168,7 @@ func TestRenderTreePluginNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("renderLayoutChild: %v", err)
 	}
-	for _, slot := range []string{"n1", "n2"} {
+	for _, slot := range []string{"n1", "n2' id='bino-gauge-g1"} {
 		if !strings.Contains(out, "<div slot='"+slot+"'><bn-gauge></bn-gauge></div>") {
 			t.Errorf("plugin HTML missing from slot %s in %q", slot, out)
 		}
