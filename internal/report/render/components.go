@@ -1033,30 +1033,30 @@ func filterChildrenByConstraints(children []layoutChild, rc *renderCtx) ([]layou
 
 	result := make([]layoutChild, 0, len(children))
 	for _, child := range children {
-		// No constraints means always included
-		if len(child.Metadata.Constraints) == 0 {
-			result = append(result, child)
-			continue
-		}
-
-		// Parse constraints (supports both string and structured formats)
-		constraints, parseErr := spec.ParseMixedConstraints(child.Metadata.Constraints)
-		if parseErr != nil {
-			return nil, fmt.Errorf("invalid constraint in child %q: %w", child.Metadata.Name, parseErr)
-		}
-
-		// Evaluate constraints
-		match, err := spec.EvaluateParsedConstraintsWithContext(constraints, rc.constraintCtx, child.Kind, child.Metadata.Name)
+		match, err := childPassesConstraints(child.Kind, child.Metadata, rc)
 		if err != nil {
 			return nil, err
 		}
-
 		if match {
 			result = append(result, child)
 		}
 	}
 
 	return result, nil
+}
+
+// childPassesConstraints reports whether a page, card or Grid child's own
+// metadata.constraints match. Without a constraint context every child passes.
+func childPassesConstraints(kind string, meta layoutChildMeta, rc *renderCtx) (bool, error) {
+	if rc == nil || rc.constraintCtx == nil || len(meta.Constraints) == 0 {
+		return true, nil
+	}
+	// Parse constraints (supports both string and structured formats)
+	constraints, err := spec.ParseMixedConstraints(meta.Constraints)
+	if err != nil {
+		return false, fmt.Errorf("invalid constraint in child %q: %w", meta.Name, err)
+	}
+	return spec.EvaluateParsedConstraintsWithContext(constraints, rc.constraintCtx, kind, meta.Name)
 }
 
 // builtinLayoutChildKinds lists the child kinds rendered by renderLayoutChild
@@ -1424,6 +1424,7 @@ func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 		b.WriteString("\n  <div slot='")
 		b.WriteString(html.EscapeString(node.ID))
 		b.WriteString("'")
+		writeComponentID(&b, node.Kind, node.Ref, "")
 		writeAttr(&b, "data-bino-annotation-target", rc.treeAnnotationTarget(node))
 		if rc.gridTargets && treeNodeTargetKey(node) != "" {
 			writeTargetAttrs(&b, node.Kind, node.Ref)
@@ -1592,12 +1593,19 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 	// Cells inherit the grid's effective style as their default.
 	childRC := rc.withInheritedStyle(s.SelectedStyle)
 
-	// Render the children first: a child that renders nothing (a missing
-	// optional ref, a ref that constraints filter out) takes no position, so
+	// Render the children first: a child that renders nothing (its own
+	// constraints, a missing optional ref, a ref that constraints filter out) takes no position, so
 	// its span must not hide another child.
 	rendered := make([]gridChild, 0, len(s.Children))
 	contents := make([]string, 0, len(s.Children))
 	for _, child := range s.Children {
+		match, err := childPassesConstraints(child.Kind, child.Metadata, rc)
+		if err != nil {
+			return "", err
+		}
+		if !match {
+			continue
+		}
 		childContent, err := renderGridChild(child, childRC)
 		if err != nil {
 			return "", fmt.Errorf("render grid child %s-%s: %w", child.Row, child.Column, err)

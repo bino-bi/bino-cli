@@ -236,7 +236,7 @@ func TestAnnotations_ACardInATreeHasNoTargets(t *testing.T) {
 func TestAnnotations_ATreeNodeWithARefIsATarget(t *testing.T) {
 	tree := `{"kind":"Tree","metadata":{"name":"tr"},"spec":{"edges":[],"nodes":[{"id":"n","kind":"ChartTime","ref":"trend"},{"id":"m","kind":"ChartTime","spec":{"dataset":"sales"}}]}}`
 	out := renderAnnotations(t, ModeBuild, chartDoc, marker2024, annotationTestPage(tree))
-	if !regexp.MustCompile(`<div slot='n' data-bino-annotation-target='t1'[ >]`).MatchString(out) {
+	if !regexp.MustCompile(`<div slot='n' id='bino-charttime-trend' data-bino-annotation-target='t1'[ >]`).MatchString(out) {
 		t.Fatalf("no target on the tree node:\n%s", out)
 	}
 	if strings.Contains(out, "<div slot='m' data-bino-annotation-target") {
@@ -488,7 +488,7 @@ func TestAnnotations_GridChildAndTreeNodeCarryTheirTarget(t *testing.T) {
 	for _, want := range []string{
 		`<div slot='[^']*' id='bino-charttime-trend' data-bino-target-kind='ChartTime' data-bino-target-name='trend'><bn-chart-time`,
 		`<div slot='[^']*' id='bino-table-inline_t' data-bino-target-kind='Table' data-bino-target-name='inline_t'><bn-table`,
-		`<div slot='n' data-bino-target-kind='ChartTime' data-bino-target-name='trend'>`,
+		`<div slot='n' id='bino-charttime-trend' data-bino-target-kind='ChartTime' data-bino-target-name='trend'>`,
 		`<div slot='m'>`, // an inline node cannot be a target
 	} {
 		if !regexp.MustCompile(want).MatchString(out) {

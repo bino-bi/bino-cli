@@ -226,6 +226,49 @@ spec:
 	}
 }
 
+// A component used only as a Tree node resolves by its ref.
+func TestResolveScreenshotJobs_TreeRefNode(t *testing.T) {
+	docs := loadScreenshotDocs(t, `apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: tree_page
+spec:
+  children:
+    - kind: Tree
+      metadata:
+        name: tree
+      spec:
+        edges:
+          - from: root
+            to: leaf
+        nodes:
+          - id: root
+            kind: Label
+            spec:
+              value: Total
+          - id: leaf
+            kind: ChartStructure
+            ref: tree-chart
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: tree-chart
+spec:
+  dataset: sales
+`)
+	jobs, err := resolveScreenshotJobs(docs, []string{"ChartStructure/tree-chart"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := jobs[0].Capture.Name; got != "tree-chart" {
+		t.Errorf("capture name %q, want tree-chart", got)
+	}
+	if jobs[0].Report == nil || jobs[0].Report.Spec.LayoutPages[0].Page != "tree_page" {
+		t.Errorf("want a render of tree_page, got %+v", jobs[0])
+	}
+}
+
 const constrainedScreenshotYAML = `apiVersion: bino.bi/v1alpha1
 kind: LayoutPage
 metadata:
