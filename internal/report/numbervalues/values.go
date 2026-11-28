@@ -176,10 +176,15 @@ func itemValue(item Item) (Value, bool) {
 			return Value{}, false
 		}
 	case "label":
-		if item.Role != "data" {
+		// a value label has a data-point key with part label (or total);
+		// axis ticks and titles have none
+		if part := item.Point["part"]; part != "label" && part != "total" {
 			return Value{}, false
 		}
 	case "bar", "point":
+		if item.Point == nil {
+			return Value{}, false
+		}
 	default:
 		return Value{}, false
 	}

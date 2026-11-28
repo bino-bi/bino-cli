@@ -202,13 +202,52 @@ func TestDateBucket(t *testing.T) {
 		{"week", "2025-01-05", "2024-12-30"}, // a Sunday belongs to the week of the Monday before
 		{"day", "2025-01-05T13:00:00", "2025-01-05"},
 		{"hour", "2025-01-05T13:45:00", "2025-01-05T13:00:00"},
-		{"", "2025-01-31", "2025-01-31"},
 	}
 	for _, c := range cases {
 		got, ok := dateBucket(c.interval)(c.in)
 		if !ok || got != c.want {
 			t.Errorf("dateBucket(%q)(%q) = %q, %v; want %q", c.interval, c.in, got, ok, c.want)
 		}
+	}
+	for _, unknown := range []string{"", "auto", "setname", "none"} {
+		if dateBucket(unknown) != nil {
+			t.Errorf("dateBucket(%q) is not nil", unknown)
+		}
+	}
+}
+
+// Without the interval the engine used, a date point is never compared: a
+// monthly bucket over daily rows would look like a difference.
+func TestVerify_UnknownIntervalIsUnmatched(t *testing.T) {
+	capture := `{"components":[{"id":"c","kind":"ChartTime","datasets":"daily","dateInterval":"auto","items":[
+	  {"kind":"bar","value":3,"point":{"date":"2025-01-01","scenario":"ac1","part":"element"}}]}]}`
+	file, err := Build([]byte(capture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	Verify(file, map[string]json.RawMessage{"daily": json.RawMessage(`[{"date":"2025-01-01","ac1":1},{"date":"2025-01-02","ac1":2}]`)})
+	want := Summary{Values: 1, Unmatched: 1, UnmatchedReasons: map[string]int{reasonInterval: 1}}
+	if !reflect.DeepEqual(*file.Check, want) {
+		t.Errorf("check = %s, want %s", mustJSON(file.Check), mustJSON(want))
+	}
+}
+
+// Axis ticks, titles and other text of a chart carry no data-point key and
+// are no shown values.
+func TestBuild_SkipsTextWithoutDataPoint(t *testing.T) {
+	capture := `{"components":[{"id":"bn-chart-scatter[0]","kind":"ChartScatter","items":[
+	  {"kind":"label","role":"data","text":"100"},
+	  {"kind":"label","role":"axisLabel","text":"2025","point":{"category":"x","part":"element"}},
+	  {"kind":"bar","value":7},
+	  {"kind":"point","text":"5"},
+	  {"kind":"label","role":"data","text":"42","point":{"category":"A","scenario":"ac1","part":"label"}}]}]}`
+	file, err := Build([]byte(capture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Value{{Key: "ac1", Point: map[string]string{"category": "A"}, Text: text("42")}}
+	if got := file.Components[0].Values; !reflect.DeepEqual(got, want) {
+		t.Errorf("values = %s, want %s", mustJSON(got), mustJSON(want))
 	}
 }
 

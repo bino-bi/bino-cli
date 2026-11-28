@@ -359,3 +359,111 @@ func TestBuildOverlay_InsideProject(t *testing.T) {
 		t.Errorf("%d LayoutPages, want the overlay's one", pages)
 	}
 }
+
+// The overlay comes from untrusted callers: only regular files are read, and
+// a size limit holds.
+func TestBuildOverlay_OnlyRegularFiles(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	secret := filepath.Join(t.TempDir(), "secret")
+	writeFiles(t, filepath.Dir(secret), map[string]string{"secret": "token\n"})
+
+	withLink := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(withLink, "pages"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(withLink, "pages", "x.yaml")); err != nil {
+		t.Skipf("no symlinks: %v", err)
+	}
+	if _, err := newBuildOverlay(project, withLink); err == nil || !strings.Contains(err.Error(), "pages/x.yaml is not a regular file") {
+		t.Errorf("a link in the overlay: err = %v", err)
+	}
+
+	withFifo := t.TempDir()
+	if err := mkfifo(filepath.Join(withFifo, "data.csv")); err == nil {
+		if _, err := newBuildOverlay(project, withFifo); err == nil || !strings.Contains(err.Error(), "data.csv is not a regular file") {
+			t.Errorf("a pipe in the overlay: err = %v", err)
+		}
+	}
+
+	tooBig := t.TempDir()
+	writeFiles(t, tooBig, map[string]string{"data/big.csv": strings.Repeat("x", maxOverlayBytes+1)})
+	if _, err := newBuildOverlay(project, tooBig); err == nil || !strings.Contains(err.Error(), "MiB") {
+		t.Errorf("a too large overlay: err = %v", err)
+	}
+}
+
+// An overlay file is never written through a link of the tree: not into a
+// linked directory, and not over a linked project file whose name differs
+// only in case on a case-insensitive file system.
+func TestBuildOverlay_CopyNeverWritesThroughLinks(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, map[string]string{"pages/sales.yaml": "original\n"})
+	outside := t.TempDir()
+	overlayDir := t.TempDir()
+	writeFiles(t, overlayDir, map[string]string{"linked/x.yaml": "draft\n", "pages/sales.yaml": "draft\n"})
+
+	root := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("no symlinks: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "pages"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// what Sync leaves for a project file the overlay names in another case
+	if err := os.Symlink(filepath.Join(project, "pages", "sales.yaml"), filepath.Join(root, "pages", "sales.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	o := &buildOverlay{ProjectRoot: project, Dir: overlayDir, Root: root, realRoot: root}
+
+	if err := o.copyOverlayFile("linked/x.yaml"); err == nil {
+		t.Error("a file below a linked directory must be refused")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("written through the link: %v", entries)
+	}
+	if err := o.copyOverlayFile("pages/sales.yaml"); err == nil {
+		t.Error("an existing linked file must be refused")
+	}
+	if data, _ := os.ReadFile(filepath.Join(project, "pages", "sales.yaml")); string(data) != "original\n" {
+		t.Errorf("the project file was overwritten: %q", data)
+	}
+}
+
+// A file a hook writes into the project after the tree was built is seen
+// once the tree is synced, as the build does after its hooks.
+func TestBuildOverlay_SyncSeesNewProjectFiles(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	overlayDir := t.TempDir()
+	writeFiles(t, overlayDir, overlayDraft)
+	overlay, err := newBuildOverlay(project, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer overlay.Close() //nolint:errcheck // test cleanup
+
+	writeFiles(t, project, map[string]string{"data/fresh.csv": "a\n1\n", "pages/sales.yaml": overlayPage("changed")})
+	if err := overlay.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(overlay.Root, "data", "fresh.csv")); err != nil || string(data) != "a\n1\n" {
+		t.Errorf("new project file: %q, %v", data, err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(overlay.Root, "pages", "sales.yaml")); !strings.Contains(string(data), "draft_region") {
+		t.Error("Sync replaced the overlay's file")
+	}
+}
+
+func TestBuildStatelessRefusesDraftFlags(t *testing.T) {
+	t.Setenv("CI", "1") // no update check in the background
+	for _, flag := range [][]string{{"--overlay", t.TempDir()}, {"--number-values"}, {"--verify-numbers"}} {
+		root := newRootCommand()
+		root.SetOut(io.Discard)
+		root.SetErr(io.Discard)
+		root.SetArgs(append([]string{"build", "--stateless"}, flag...))
+		if err := root.ExecuteContext(context.Background()); err == nil || !strings.Contains(err.Error(), "cannot be combined with --stateless") {
+			t.Errorf("%v: err = %v", flag, err)
+		}
+	}
+}

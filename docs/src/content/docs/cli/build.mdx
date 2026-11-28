@@ -116,7 +116,12 @@ bino build --overlay /tmp/draft --out-dir /tmp/draft-out
   `--overlay`. When `<dir>` has a file at that path, that file is read instead. A path that leaves
   the project (`../shared/data.csv`) is not supported with `--overlay`.
 - `bino.toml` is always read from the project. An overlay with a `bino.toml` fails the build, and
-  so does an overlay file below a directory that is a link in the project.
+  so does an overlay file below a directory that is a link in the project, or a file whose name
+  differs only in case from a project file.
+- The overlay may hold only regular files: a link, a device or a pipe fails the build. It may hold
+  at most 2000 files and 8 MiB.
+- Files that a `pre-build` or `pre-datasource` [hook](/concepts/hooks/) writes into the project
+  are seen, as without `--overlay`.
 - Lint, the layout state and all other flags work as usual.
 - A file from the overlay that does not parse or validate fails the build like a project file. The
   error names the path in the project, as if the file were there, with its line, and a second line
@@ -178,7 +183,8 @@ program or an agent can check them without reading the PDF.
 | `values[].text` | What is printed: scaled, rounded and formatted for the locale. Missing when the value has no label, like a bar without one. |
 
 A bar and its label are one value: the bar gives `value`, the label gives `text`. Numbers come from
-tables and charts only; a number written in a `Text` is not listed. The data points come from a recent
+tables and charts only, and only from elements with a data point: axis ticks and titles are not
+listed, and neither is a number written in a `Text`. The data points come from a recent
 rendering engine. With an older `engine-version`, values have no `point` and cannot be checked.
 
 With `--build-log-format json`, each artefact names the file in `values`, next to `layout_state`
@@ -211,8 +217,9 @@ result to the values file:
 ```
 
 - A scenario slot is expected to be the sum of that column over the rows with the same data point.
-  A `date` matches the period of the chart's date interval, so a row dated `2025-01-31` belongs to
-  the point `2025-01-01` of a monthly chart. A `total` row sums all rows, a `subtotal` row the rows
+  A `date` matches the period of the component's date interval (`dateInterval` of a chart,
+  `interval` of a table), so a row dated `2025-01-31` belongs to the point `2025-01-01` of a
+  monthly chart. When that interval is not known (`auto`, or `setname`), the value is unmatched. A `total` row sums all rows, a `subtotal` row the rows
   of its `rowGroup`.
 - A variance is computed from the two sums like the engine does it: `a - b` for `d...`,
   `(a - b) / |b|` for `dr...`. When `b` is 0 the engine shows `n/a`, and so the check expects no value.
@@ -220,8 +227,9 @@ result to the values file:
   information.
 - A value that cannot be compared is counted as `unmatched`, not as a difference, with the reason
   in `unmatchedReasons`: no row for the point (for example an "other" category), a component with a
-  `filter` or with more than one DataSet, rows with `operation: "-"`, a row whose date cannot be
-  read, a value without a data point, or two values with the same data point.
+  `filter` or with more than one DataSet, rows with `operation: "-"`, an unknown date interval, a
+  row whose date cannot be read, a value without a data point, or two values with the same data
+  point.
 - `differences` is always present with `--verify-numbers`; an empty list means nothing differs.
 
 Differences do not fail the build. They are reported as one build warning per artefact, and the

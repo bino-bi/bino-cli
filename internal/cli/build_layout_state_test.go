@@ -201,3 +201,16 @@ func TestLayoutStateCaptureWithoutPathReportsOnlyOverflow(t *testing.T) {
 		t.Fatalf("findings = %v", capture.Findings)
 	}
 }
+
+// The build log names the layout file only once it is written: an engine
+// without layout state never calls Handle.
+func TestLayoutStateCaptureWritten(t *testing.T) {
+	capture := &layoutStateCapture{SnapshotPath: filepath.Join(t.TempDir(), "report.layout.json"), Logger: logx.Nop()}
+	if capture.written {
+		t.Fatal("written before any capture")
+	}
+	capture.Handle([]byte(`{"state":{"version":1,"components":[]}}`))
+	if !capture.written {
+		t.Error("not marked written after Handle")
+	}
+}

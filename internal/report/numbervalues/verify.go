@@ -45,6 +45,7 @@ const (
 	reasonOperation = "rows with operation '-'"
 	reasonAmbiguous = "several values with the same data point"
 	reasonDate      = "date not readable"
+	reasonInterval  = "date interval unknown"
 	reasonDatasets  = "component reads several datasets"
 )
 
@@ -188,6 +189,10 @@ func check(c Component, v Value, rows []map[string]any) (diff *Difference, unmat
 func selectRows(rows []map[string]any, dims map[string]string, interval string) (matched []map[string]any, unmatched string) {
 	bucket := dateBucket(interval)
 	if want, ok := dims["date"]; ok {
+		if bucket == nil {
+			// a period of unknown length: matching exact dates could report false differences
+			return nil, reasonInterval
+		}
 		b, ok := bucket(want)
 		if !ok {
 			return nil, reasonDate
@@ -358,8 +363,8 @@ func formatPointDate(t time.Time) string {
 
 // dateBucket maps a date to the start of its bucket for a date interval,
 // written like the data-point key of the bucket. Weeks start on Monday
-// (ISO), as in the engine. Without a known interval a date stays itself, so
-// only the exact date matches.
+// (ISO), as in the engine. Nil for an interval that is not a known length
+// (blank, auto, setname).
 func dateBucket(interval string) func(string) (string, bool) {
 	var start func(time.Time) time.Time
 	switch strings.ToLower(strings.TrimSpace(interval)) {
@@ -385,7 +390,7 @@ func dateBucket(interval string) func(string) (string, bool) {
 	case "second":
 		start = func(t time.Time) time.Time { return t.Truncate(time.Second) }
 	default:
-		start = func(t time.Time) time.Time { return t }
+		return nil
 	}
 	return func(s string) (string, bool) {
 		t, ok := parseDate(s)

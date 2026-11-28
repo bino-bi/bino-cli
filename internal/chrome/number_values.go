@@ -60,7 +60,7 @@ const numberValuesExpression = `(async () => {
       pageName: page ? (page.getAttribute('data-bino-page') || '') : '',
       datasets: el.getAttribute('datasets') || '',
       filter: el.getAttribute('filter') || '',
-      dateInterval: el.getAttribute('date-interval') || '',
+      dateInterval: el.getAttribute(el.localName === 'bn-table' ? 'interval' : 'date-interval') || '',
       measureScale: el.getAttribute('measure-scale') || '',
       measureUnit: el.getAttribute('measure-unit') || '',
       items: [],
@@ -75,7 +75,13 @@ const numberValuesExpression = `(async () => {
       const meta = state.metadata || {};
       if (!entry.measureScale && meta.measureScale) entry.measureScale = meta.measureScale;
       if (!entry.measureUnit && meta.measureUnit) entry.measureUnit = meta.measureUnit;
-      if (meta.dateInterval) entry.dateInterval = meta.dateInterval;
+      if (!entry.dateInterval && el.localName === 'bn-chart-time') {
+        // a blank date-interval is detected by the engine, which says so in a warning
+        for (const d of state.diagnostics || []) {
+          const m = /auto-detected: (\w+)/.exec(d.message || '');
+          if (m) entry.dateInterval = m[1];
+        }
+      }
       if (state.error) entry.error = state.error;
       for (const item of state.elements || []) {
         const keep = { kind: item.kind };
@@ -86,12 +92,13 @@ const numberValuesExpression = `(async () => {
           if (item.value != null) keep.value = item.value;
           if (item.text != null) keep.text = item.text;
         } else if (item.kind === 'bar') {
-          if (item.value == null && !item.point) continue;
+          // only an element with a data-point key belongs to a value; axis text and ticks have none
+          if (!item.point) continue;
           if (item.value != null) keep.value = item.value;
           if (item.segment != null) keep.segment = item.segment;
           if (item.scenario != null) keep.scenario = item.scenario;
         } else if (item.kind === 'label') {
-          if (item.role !== 'data' && !item.point) continue;
+          if (!item.point) continue;
           keep.role = item.role;
           keep.text = item.text;
         } else if (item.kind === 'point') {

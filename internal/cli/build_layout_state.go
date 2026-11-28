@@ -29,6 +29,8 @@ type layoutStateCapture struct {
 	// Findings are the analyzed results, filled by Handle.
 	Findings []layoutstate.Finding
 	analyzed bool
+	// written is set once the snapshot file is on disk.
+	written bool
 }
 
 // Handle is the chrome.PDFOptions.OnLayoutState callback.
@@ -41,7 +43,17 @@ func (c *layoutStateCapture) Handle(snapshot []byte) {
 	}
 	if err := c.write(snapshot); err != nil {
 		c.Logger.Warnf("failed to write layout state: %v", err)
+		return
 	}
+	c.written = true
+}
+
+// WrittenPath is SnapshotPath once the file is written, else empty.
+func (c *layoutStateCapture) WrittenPath() string {
+	if !c.written {
+		return ""
+	}
+	return c.SnapshotPath
 }
 
 func (c *layoutStateCapture) analyze(snapshot []byte, quiet bool) {

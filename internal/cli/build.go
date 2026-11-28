@@ -357,6 +357,9 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 			if err := env.HookRunner.Run(ctx, "pre-build", buildHookEnv); err != nil {
 				return RuntimeError(err)
 			}
+			if err := overlay.Sync(); err != nil {
+				return RuntimeError(err)
+			}
 
 			dataMode = env.Resolver.ResolveString("data-mode", "data-mode", dataMode)
 			resolvedDataMode, err := normalizeDataMode(dataMode)
@@ -426,6 +429,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 			execCfg := buildExecutionConfig{
 				CaptureLayoutState: layoutState,
 				NumberValues:       numberValues || verifyNumbers,
+				SyncOverlay:        overlay.Sync,
 				VerifyNumbers:      verifyNumbers,
 				Builder:            builder,
 				Logger:             logger,
@@ -639,6 +643,16 @@ type buildArtefactConfig struct {
 	// VerifyNumbers also checks it against the DataSet rows.
 	NumberValues  bool
 	VerifyNumbers bool
+	// SyncOverlay works as in buildExecutionConfig.
+	SyncOverlay func() error
+}
+
+// syncOverlay adds files the pre-datasource hook wrote, with --overlay.
+func (cfg buildArtefactConfig) syncOverlay() error {
+	if cfg.SyncOverlay == nil {
+		return nil
+	}
+	return cfg.SyncOverlay()
 }
 
 // buildArtefact renders a single report artifact to PDF.
@@ -669,6 +683,9 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 			}
 			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 		}
+	}
+	if err := cfg.syncOverlay(); err != nil {
+		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 	}
 
 	// Start spinner for HTML rendering
@@ -796,7 +813,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		spinner.Stop()
 	}
 	result := artefactResult{Name: artefactName, PDFPath: pdfPath, GraphPath: graphPath, RenderWarnings: renderResult.Warnings}
-	result.LayoutStatePath = capture.SnapshotPath
+	result.LayoutStatePath = capture.WrittenPath()
 	result.LayoutWarnings = capture.Warnings(artefactName)
 	numbers.apply(&result, renderResult.Datasets)
 	for _, f := range capture.Findings {
@@ -1264,6 +1281,8 @@ type buildExecutionConfig struct {
 	HookRunner         *hooks.Runner
 	HookEnv            hooks.HookEnv
 	HostService        *plugin.BinoHostServer
+	// SyncOverlay, with --overlay, adds files a hook wrote to the project.
+	SyncOverlay func() error
 }
 
 // clearPluginDatasets drops the previous artefact's datasets so plugin calls
@@ -1310,6 +1329,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 			CaptureLayoutState: cfg.CaptureLayoutState,
 			NumberValues:       cfg.NumberValues,
 			VerifyNumbers:      cfg.VerifyNumbers,
+			SyncOverlay:        cfg.SyncOverlay,
 			Builder:            cfg.Builder,
 			Logger:             cfg.Logger.Channel(artifact.Document.Name),
 			Docs:               manifests.Documents,
