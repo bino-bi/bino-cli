@@ -89,31 +89,36 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 		return nil, fmt.Errorf("register views: %w", err)
 	}
 
-	// Build the schema query based on document type
-	var schemaQuery string
-	var constants []Constant
 	switch doc.Kind {
 	case "DataSource":
-		schemaQuery = fmt.Sprintf("SELECT * FROM %q LIMIT 0", doc.Name)
+		return schemaColumns(ctx, session, fmt.Sprintf("SELECT * FROM %q LIMIT 0", doc.Name), nil)
 	case "DataSet":
-		compiled, err := Compile(*doc)
-		if err != nil {
-			return nil, err
-		}
-		if compiled.Prql {
-			if err := session.LoadPRQL(ctx); err != nil {
-				return nil, err
-			}
-		}
-		if err := RunSetup(ctx, session, compiled); err != nil {
-			return nil, err
-		}
-		schemaQuery = LimitQuery(compiled.Query, 0)
-		constants = compiled.Constants
+		return ProbeColumns(ctx, session, *doc)
 	default:
 		return nil, fmt.Errorf("unsupported kind: %s", doc.Kind)
 	}
+}
 
+// ProbeColumns compiles a DataSet the way the build does, runs its setup and
+// its query with LIMIT 0 on session, and returns the result columns with the
+// constants stamped on. The DataSources must already be registered as views.
+func ProbeColumns(ctx context.Context, session *duckdb.Session, doc config.Document) ([]string, error) {
+	compiled, err := Compile(doc)
+	if err != nil {
+		return nil, err
+	}
+	if compiled.Prql {
+		if err := session.LoadPRQL(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if err := RunSetup(ctx, session, compiled); err != nil {
+		return nil, err
+	}
+	return schemaColumns(ctx, session, LimitQuery(compiled.Query, 0), compiled.Constants)
+}
+
+func schemaColumns(ctx context.Context, session *duckdb.Session, schemaQuery string, constants []Constant) ([]string, error) {
 	rows, err := session.DB().QueryContext(ctx, schemaQuery)
 	if err != nil {
 		return nil, fmt.Errorf("query schema: %w", err)

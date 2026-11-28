@@ -3,8 +3,8 @@ title: bino lint
 description: Validate manifests and run lint rules without building.
 ---
 
-`bino lint` validates your report manifests against the schema and runs content lint rules without executing queries or generating PDFs.
-This is useful for quick validation during development or in CI pipelines.
+`bino lint` validates your report manifests against the schema and runs content lint rules without generating PDFs.
+Without `--with-data` it runs no query, so it is fast. This is useful for quick validation during development or in CI pipelines.
 
 ## Usage
 
@@ -17,10 +17,11 @@ Common flags:
 - `--work-dir` - report bundle directory (default: `.`).
 - `--out-dir` - output directory for lint logs (default: `dist`).
 - `--lint-log-format` - lint log file format: `text` (default) or `json`.
-- `--execute-queries` - execute dataset queries and validate data (slower but catches data issues).
+- `--with-data` - run the dataset queries and check the data: SQL errors, missing columns and CSV format (slower). `--execute-queries` is the old name and still works.
+- `--data-timeout` - time limit for the `--with-data` checks (default: `60s`, `0` means no limit).
 - `--fail-on-warnings` - exit with non-zero code if any warnings are found (useful for CI).
 
-No lint finding fails the command on its own, whatever severity it reports - only a rule you re-grade to `"error"` in `bino.toml` does, see [Lint rules](/concepts/project-configuration/#lint-rules).
+Most lint findings do not fail the command on their own, whatever severity they report - only a rule you re-grade to `"error"` in `bino.toml` does, see [Lint rules](/concepts/project-configuration/#lint-rules). The data checks of `--with-data` are the exception: a failing query or a missing column is an error and fails the command.
 
 ## Examples
 
@@ -42,27 +43,35 @@ Output JSON log for CI integration:
 bino lint --lint-log-format json
 ```
 
-Execute queries and validate data:
+Check the data too, with at most two minutes for it:
 
 ```bash
-bino lint --execute-queries
+bino lint --with-data --data-timeout 2m
 ```
 
-## Deep validation with --execute-queries
+## Data checks with --with-data
 
-With this flag the points of [annotations](/reference/annotation/) are also checked against the data, see [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing).
-
-By default, `bino lint` only validates manifest structure without executing queries. When you need to validate actual data, use the `--execute-queries` flag:
+By default, `bino lint` only validates manifest structure without executing queries. A report can pass that and still fail in the build, because a query has a typo or a column is missing. `--with-data` finds these problems before the build:
 
 ```bash
-bino lint --execute-queries
+bino lint --with-data
 ```
 
 This will:
 
-1. Execute all DataSet queries
-2. Validate query results against the [DataSet schema](/reference/dataset/#standard-dataset-schema)
-3. Report data validation warnings alongside lint findings
+1. Run every DataSet query with `LIMIT 0`. A DuckDB error is a [`dataset-sql`](/appendix/lint-rules/#dataset-sql) finding on the line of the query that DuckDB names.
+2. Compare the columns each component reads with the columns of its DataSet: [`dataset-column`](/appendix/lint-rules/#dataset-column) for a missing column, [`scenario-column`](/appendix/lint-rules/#scenario-column) for a missing scenario slot of a scenario or variance (`dac1_pl1_pos` needs `ac1` and `pl1`).
+3. Sniff the file of every local CSV DataSource: [`csv-format`](/appendix/lint-rules/#csv-format) for a missing header row, a header row read as data, a delimiter other than the declared one, and dates that the declared `dateFormat` does not parse.
+4. Execute all DataSet queries and validate the results against the [DataSet schema](/reference/dataset/#standard-dataset-schema).
+5. Report data validation warnings alongside lint findings.
+
+With this flag the points of [annotations](/reference/annotation/) are also checked against the data, see [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing).
+
+Every data finding has the file and line of the field that is wrong, in the console and in the `--lint-log-format json` log. SQL errors and missing columns are errors, CSV findings are warnings. `[lint]` in `bino.toml` can disable or re-grade them like any other rule.
+
+With constraints in the project, the data checks run once for each ReportArtefact and ScreenshotArtefact in build mode and for each ReportArtefact a LiveReportArtefact route serves in serve mode, on the documents the constraints select there, as in the build and in serve. A DataSet or DataSource that no artefact selects is named in one info finding [`data-unchecked`](/appendix/lint-rules/#data-unchecked).
+
+`--data-timeout` bounds the data checks (default `60s`). When the time runs out, lint stops the checks, keeps what it found, and adds one info finding [`data-timeout`](/appendix/lint-rules/#data-timeout) that names the DataSets it did not check. The time limit alone never fails the command, also not with `--fail-on-warnings`.
 
 Data validation checks include:
 
@@ -71,7 +80,7 @@ Data validation checks include:
 - Date format validation (ISO 8601)
 - Dependent required fields (e.g., `rowGroup` requires `rowGroupIndex`)
 
-**Note**: `--execute-queries` is slower than regular lint because it runs actual queries. Use it when you need to verify data correctness, not just manifest structure.
+**Note**: `--with-data` is slower than regular lint because it runs actual queries. Use it when you need to verify data correctness, not just manifest structure.
 
 ## Exit code
 
@@ -84,12 +93,13 @@ checks them in this order:
 | The `engine-version` pin is incompatible with this CLI                    | Yes - `disable = ["engine-version-incompatible"]` turns the check off |
 | Manifests failed to load or failed schema validation                      | No - `disable` hides the individual lines, the command still fails    |
 | A rule you raised with `[lint.severity]` to `"error"` produced a finding  | n/a - this is the opt-in                                              |
+| `--with-data` found a failing query or a missing column                   | Yes - `disable` or a lower `[lint.severity]`                          |
 | `--fail-on-warnings` and any remaining finding or data validation warning | Findings you lowered to `"info"` do not count                         |
 
 The `[lint]` table lives in `bino.toml`; see
 [Lint rules](/concepts/project-configuration/#lint-rules) for the full
-semantics. Without that table, nothing but the first three rows and
-`--fail-on-warnings` can fail the command, exactly as before. `bino build` is
+semantics. Without that table, nothing but the first three rows, the data
+checks of `--with-data` and `--fail-on-warnings` can fail the command. `bino build` is
 not affected by `[lint]` at all: it prints the findings that survive `disable`,
 but no finding has ever failed a build.
 
@@ -97,7 +107,7 @@ Use `--fail-on-warnings` to exit with code 1 if any warnings are found:
 
 ```bash
 # CI-friendly: fail if there are any lint or data validation warnings
-bino lint --execute-queries --fail-on-warnings
+bino lint --with-data --fail-on-warnings
 ```
 
 ## Integration with build and preview

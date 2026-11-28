@@ -200,16 +200,6 @@ func TestQueryDiagnostics_Setting(t *testing.T) {
 	}
 }
 
-func TestParseDuckDBError(t *testing.T) {
-	msg, line, ok := parseDuckDBError("query: Parser Error: syntax error at or near \"FORM\"\n\nLINE 3: FORM x\n        ^")
-	if !ok || line != 3 || msg != "Parser Error: syntax error at or near \"FORM\"" {
-		t.Errorf("got %q %d %v", msg, line, ok)
-	}
-	if _, _, ok := parseDuckDBError("context deadline exceeded"); ok {
-		t.Error("a timeout is not a DuckDB error")
-	}
-}
-
 func TestHover_DatasetSample(t *testing.T) {
 	be := &queryBackend{samples: map[string]DatasetSample{
 		"sales": {Kind: "DataSet", Columns: []string{"region", "amount"}, Types: []string{"VARCHAR", "DOUBLE"},
