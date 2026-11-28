@@ -3,6 +3,7 @@ package dataquery
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -290,5 +291,66 @@ func TestNormalizeTimes(t *testing.T) {
 	}
 	if got := normalizeTyped(d.Add(90*time.Minute), "TIMESTAMP"); got != "2024-03-01T01:30:00Z" {
 		t.Errorf("TIMESTAMP = %v", got)
+	}
+}
+
+func TestQueryCapsCellsAndResultSize(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	ctx := context.Background()
+	res, err := Query(ctx, docs, amb, "SELECT repeat('x', 10000) AS s, [repeat('y', 5000)] AS l", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, cell := range res.Rows[0] {
+		str, _ := cell.(string)
+		if len(str) != maxCellBytes+len(cutMark) || !strings.HasSuffix(str, cutMark) {
+			t.Errorf("cell %d: %d bytes, want it cut to %d", i, len(str), maxCellBytes)
+		}
+	}
+	if len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "2 cells") {
+		t.Errorf("notes = %v", res.Notes)
+	}
+
+	res, err = Query(ctx, docs, amb, "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 1000) SELECT n, repeat('x', 4000) FROM c", MaxLimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Truncated || len(res.Rows) >= 1000 || len(res.Rows) < 400 || len(res.Notes) == 0 {
+		t.Fatalf("rows=%d truncated=%v notes=%v", len(res.Rows), res.Truncated, res.Notes)
+	}
+}
+
+func TestQueryRefusesHugeGenerators(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	for _, q := range []string{
+		"SELECT count(*) FROM (SELECT unnest(generate_series(1, 3000000000)) x)",
+		"SELECT len(range(0, 1e12))",
+		"SELECT len(range(100000000))",
+		"SELECT len(range(0, 50000000, 2))",
+		"SELECT length(repeat('ab', 10000000))",
+	} {
+		if _, err := Query(context.Background(), docs, amb, q, 0); err == nil || !strings.Contains(err.Error(), "is refused") {
+			t.Errorf("%s: err = %v", q, err)
+		}
+	}
+	res, err := Query(context.Background(), docs, amb, "SELECT unnest(generate_series(1, 10)) AS x, repeat('ab', 3) AS r", 0)
+	if err != nil || len(res.Rows) != 10 {
+		t.Fatalf("small generator: rows=%d err=%v", len(res.Rows), err)
+	}
+}
+
+func TestQueryInterruptedAtTimeout(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	old := queryCallTimeout
+	queryCallTimeout = time.Second
+	t.Cleanup(func() { queryCallTimeout = old })
+	from := "sales_csv a"
+	for i := range 13 {
+		from += fmt.Sprintf(", sales_csv t%d", i)
+	}
+	start := time.Now()
+	_, err := Query(context.Background(), docs, amb, "SELECT count(*) FROM "+from, 0)
+	if took := time.Since(start); err == nil || took > 4*time.Second {
+		t.Fatalf("err=%v after %v", err, took)
 	}
 }

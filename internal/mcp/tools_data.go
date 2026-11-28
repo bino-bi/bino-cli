@@ -26,7 +26,7 @@ func (h *handlers) registerDataTools(srv *mcpsdk.Server) {
 		Name:        "query_data",
 		Title:       "Query project data",
 		Annotations: readOnlyTool("Query project data"),
-		Description: "Run one DuckDB SELECT over the project's DataSources and DataSets, referenced by name (a DataSet whose name a DataSource also uses is not offered: the name means the DataSource). Returns columns with DuckDB types, rows as arrays, and truncated when more rows exist than limit. Table functions (read_csv, glob, ...), qualified names, DESCRIBE/SUMMARIZE/SHOW and every non-SELECT statement are refused. A failing query returns DuckDB's own message in error.",
+		Description: "Run one DuckDB SELECT over the project's DataSources and DataSets, referenced by name (a DataSet whose name a DataSource also uses is not offered: the name means the DataSource). Returns columns with DuckDB types, rows as arrays, and truncated when more rows exist than limit or the result passes 2 MiB; cells over 4 KiB are cut (see notes). Table functions (read_csv, glob, ...), qualified names, DESCRIBE/SUMMARIZE/SHOW and every non-SELECT statement are refused. A failing query returns DuckDB's own message in error.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in queryDataInput) (*mcpsdk.CallToolResult, daemon.QueryDataResult, error) {
 		st, err := h.state(ctx)
 		if err != nil {

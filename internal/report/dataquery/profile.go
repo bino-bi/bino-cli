@@ -189,7 +189,7 @@ func (s *session) topValues(ctx context.Context, src, col, typ string) ([]ValueC
 		if err := rows.Scan(&vc.Value, &vc.Count); err != nil {
 			return nil, err
 		}
-		vc.Value = normalizeTyped(vc.Value, typ)
+		vc.Value, _, _ = capCell(normalizeTyped(vc.Value, typ))
 		out = append(out, vc)
 	}
 	return out, rows.Err()

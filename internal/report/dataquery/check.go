@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -90,6 +91,11 @@ func (w *walker) walk(node any, scope map[string]bool) error {
 				scope = with(scope, name)
 			}
 		}
+		if n["class"] == "FUNCTION" {
+			if err := checkGenerator(n); err != nil {
+				return err
+			}
+		}
 		if _, isExpr := n["class"]; !isExpr {
 			typ, _ := n["type"].(string)
 			switch typ {
@@ -165,4 +171,90 @@ func nonEmpty(parts ...string) []string {
 		}
 	}
 	return out
+}
+
+const (
+	// maxGeneratedItems bounds range and generate_series with constant
+	// arguments: DuckDB builds such a list in one vector, outside its memory
+	// limit and without a point where it can be interrupted.
+	maxGeneratedItems = 10_000_000
+	// maxRepeatBytes bounds the string repeat builds from constant arguments.
+	maxRepeatBytes = 1 << 20
+)
+
+// checkGenerator refuses range, generate_series and repeat calls whose
+// constant arguments ask for a huge result. Arguments that are not
+// constants cannot be judged here and pass.
+func checkGenerator(fn map[string]any) error {
+	name, _ := fn["function_name"].(string)
+	args, _ := fn["arguments"].([]any)
+	switch strings.ToLower(name) {
+	case "range", "generate_series":
+		nums, ok := constNumbers(args)
+		if !ok || len(nums) == 0 || len(nums) > 3 {
+			return nil
+		}
+		start, stop, step := 0.0, nums[0], 1.0
+		if len(nums) >= 2 {
+			start, stop = nums[0], nums[1]
+		}
+		if len(nums) == 3 {
+			step = nums[2]
+		}
+		if step == 0 {
+			return nil
+		}
+		if items := (stop - start) / step; items > maxGeneratedItems {
+			return fmt.Errorf("%s() with %.0f items is refused: at most %d are allowed", name, items, maxGeneratedItems)
+		}
+	case "repeat":
+		if len(args) != 2 {
+			return nil
+		}
+		text, okText := constString(args[0])
+		count, okCount := constNumbers(args[1:])
+		if okText && okCount && float64(len(text))*count[0] > maxRepeatBytes {
+			return fmt.Errorf("repeat() building %.0f bytes is refused: at most %d are allowed", float64(len(text))*count[0], maxRepeatBytes)
+		}
+	}
+	return nil
+}
+
+// constArg unwraps a serialized function argument to its constant literal.
+func constArg(a any) (map[string]any, bool) {
+	m, _ := a.(map[string]any)
+	if e, ok := m["expression"].(map[string]any); ok {
+		m = e
+	}
+	if m["class"] != "CONSTANT" {
+		return nil, false
+	}
+	lit, ok := m["literal"].(map[string]any)
+	return lit, ok
+}
+
+func constNumbers(args []any) ([]float64, bool) {
+	out := make([]float64, 0, len(args))
+	for _, a := range args {
+		lit, ok := constArg(a)
+		if !ok {
+			return nil, false
+		}
+		text, _ := lit["text"].(string)
+		f, err := strconv.ParseFloat(text, 64)
+		if err != nil {
+			return nil, false
+		}
+		out = append(out, f)
+	}
+	return out, true
+}
+
+func constString(a any) (string, bool) {
+	lit, ok := constArg(a)
+	if !ok || lit["kind"] != "STRING" {
+		return "", false
+	}
+	text, ok := lit["text"].(string)
+	return text, ok
 }

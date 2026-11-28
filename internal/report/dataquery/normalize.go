@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	duckdbdrv "github.com/duckdb/duckdb-go/v2"
 )
@@ -78,4 +79,38 @@ func normalize(v any) any {
 	default:
 		return val
 	}
+}
+
+const (
+	// maxCellBytes caps the JSON size of one cell.
+	maxCellBytes = 4 << 10
+	// maxResultBytes caps the JSON size of all cells of a query_data result.
+	maxResultBytes = 2 << 20
+	cutMark        = "...[truncated]"
+)
+
+// capCell returns v, or a string holding its first maxCellBytes bytes ending
+// in cutMark when v is larger, with its encoded size and whether it was cut.
+// A cut list, map or struct becomes the start of its JSON text.
+func capCell(v any) (out any, size int, cut bool) {
+	if str, ok := v.(string); ok {
+		if len(str) <= maxCellBytes {
+			return str, len(str) + 2, false
+		}
+		return cutString(str), maxCellBytes + len(cutMark) + 2, true
+	}
+	b, err := json.Marshal(v)
+	if err != nil || len(b) <= maxCellBytes {
+		return v, len(b), false
+	}
+	return cutString(string(b)), maxCellBytes + len(cutMark) + 2, true
+}
+
+// cutString keeps the first maxCellBytes bytes of s, not splitting a rune.
+func cutString(s string) string {
+	n := maxCellBytes
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n] + cutMark
 }

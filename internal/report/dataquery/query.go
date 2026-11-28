@@ -20,9 +20,11 @@ const (
 	DefaultLimit = 100
 	// MaxLimit is the largest limit query_data accepts.
 	MaxLimit = 1000
-	// queryCallTimeout bounds one query_data call, setup included.
-	queryCallTimeout = 60 * time.Second
 )
+
+// queryCallTimeout bounds one query_data call, setup included. When it ends,
+// the driver interrupts the running statement. A var so tests can shorten it.
+var queryCallTimeout = 60 * time.Second
 
 // QueryResult is the result of one query_data call.
 type QueryResult struct {
@@ -30,6 +32,8 @@ type QueryResult struct {
 	Rows      [][]any              `json:"rows"`
 	Limit     int                  `json:"limit"`
 	Truncated bool                 `json:"truncated"`
+	// Notes says when rows or cells were cut to keep the result small.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Query runs one SELECT over the DataSources and DataSets in docs (the
@@ -112,9 +116,18 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 	for _, ct := range colTypes {
 		res.Columns = append(res.Columns, datasummary.Column{Name: ct.Name(), Type: ct.DatabaseTypeName()})
 	}
+	size, cutCells := 0, 0
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return res, err
+		}
 		if len(res.Rows) == limit {
 			res.Truncated = true
+			break
+		}
+		if size > maxResultBytes {
+			res.Truncated = true
+			res.Notes = append(res.Notes, fmt.Sprintf("rows stop after %d: the result is larger than %d bytes; select fewer or narrower columns", len(res.Rows), maxResultBytes))
 			break
 		}
 		vals := make([]any, len(colTypes))
@@ -126,9 +139,18 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 			return res, err
 		}
 		for i, v := range vals {
-			vals[i] = normalizeTyped(v, res.Columns[i].Type)
+			var cut bool
+			var n int
+			vals[i], n, cut = capCell(normalizeTyped(v, res.Columns[i].Type))
+			size += n
+			if cut {
+				cutCells++
+			}
 		}
 		res.Rows = append(res.Rows, vals)
+	}
+	if cutCells > 0 {
+		res.Notes = append(res.Notes, fmt.Sprintf("%d cells were longer than %d bytes and end in %q", cutCells, maxCellBytes, cutMark))
 	}
 	return res, rows.Err()
 }
