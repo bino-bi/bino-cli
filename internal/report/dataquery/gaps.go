@@ -9,13 +9,18 @@ const (
 	maxMissingListed = 20
 	// maxPeriodSpan bounds the periods walked between the first and last date.
 	maxPeriodSpan = 1_000_000
+	// minWeekdayDates is how many dates a series needs before missing
+	// weekends make it a weekday series rather than a daily one.
+	minWeekdayDates = 10
 )
 
 // findGaps infers the step of sorted, distinct dates and lists the periods
 // between the first and the last date that have no row. The step is the
 // coarsest one every date lines up with: all on January 1 (or December 31)
 // is year, all on a quarter's first (or last) day is quarter, all on the 1st
-// (or the last day of the month) is month, all on one weekday is week, else day.
+// (or the last day of the month) is month, all on one weekday is week, no
+// Saturday or Sunday in at least minWeekdayDates dates is weekday (Monday to
+// Friday, weekends are not missing), else day.
 func findGaps(dates []time.Time) *Series {
 	s := &Series{From: dates[0].Format(time.DateOnly), To: dates[len(dates)-1].Format(time.DateOnly), Periods: len(dates), Missing: []string{}}
 	if len(dates) < 2 {
@@ -74,6 +79,8 @@ func inferStep(dates []time.Time) string {
 		return "month"
 	case all(func(d time.Time) bool { return d.Weekday() == dates[0].Weekday() }):
 		return "week"
+	case len(dates) >= minWeekdayDates && all(func(d time.Time) bool { return d.Weekday() != time.Saturday && d.Weekday() != time.Sunday }):
+		return "weekday"
 	default:
 		return "day"
 	}
@@ -81,9 +88,10 @@ func inferStep(dates []time.Time) string {
 
 // periodFuncs returns the period number of a date for step and the label of
 // a period number. Week and day count days from first, so a week is the
-// seven days that start on first's weekday.
+// seven days that start on first's weekday; weekday counts Monday to Friday.
 func periodFuncs(step string, first time.Time) (index func(time.Time) int, label func(int) string) {
-	days := func(d time.Time) int { return int(d.Sub(first).Hours()+0.5) / 24 }
+	// Days come from Unix seconds: time.Duration overflows after 292 years.
+	days := func(d time.Time) int { return int(floorDiv(d.Unix()-first.Unix(), 86400)) }
 	switch step {
 	case "year":
 		return func(d time.Time) int { return d.Year() },
@@ -97,7 +105,26 @@ func periodFuncs(step string, first time.Time) (index func(time.Time) int, label
 	case "week":
 		return func(d time.Time) int { return days(d) / 7 },
 			func(i int) string { return first.AddDate(0, 0, 7*i).Format(time.DateOnly) }
+	case "weekday":
+		// k counts days from Monday 1969-12-29, so k mod 7 is 0 on a Monday.
+		return func(d time.Time) int {
+				k := floorDiv(d.Unix(), 86400) + 3
+				w, r := floorDiv(k, 7), k-7*floorDiv(k, 7)
+				return int(w*5 + min(r, 5))
+			}, func(i int) string {
+				w := floorDiv(int64(i), 5)
+				k := w*7 + int64(i) - 5*w
+				return time.Unix((k-3)*86400, 0).UTC().Format(time.DateOnly)
+			}
 	default:
 		return days, func(i int) string { return first.AddDate(0, 0, i).Format(time.DateOnly) }
 	}
+}
+
+func floorDiv(a, b int64) int64 {
+	q := a / b
+	if (a%b != 0) && ((a < 0) != (b < 0)) {
+		q--
+	}
+	return q
 }

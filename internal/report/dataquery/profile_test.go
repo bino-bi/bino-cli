@@ -2,10 +2,15 @@ package dataquery
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"bino.bi/bino/internal/report/config"
 )
 
 func TestProfileMonthlyGap(t *testing.T) {
@@ -82,6 +87,8 @@ func TestFindGaps(t *testing.T) {
 		{"weeks", d("2024-01-01", "2024-01-08", "2024-01-22"), "week", []string{"2024-01-15"}},
 		{"days", d("2024-01-01", "2024-01-02", "2024-01-04"), "day", []string{"2024-01-03"}},
 		{"single", d("2024-01-01"), "", []string{}},
+		{"weekdays", d("2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-11", "2024-01-12", "2024-01-15"), "weekday", []string{"2024-01-10"}},
+		{"weekdays before 1970", d("1969-12-22", "1969-12-23", "1969-12-24", "1969-12-25", "1969-12-26", "1969-12-29", "1969-12-30", "1970-01-01", "1970-01-02", "1970-01-05"), "weekday", []string{"1969-12-31"}},
 	}
 	for _, c := range cases {
 		s := findGaps(c.dates)
@@ -98,5 +105,46 @@ func TestFindGaps(t *testing.T) {
 	s := findGaps(many)
 	if len(s.Missing) != maxMissingListed || s.MissingMore != 66-maxMissingListed {
 		t.Errorf("cap: listed %d, more %d", len(s.Missing), s.MissingMore)
+	}
+
+	// 400 years apart: more than time.Duration can hold.
+	far := d("1700-01-02", "2100-01-03")
+	span := int(far[1].Unix()-far[0].Unix()) / 86400
+	if s := findGaps(far); s.Step != "day" || len(s.Missing)+s.MissingMore != span-1 {
+		t.Errorf("far: step %q missing %d+%d, want %d", s.Step, len(s.Missing), s.MissingMore, span-1)
+	}
+}
+
+func TestProfileExactNullCount(t *testing.T) {
+	root, _, _ := writeProject(t)
+	var b strings.Builder
+	b.WriteString("id,v\n")
+	for i := range 50_000 {
+		if i == 777 {
+			fmt.Fprintf(&b, "%d,\n", i)
+			continue
+		}
+		fmt.Fprintf(&b, "%d,%d\n", i, i%7)
+	}
+	if err := os.WriteFile(filepath.Join(root, "data", "big.csv"), []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := "apiVersion: bino.bi/v1alpha1\nkind: DataSource\nmetadata:\n  name: big\nspec:\n  type: csv\n  path: ./data/big.csv\n"
+	if err := os.WriteFile(filepath.Join(root, "big.yaml"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := config.LoadDirWithOptions(context.Background(), root, config.LoadOptions{Lenient: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs, amb := config.ResolveForIntrospection(docs)
+	p, err := ProfileData(context.Background(), docs, amb, newCatalog(docs).entries["big"].doc, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range p.Columns {
+		if c.Name == "v" && c.NullCount != 1 {
+			t.Fatalf("v nullCount = %d, want 1", c.NullCount)
+		}
 	}
 }

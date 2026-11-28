@@ -27,7 +27,10 @@ func TestAccessFor(t *testing.T) {
 		{Kind: "DataSet", Name: "ds", Raw: []byte(`{"spec":{"query":"SELECT 1"}}`)},
 	})
 	base := filepath.ToSlash(root)
-	for _, want := range []string{base + "/data/", base + "/data/parts/", "https://example.com/exports/2024/", "s3://bucket/"} {
+	if !slices.Contains(acc.Files, base+"/data/sales.csv") || slices.Contains(acc.Prefixes, base+"/data/") {
+		t.Errorf("a single file must be allowed by path only: files %v prefixes %v", acc.Files, acc.Prefixes)
+	}
+	for _, want := range []string{base + "/data/parts/", "https://example.com/exports/2024/", "s3://bucket/"} {
 		if !slices.Contains(acc.Prefixes, want) {
 			t.Errorf("prefixes %v miss %s", acc.Prefixes, want)
 		}

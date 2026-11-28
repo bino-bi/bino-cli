@@ -39,8 +39,8 @@ type Profile struct {
 	Warnings   []string        `json:"warnings"`
 }
 
-// ColumnProfile describes one column. The counts refer to the summarized
-// rows: all rows, or the sample when the profile is sampled.
+// ColumnProfile describes one column. The statistics refer to the
+// summarized rows: all rows, or the sample when the profile is sampled.
 type ColumnProfile struct {
 	Name           string       `json:"name"`
 	Type           string       `json:"type"`
@@ -63,7 +63,7 @@ type ValueCount struct {
 type Series struct {
 	From string `json:"from"`
 	To   string `json:"to"`
-	// Step is the inferred period: day, week, month, quarter or year. Empty
+	// Step is the inferred period: day, weekday, week, month, quarter or year. Empty
 	// when the column has fewer than two distinct dates.
 	Step    string `json:"step,omitempty"`
 	Periods int    `json:"periods"`
@@ -101,13 +101,13 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 	full := "(\n" + srcs[strings.ToLower(target.Name)] + "\n) AS _bino_p"
 
 	if err := s.conn.QueryRowContext(ctx, "SELECT count(*) FROM "+full).Scan(&p.RowCount); err != nil {
-		return p, ambiguous.Explain(err)
+		return p, explain(ambiguous, err)
 	}
 	src := full
 	if p.RowCount > int64(sampleRows) {
 		create := fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM %s USING SAMPLE reservoir(%d ROWS) REPEATABLE (1)", sampleTable, full, sampleRows)
 		if _, err := s.conn.ExecContext(ctx, create); err != nil {
-			return p, ambiguous.Explain(err)
+			return p, explain(ambiguous, err)
 		}
 		src = sampleTable
 		p.Sampled = true
@@ -116,7 +116,7 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 
 	cols, rows, err := datasummary.Summarize(ctx, s.conn, datasummary.QuerySQL("SELECT * FROM "+src), normalize)
 	if err != nil {
-		return p, ambiguous.Explain(err)
+		return p, explain(ambiguous, err)
 	}
 	idx := map[string]int{}
 	for i, c := range cols {
@@ -130,22 +130,23 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 			Max:            r[idx["max"]],
 			ApproxDistinct: toInt64(r[idx["approx_unique"]]),
 		}
-		count := toInt64(r[idx["count"]])
-		cp.NullCount = int64(toFloat64(r[idx["null_percentage"]])*float64(count)/100 + 0.5)
 		p.Columns = append(p.Columns, cp)
+	}
+	if err := s.nullCounts(ctx, src, p.Columns); err != nil {
+		return p, explain(ambiguous, err)
 	}
 
 	for i := range p.Columns {
 		c := &p.Columns[i]
 		if c.ApproxDistinct > 0 && c.ApproxDistinct <= topValuesMaxDistinct {
-			if c.TopValues, err = s.topValues(ctx, src, c.Name); err != nil {
-				return p, err
+			if c.TopValues, err = s.topValues(ctx, src, c.Name, c.Type); err != nil {
+				return p, explain(ambiguous, err)
 			}
 		}
 		if isDateType(c.Type) {
 			series, warn, err := s.series(ctx, full, c.Name)
 			if err != nil {
-				return p, err
+				return p, explain(ambiguous, err)
 			}
 			c.Series = series
 			if warn != "" {
@@ -155,13 +156,27 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 	}
 	warns, err := s.textWarnings(ctx, src, p.Columns)
 	if err != nil {
-		return p, err
+		return p, explain(ambiguous, err)
 	}
 	p.Warnings = append(p.Warnings, warns...)
 	return p, nil
 }
 
-func (s *session) topValues(ctx context.Context, src, col string) ([]ValueCount, error) {
+// nullCounts counts the nulls of every column exactly, in one scan of src.
+func (s *session) nullCounts(ctx context.Context, src string, cols []ColumnProfile) error {
+	if len(cols) == 0 {
+		return nil
+	}
+	exprs := make([]string, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range cols {
+		exprs[i] = fmt.Sprintf("count(*) - count(%s)", quoteIdent(cols[i].Name))
+		ptrs[i] = &cols[i].NullCount
+	}
+	return s.conn.QueryRowContext(ctx, "SELECT "+strings.Join(exprs, ", ")+" FROM "+src).Scan(ptrs...)
+}
+
+func (s *session) topValues(ctx context.Context, src, col, typ string) ([]ValueCount, error) {
 	q := fmt.Sprintf("SELECT %s, count(*) FROM %s GROUP BY 1 ORDER BY 2 DESC, 1 NULLS LAST LIMIT %d", quoteIdent(col), src, topValuesCount)
 	rows, err := s.conn.QueryContext(ctx, q)
 	if err != nil {
@@ -174,7 +189,7 @@ func (s *session) topValues(ctx context.Context, src, col string) ([]ValueCount,
 		if err := rows.Scan(&vc.Value, &vc.Count); err != nil {
 			return nil, err
 		}
-		vc.Value = normalize(vc.Value)
+		vc.Value = normalizeTyped(vc.Value, typ)
 		out = append(out, vc)
 	}
 	return out, rows.Err()
@@ -266,14 +281,6 @@ func toInt64(v any) int64 {
 	var f float64
 	if _, err := fmt.Sscan(fmt.Sprint(v), &f); err == nil {
 		return int64(f)
-	}
-	return 0
-}
-
-func toFloat64(v any) float64 {
-	var f float64
-	if _, err := fmt.Sscan(fmt.Sprint(v), &f); err == nil {
-		return f
 	}
 	return 0
 }

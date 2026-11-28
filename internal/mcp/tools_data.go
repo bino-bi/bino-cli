@@ -39,7 +39,7 @@ func (h *handlers) registerDataTools(srv *mcpsdk.Server) {
 		Name:        "profile_data",
 		Title:       "Profile a dataset",
 		Annotations: readOnlyTool("Profile a dataset"),
-		Description: "Profile a DataSet or DataSource: row count; per column the DuckDB type, min, max, approximate distinct count and null count (from a random sample when the data has more than sample_rows rows); the top 5 values of columns with few distinct values; for DATE and TIMESTAMP columns the range, the inferred step (day, week, month, quarter, year) and the missing periods. warnings lists things worth checking, such as a VARCHAR column whose values are all numbers.",
+		Description: "Profile a DataSet or DataSource: row count; per column the DuckDB type, min, max, approximate distinct count and null count (from a random sample when the data has more than sample_rows rows); the top 5 values of columns with few distinct values; for DATE and TIMESTAMP columns the range, the inferred step (day, weekday, week, month, quarter, year) and the missing periods. warnings lists things worth checking, such as a VARCHAR column whose values are all numbers.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in profileDataInput) (*mcpsdk.CallToolResult, daemon.ProfileDataResult, error) {
 		st, err := h.state(ctx)
 		if err != nil {

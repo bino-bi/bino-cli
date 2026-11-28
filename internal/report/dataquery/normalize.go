@@ -5,17 +5,37 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
+	"time"
 
 	duckdbdrv "github.com/duckdb/duckdb-go/v2"
 )
 
+// normalizeTyped is normalize for a value of a column of DuckDB type typ:
+// a DATE becomes "2006-01-02" and a TIME "15:04:05.999999".
+func normalizeTyped(v any, typ string) any {
+	if t, ok := v.(time.Time); ok {
+		switch {
+		case typ == "DATE":
+			return t.Format(time.DateOnly)
+		case strings.HasPrefix(typ, "TIME") && !strings.HasPrefix(typ, "TIMESTAMP"):
+			return t.Format("15:04:05.999999")
+		}
+	}
+	return normalize(v)
+}
+
 // normalize turns a value scanned from DuckDB into one encoding/json can
 // write without losing digits: DECIMAL and HUGEINT become JSON numbers from
 // their exact text, NaN and infinity become strings, MAP keys become strings.
+// A time becomes RFC 3339 text, which also covers years encoding/json
+// refuses (DuckDB's infinity is a time far beyond year 9999).
 func normalize(v any) any {
 	switch val := v.(type) {
 	case nil:
 		return nil
+	case time.Time:
+		return val.Format(time.RFC3339Nano)
 	case []byte:
 		return string(val)
 	case float64:

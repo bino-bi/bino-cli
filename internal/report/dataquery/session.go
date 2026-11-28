@@ -6,6 +6,7 @@ package dataquery
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -24,7 +25,42 @@ const (
 	statementTimeout = 30 * time.Second
 	// memoryLimit caps the memory of one call's DuckDB session.
 	memoryLimit = "1GB"
+	// tempLimit caps what one session may spill to disk.
+	tempLimit = "1GB"
+	// threads is the number of DuckDB threads one session may use.
+	threads = 2
+	// maxConcurrent is how many calls may hold a session at the same time.
+	maxConcurrent = 2
 )
+
+// slots limits the sessions open at the same time in this process.
+var slots = make(chan struct{}, maxConcurrent)
+
+// acquire waits for a free slot or for ctx to end.
+func acquire(ctx context.Context) (release func(), err error) {
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("wait for a free query slot: %w", ctx.Err())
+	}
+}
+
+// errDirectFile explains a Permission Error: the locked session reads only
+// what the DataSources read.
+var errDirectFile = errors.New("query_data and profile_data read files and URLs only through DataSources; a DataSet whose own SQL reads a file or URL directly (read_csv, 'file.csv', ...) is not supported by these tools")
+
+// explain adds what DuckDB's message cannot know: the ambiguous names that
+// can cause it, and why a file was refused.
+func explain(ambiguous config.Ambiguities, err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "file system operations are disabled by configuration") {
+		err = errors.Join(err, errDirectFile)
+	}
+	return ambiguous.Explain(err)
+}
 
 // entry is one name the SQL may read.
 type entry struct {
@@ -77,7 +113,8 @@ func (c *catalog) names() []string {
 type session struct {
 	sess    *duckdb.Session
 	conn    *sql.Conn
-	allowed []string // the prefixes the views read, set by prepare
+	access  datasource.Access // what the views read, set by prepare
+	release func()
 }
 
 func (s *session) Close() {
@@ -85,25 +122,34 @@ func (s *session) Close() {
 		_ = s.conn.Close() //nolint:errcheck // teardown of a throwaway session
 	}
 	_ = s.sess.Close() //nolint:errcheck // teardown of a throwaway session
+	s.release()
 }
 
 // openSession opens a new in-memory DuckDB session, separate from any shared
 // session, with the built-in macros and the extension cache of the CLI.
+// It waits for one of the maxConcurrent slots first.
 func openSession(ctx context.Context) (*session, error) {
+	release, err := acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
 	opts, err := duckdb.DefaultOptions()
 	if err != nil {
+		release()
 		return nil, err
 	}
 	sess, err := duckdb.OpenSession(ctx, opts)
 	if err != nil {
+		release()
 		return nil, err
 	}
 	conn, err := sess.DB().Conn(ctx)
 	if err != nil {
 		_ = sess.Close() //nolint:errcheck // teardown on the error path
+		release()
 		return nil, err
 	}
-	return &session{sess: sess, conn: conn}, nil
+	return &session{sess: sess, conn: conn, release: release}, nil
 }
 
 // prepare makes the session ready to read targets: it registers the views of
@@ -121,7 +167,7 @@ func (s *session) prepare(ctx context.Context, docs []config.Document, ambiguous
 		case "DataSet":
 			c, err := dataset.Compile(*t)
 			if err != nil {
-				return nil, ambiguous.Explain(fmt.Errorf("DataSet %s: %w", t.Name, err))
+				return nil, explain(ambiguous, fmt.Errorf("DataSet %s: %w", t.Name, err))
 			}
 			compiled[t.Name] = c
 			texts = append(texts, c.Query)
@@ -188,17 +234,18 @@ func (s *session) prepare(ctx context.Context, docs []config.Document, ambiguous
 			}
 		}
 		if err := dataset.RunSetup(ctx, s.sess, c); err != nil {
-			return nil, ambiguous.Explain(fmt.Errorf("DataSet %s: %w", t.Name, err))
+			return nil, explain(ambiguous, fmt.Errorf("DataSet %s: %w", t.Name, err))
 		}
 		out[key] = strings.TrimRight(strings.TrimSpace(c.Query), "; \t\r\n")
 	}
-	s.allowed = datasource.AccessFor(sources).Prefixes
+	s.access = datasource.AccessFor(sources)
 	return out, nil
 }
 
-// lock confines the session: it may read only the prefixes prepare found
-// and its own scratch dir, load no extension, and run each statement for at
-// most statementTimeout. The allow-list is set before external access is
+// lock confines the session: it may read only the files and prefixes
+// prepare found and its own scratch dir, load no extension, run each
+// statement for at most statementTimeout, and use bounded memory, disk and
+// threads. The allow-list is set before external access is
 // disabled, because after that it can no longer change; lock_configuration
 // comes last so nothing can undo the rest.
 func (s *session) lock(ctx context.Context) error {
@@ -207,17 +254,16 @@ func (s *session) lock(ctx context.Context) error {
 		return err
 	}
 	spill := filepath.Join(scratch, "spill")
-	allowed := append([]string{filepath.ToSlash(scratch) + "/"}, s.allowed...)
+	dirs := append([]string{filepath.ToSlash(scratch) + "/"}, s.access.Prefixes...)
 	if real, err := filepath.EvalSymlinks(scratch); err == nil && real != scratch {
-		allowed = append(allowed, filepath.ToSlash(real)+"/")
-	}
-	quoted := make([]string, len(allowed))
-	for i, a := range allowed {
-		quoted[i] = quoteString(a)
+		dirs = append(dirs, filepath.ToSlash(real)+"/")
 	}
 	stmts := []string{
 		"SET GLOBAL temp_directory = " + quoteString(spill),
-		"SET GLOBAL allowed_directories = [" + strings.Join(quoted, ", ") + "]",
+		"SET GLOBAL max_temp_directory_size = " + quoteString(tempLimit),
+		fmt.Sprintf("SET GLOBAL threads = %d", threads),
+		"SET GLOBAL allowed_paths = " + quoteList(s.access.Files),
+		"SET GLOBAL allowed_directories = " + quoteList(dirs),
 		"SET GLOBAL enable_external_access = false",
 		"SET GLOBAL autoload_known_extensions = false",
 		"SET GLOBAL autoinstall_known_extensions = false",
@@ -235,6 +281,14 @@ func (s *session) lock(ctx context.Context) error {
 
 func quoteIdent(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+func quoteList(items []string) string {
+	quoted := make([]string, len(items))
+	for i, it := range items {
+		quoted[i] = quoteString(it)
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 func quoteString(s string) string {

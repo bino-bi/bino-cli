@@ -2,10 +2,12 @@ package dataquery
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"bino.bi/bino/internal/report/config"
 )
@@ -17,8 +19,9 @@ func writeProject(t *testing.T) (string, []config.Document, config.Ambiguities) 
 	t.Helper()
 	root := t.TempDir()
 	files := map[string]string{
-		"data/sales.csv": "region,date,ac1,code\nNorth,2024-01-01,10.0,1\nSouth,2024-01-01,20.0,2\nNorth,2024-02-01,30.0,3\nNorth,2024-04-01,40.0,4\nSouth,2024-05-01,50.5,5\n",
-		"secret.txt":     "do not read\n",
+		"data/sales.csv":  "region,date,ac1,code\nNorth,2024-01-01,10.0,1\nSouth,2024-01-01,20.0,2\nNorth,2024-02-01,30.0,3\nNorth,2024-04-01,40.0,4\nSouth,2024-05-01,50.5,5\n",
+		"secret.txt":      "do not read\n",
+		"data/secret.csv": "token,v\nhunter2,1\n",
 		"sources.yaml": `
 apiVersion: bino.bi/v1alpha1
 kind: DataSource
@@ -48,6 +51,13 @@ spec:
   query: SELECT region AS category, "date", ac1, CAST(code AS VARCHAR) AS code FROM sales_csv
   derive:
     pp1: { from: ac1, shift: 1 month, grain: month }
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: direct
+spec:
+  query: SELECT * FROM read_csv('ROOT/data/secret.csv')
 `,
 	}
 	for name, content := range files {
@@ -55,6 +65,7 @@ spec:
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
 		}
+		content = strings.ReplaceAll(content, "ROOT", filepath.ToSlash(root))
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -150,6 +161,9 @@ func TestQueryRefusals(t *testing.T) {
 		{"WITH duckdb_databases AS (SELECT * FROM duckdb_databases) SELECT * FROM duckdb_databases", "unknown table"},
 		{"DESCRIBE sales_csv", "DESCRIBE, SUMMARIZE and SHOW are not allowed"},
 		{"SELEC 1", "Parser Error: syntax error"},
+		{`WITH RECURSIVE "` + filepath.ToSlash(root) + `/data/secret.csv"(token, v) AS (SELECT * FROM "` + filepath.ToSlash(root) + `/data/secret.csv" UNION ALL SELECT token, v FROM "` + filepath.ToSlash(root) + `/data/secret.csv" WHERE false) SELECT * FROM "` + filepath.ToSlash(root) + `/data/secret.csv", sales_csv`, "CTE name"},
+		{"WITH RECURSIVE duckdb_constraints(x) AS (SELECT 1 FROM duckdb_constraints UNION ALL SELECT 1 FROM duckdb_constraints WHERE false) SELECT * FROM duckdb_constraints", `unknown table "duckdb_constraints"`},
+		{"WITH RECURSIVE t(x) AS (SELECT table_name FROM information_schema.tables UNION ALL SELECT x FROM t WHERE false) SELECT * FROM t", "qualified table name"},
 	}
 	for _, c := range cases {
 		_, err := Query(context.Background(), docs, amb, c.sql, 0)
@@ -199,8 +213,11 @@ func TestLockedSessionBlocksFiles(t *testing.T) {
 		t.Fatalf("view: n=%d err=%v", n, err)
 	}
 	secret := filepath.ToSlash(filepath.Join(root, "secret.txt"))
+	sibling := filepath.ToSlash(filepath.Join(root, "data", "secret.csv"))
 	for _, q := range []string{
 		"SELECT * FROM read_text('" + secret + "')",
+		"SELECT * FROM read_csv('" + sibling + "')",
+		"SELECT * FROM '" + sibling + "'",
 		"SELECT * FROM read_csv('/etc/passwd')",
 		"SELECT * FROM glob('/etc/*')",
 		"SET GLOBAL enable_external_access = true",
@@ -210,5 +227,68 @@ func TestLockedSessionBlocksFiles(t *testing.T) {
 		if _, err := s.conn.ExecContext(ctx, q); err == nil {
 			t.Errorf("%s: no error on the locked session", q)
 		}
+	}
+	for setting, want := range map[string]string{"threads": "2", "max_temp_directory_size": "953.6 MiB", "enable_external_access": "false", "lock_configuration": "true"} {
+		var got string
+		if err := s.conn.QueryRowContext(ctx, "SELECT CAST(current_setting('"+setting+"') AS VARCHAR)").Scan(&got); err != nil || !strings.Contains(got, want) {
+			t.Errorf("%s = %q (%v), want %q", setting, got, err, want)
+		}
+	}
+	// The plan check on its own refuses a scan the targets do not make.
+	err = checkPlan(ctx, s.conn, "SELECT * FROM duckdb_constraints", []*config.Document{target}, map[string]string{"sales_csv": "SELECT * FROM sales_csv"})
+	if err == nil || !strings.Contains(err.Error(), "duckdb_constraints") {
+		t.Errorf("checkPlan: %v", err)
+	}
+	if err := checkPlan(ctx, s.conn, "SELECT region FROM sales_csv", []*config.Document{target}, map[string]string{"sales_csv": "SELECT * FROM sales_csv"}); err != nil {
+		t.Errorf("checkPlan of a view: %v", err)
+	}
+}
+
+func TestQueryDataSetReadingAFileDirectly(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	_, err := Query(context.Background(), docs, amb, "SELECT * FROM direct", 0)
+	if err == nil || !strings.Contains(err.Error(), "Permission Error") || !strings.Contains(err.Error(), "only through DataSources") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAcquireRespectsContext(t *testing.T) {
+	var releases []func()
+	for range maxConcurrent {
+		r, err := acquire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, r)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := acquire(ctx); err == nil {
+		t.Fatal("acquire succeeded with every slot taken")
+	}
+	for _, r := range releases {
+		r()
+	}
+	r, err := acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r()
+}
+
+func TestNormalizeTimes(t *testing.T) {
+	inf := time.Date(5881580, time.July, 11, 0, 0, 0, 0, time.UTC)
+	if _, err := json.Marshal([]any{normalize(inf), normalize([]any{inf})}); err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	d := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+	if got := normalizeTyped(d, "DATE"); got != "2024-03-01" {
+		t.Errorf("DATE = %v", got)
+	}
+	if got := normalizeTyped(time.Date(1, 1, 1, 10, 11, 12, 500_000_000, time.UTC), "TIME"); got != "10:11:12.5" {
+		t.Errorf("TIME = %v", got)
+	}
+	if got := normalizeTyped(d.Add(90*time.Minute), "TIMESTAMP"); got != "2024-03-01T01:30:00Z" {
+		t.Errorf("TIMESTAMP = %v", got)
 	}
 }

@@ -3,6 +3,7 @@ package dataquery
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -57,7 +58,7 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 
 	refs, err := parseTables(ctx, s.conn, sqlText, cat.known, cat.names())
 	if err != nil {
-		return res, ambiguous.Explain(err)
+		return res, explain(ambiguous, err)
 	}
 	wrapped := fmt.Sprintf("SELECT * FROM (\n%s\n) AS _bino_q LIMIT %d", sqlText, limit+1)
 	if _, err := parseTables(ctx, s.conn, wrapped, cat.known, cat.names()); err != nil {
@@ -83,7 +84,7 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 		}
 		view := fmt.Sprintf("CREATE VIEW %s AS (\n%s\n)", quoteIdent(t.Name), srcs[strings.ToLower(t.Name)])
 		if _, err := s.conn.ExecContext(ctx, view); err != nil {
-			return res, ambiguous.Explain(fmt.Errorf("DataSet %s: %w", t.Name, err))
+			return res, explain(ambiguous, fmt.Errorf("DataSet %s: %w", t.Name, err))
 		}
 	}
 	if err := s.lock(ctx); err != nil {
@@ -91,13 +92,17 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 	}
 	for _, q := range []string{sqlText, wrapped} {
 		if err := requireSelect(ctx, s.conn, q); err != nil {
-			return res, ambiguous.Explain(err)
+			return res, explain(ambiguous, err)
 		}
+	}
+
+	if err := checkPlan(ctx, s.conn, wrapped, targets, srcs); err != nil {
+		return res, explain(ambiguous, err)
 	}
 
 	rows, err := s.conn.QueryContext(ctx, wrapped)
 	if err != nil {
-		return res, ambiguous.Explain(err)
+		return res, explain(ambiguous, err)
 	}
 	defer rows.Close()
 	colTypes, err := rows.ColumnTypes()
@@ -121,7 +126,7 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 			return res, err
 		}
 		for i, v := range vals {
-			vals[i] = normalize(v)
+			vals[i] = normalizeTyped(v, res.Columns[i].Type)
 		}
 		res.Rows = append(res.Rows, vals)
 	}
@@ -155,4 +160,64 @@ func requireSelect(ctx context.Context, conn *sql.Conn, q string) error {
 		}
 		return nil
 	})
+}
+
+// checkPlan compares the scans in DuckDB's bound plan of q with the scans of
+// the targets on their own: q may not read through a function (a file
+// reader, a catalog function) that none of the targets reads through. This
+// catches any name the SQL check let through but DuckDB resolved to
+// something else.
+func checkPlan(ctx context.Context, conn *sql.Conn, q string, targets []*config.Document, srcs map[string]string) error {
+	allowed := map[string]bool{}
+	for _, t := range targets {
+		fns, err := planFunctions(ctx, conn, "SELECT * FROM (\n"+srcs[strings.ToLower(t.Name)]+"\n) AS _bino_b")
+		if err != nil {
+			return err
+		}
+		for fn := range fns {
+			allowed[fn] = true
+		}
+	}
+	fns, err := planFunctions(ctx, conn, q)
+	if err != nil {
+		return err
+	}
+	for fn := range fns {
+		if !allowed[fn] {
+			return fmt.Errorf("the query reads through %s, which none of the DataSources and DataSets it names does: the SQL may only read the project's DataSources and DataSets by name", strings.ToLower(fn))
+		}
+	}
+	return nil
+}
+
+// planFunctions returns the table functions in the plan of q. EXPLAIN binds
+// and plans q without running it.
+func planFunctions(ctx context.Context, conn *sql.Conn, q string) (map[string]bool, error) {
+	var key, plan string
+	if err := conn.QueryRowContext(ctx, "EXPLAIN (FORMAT JSON) "+q).Scan(&key, &plan); err != nil {
+		return nil, err
+	}
+	var tree any
+	if err := json.Unmarshal([]byte(plan), &tree); err != nil {
+		return nil, fmt.Errorf("read query plan: %w", err)
+	}
+	out := map[string]bool{}
+	var visit func(any)
+	visit = func(n any) {
+		switch v := n.(type) {
+		case []any:
+			for _, c := range v {
+				visit(c)
+			}
+		case map[string]any:
+			if info, ok := v["extra_info"].(map[string]any); ok {
+				if fn, ok := info["Function"].(string); ok {
+					out[fn] = true
+				}
+			}
+			visit(v["children"])
+		}
+	}
+	visit(tree)
+	return out, nil
 }

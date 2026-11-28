@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestQueryDataTool(t *testing.T) {
@@ -49,8 +51,8 @@ func TestProfileDataTool(t *testing.T) {
 	}
 }
 
-// TestDataToolSchemas checks that a read-only server lists both data tools
-// and logs their input schemas as tools/list serves them.
+// TestDataToolSchemas checks that a read-only server lists both data tools,
+// logs their input schemas as tools/list serves them, and calls each once.
 func TestDataToolSchemas(t *testing.T) {
 	deps := fullDeps(t)
 	deps.ReadOnly = true
@@ -72,5 +74,33 @@ func TestDataToolSchemas(t *testing.T) {
 	}
 	if found != 2 {
 		t.Fatalf("found %d data tools", found)
+	}
+
+	ct, st := mcpsdk.NewInMemoryTransports()
+	ss, err := NewServer(deps).Connect(context.Background(), st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close() //nolint:errcheck // in-memory session teardown
+	cs, err := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test", Version: "v0"}, nil).Connect(context.Background(), ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close() //nolint:errcheck // in-memory session teardown
+	var q struct {
+		Rows  [][]any `json:"rows"`
+		Error string  `json:"error"`
+	}
+	callToolJSON(t, cs, "query_data", map[string]any{"sql": "SELECT count(*) FROM revenue_data"}, &q)
+	if q.Error != "" || len(q.Rows) != 1 {
+		t.Fatalf("read-only query_data = %+v", q)
+	}
+	var p struct {
+		RowCount int64  `json:"rowCount"`
+		Error    string `json:"error"`
+	}
+	callToolJSON(t, cs, "profile_data", map[string]any{"name": "revenue_data"}, &p)
+	if p.Error != "" || p.RowCount == 0 {
+		t.Fatalf("read-only profile_data = %+v", p)
 	}
 }

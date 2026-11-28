@@ -6,9 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+// plainIdent is the only form a CTE name may take, so a CTE can never carry
+// the name of a file.
+var plainIdent = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // errNotSelect is returned for any statement other than one SELECT.
 var errNotSelect = errors.New("only one SELECT statement is allowed; INSERT, UPDATE, DELETE, CREATE, COPY, ATTACH, SET, PRAGMA and other statements are refused")
@@ -76,6 +81,9 @@ func (w *walker) walk(node any, scope map[string]bool) error {
 			for _, e := range entries {
 				entry, _ := e.(map[string]any)
 				name, _ := entry["key"].(string)
+				if !plainIdent.MatchString(name) {
+					return fmt.Errorf("CTE name %q is not allowed: use letters, digits and underscores only", name)
+				}
 				if err := w.walk(entry["value"], scope); err != nil {
 					return err
 				}
@@ -96,13 +104,19 @@ func (w *walker) walk(node any, scope map[string]bool) error {
 					return err
 				}
 			case "RECURSIVE_CTE_NODE":
+				// DuckDB binds the anchor (left) without the CTE in scope: a
+				// name there is a real table or a file, never the CTE itself.
+				if err := w.walk(n["left"], scope); err != nil {
+					return err
+				}
 				name, _ := n["cte_name"].(string)
 				scope = with(scope, name)
 			}
 		}
 		keys := make([]string, 0, len(n))
+		recursive := n["type"] == "RECURSIVE_CTE_NODE"
 		for k := range n {
-			if k != "cte_map" {
+			if k != "cte_map" && (!recursive || k != "left") {
 				keys = append(keys, k)
 			}
 		}
