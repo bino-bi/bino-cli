@@ -113,8 +113,11 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 	if err != nil {
 		return res, err
 	}
-	for _, ct := range colTypes {
+	for _, ct := range colTypes[:min(len(colTypes), maxColumns)] {
 		res.Columns = append(res.Columns, datasummary.Column{Name: ct.Name(), Type: ct.DatabaseTypeName()})
+	}
+	if len(colTypes) > maxColumns {
+		res.Notes = append(res.Notes, fmt.Sprintf("only the first %d of %d columns are returned", maxColumns, len(colTypes)))
 	}
 	size, cutCells := 0, 0
 	for rows.Next() {
@@ -125,11 +128,6 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 			res.Truncated = true
 			break
 		}
-		if size > maxResultBytes {
-			res.Truncated = true
-			res.Notes = append(res.Notes, fmt.Sprintf("rows stop after %d: the result is larger than %d bytes; select fewer or narrower columns", len(res.Rows), maxResultBytes))
-			break
-		}
 		vals := make([]any, len(colTypes))
 		ptrs := make([]any, len(colTypes))
 		for i := range vals {
@@ -138,19 +136,32 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 		if err := rows.Scan(ptrs...); err != nil {
 			return res, err
 		}
-		for i, v := range vals {
+		row := vals[:len(res.Columns)]
+		full := false
+		for i, v := range row {
+			if full {
+				row[i] = cutMark
+				cutCells++
+				continue
+			}
 			var cut bool
 			var n int
-			vals[i], n, cut = capCell(normalizeTyped(v, res.Columns[i].Type))
+			row[i], n, cut = capCell(normalizeTyped(v, res.Columns[i].Type))
 			size += n
 			if cut {
 				cutCells++
 			}
+			full = size > maxResultBytes
 		}
-		res.Rows = append(res.Rows, vals)
+		res.Rows = append(res.Rows, row)
+		if full {
+			res.Truncated = true
+			res.Notes = append(res.Notes, fmt.Sprintf("rows stop after %d: the result is larger than %d bytes; select fewer or narrower columns", len(res.Rows), maxResultBytes))
+			break
+		}
 	}
 	if cutCells > 0 {
-		res.Notes = append(res.Notes, fmt.Sprintf("%d cells were longer than %d bytes and end in %q", cutCells, maxCellBytes, cutMark))
+		res.Notes = append(res.Notes, fmt.Sprintf("%d cells were cut to at most %d bytes and end in %q", cutCells, maxCellBytes, cutMark))
 	}
 	return res, rows.Err()
 }

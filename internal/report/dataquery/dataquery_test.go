@@ -303,8 +303,9 @@ func TestQueryCapsCellsAndResultSize(t *testing.T) {
 	}
 	for i, cell := range res.Rows[0] {
 		str, _ := cell.(string)
-		if len(str) != maxCellBytes+len(cutMark) || !strings.HasSuffix(str, cutMark) {
-			t.Errorf("cell %d: %d bytes, want it cut to %d", i, len(str), maxCellBytes)
+		enc, _ := json.Marshal(str)
+		if len(enc) > maxCellBytes+len(cutMark) || len(enc) < maxCellBytes-8 || !strings.HasSuffix(str, cutMark) {
+			t.Errorf("cell %d: %d encoded bytes, want it cut to %d", i, len(enc), maxCellBytes)
 		}
 	}
 	if len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "2 cells") {
@@ -352,5 +353,83 @@ func TestQueryInterruptedAtTimeout(t *testing.T) {
 	_, err := Query(context.Background(), docs, amb, "SELECT count(*) FROM "+from, 0)
 	if took := time.Since(start); err == nil || took > 4*time.Second {
 		t.Fatalf("err=%v after %v", err, took)
+	}
+}
+
+func TestQueryRefusesComputedGeneratorSizes(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	for q, want := range map[string]string{
+		"SELECT len(range(0, 10000000 * 100))":                  "is refused",
+		"SELECT len(range(0, 10000000000::BIGINT))":             "is refused",
+		"SELECT length(repeat(repeat('x', 1000), 200000))":      "is refused",
+		"SELECT len(range(0, n)) FROM (SELECT 5 AS n)":          "must be a constant",
+		"SELECT repeat(region, 2) FROM sales_csv":               "may only repeat a constant",
+		"SELECT length(lpad('x', 2000000, ' '))":                "is refused",
+		"SELECT len(list_resize([1], 20000000))":                "is refused",
+		"SELECT len(array_resize([1], n)) FROM (SELECT 5 AS n)": "must be a constant",
+		"SELECT len(repeat([1, 2], 6000000))":                   "is refused",
+	} {
+		if _, err := Query(context.Background(), docs, amb, q, 0); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", q, err, want)
+		}
+	}
+	res, err := Query(context.Background(), docs, amb, "SELECT len(range(0, 10 * 10, 2)), lpad('x', 5, ' '), len(list_resize([1], 3)), repeat(repeat('ab', 2), 3), len(range(-5::INT, 5))", 0)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0][0] != int64(50) || res.Rows[0][3] != "abababababab" {
+		t.Fatalf("small constants: rows=%v err=%v", res.Rows, err)
+	}
+}
+
+func TestCutJSONMatchesEncoding(t *testing.T) {
+	inputs := []string{
+		strings.Repeat("<", 5000),
+		strings.Repeat("ä€ \"\\\n\x01", 900),
+		strings.Repeat("ok\xff\xfe", 3000),
+		"short <&>",
+	}
+	for _, in := range inputs {
+		head, size, cut := cutJSON(in, maxCellBytes)
+		enc, _ := json.Marshal(head)
+		if len(enc) != size || size > maxCellBytes || (cut && size < maxCellBytes-6) {
+			t.Errorf("cutJSON: encoded %d, reported %d, cut %v", len(enc), size, cut)
+		}
+		out, n, _ := capCell(in)
+		enc, _ = json.Marshal(out)
+		if len(enc) != n || n > maxCellBytes+len(cutMark) {
+			t.Errorf("capCell: encoded %d, reported %d", len(enc), n)
+		}
+	}
+}
+
+func TestQueryBudgetInsideAWideRow(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	old := maxResultBytes
+	maxResultBytes = 10 << 10
+	t.Cleanup(func() { maxResultBytes = old })
+	cols := make([]string, 10)
+	for i := range cols {
+		cols[i] = fmt.Sprintf("repeat('<', 4000) AS c%d", i)
+	}
+	res, err := Query(context.Background(), docs, amb, "SELECT "+strings.Join(cols, ", ")+" FROM sales_csv", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, _ := json.Marshal(res.Rows)
+	if !res.Truncated || len(res.Rows) != 1 || len(enc) > maxResultBytes+maxCellBytes+len(cutMark)*10 || res.Rows[0][9] != cutMark {
+		t.Fatalf("rows=%d truncated=%v bytes=%d notes=%v", len(res.Rows), res.Truncated, len(enc), res.Notes)
+	}
+}
+
+func TestQueryCapsColumns(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	cols := make([]string, maxColumns+50)
+	for i := range cols {
+		cols[i] = fmt.Sprintf("%d AS c%d", i, i)
+	}
+	res, err := Query(context.Background(), docs, amb, "SELECT "+strings.Join(cols, ", "), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Columns) != maxColumns || len(res.Rows[0]) != maxColumns || len(res.Notes) == 0 {
+		t.Fatalf("columns=%d cells=%d notes=%v", len(res.Columns), len(res.Rows[0]), res.Notes)
 	}
 }

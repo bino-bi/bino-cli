@@ -189,13 +189,18 @@ Each call runs on a DuckDB session of its own, never on the session the other to
   30 seconds, and uses at most 1 GB of memory, 1 GB of spill space and 2 threads. The settings
   are locked before the SQL runs. At most two of these calls run at the same time; the others
   wait.
-- `range` and `generate_series` with constant arguments may produce at most 10 million items,
-  and `repeat` with constant arguments at most 1 MiB.
-- A cell larger than 4 KiB is cut and ends in `...[truncated]`. Rows stop once the result holds
-  more than 2 MiB, with `truncated` set. `notes` says when either happened.
+- Functions that build a list or text of a given size (`range`, `generate_series`,
+  `list_resize`, `repeat`, `lpad`, `rpad`) need constant size arguments: literals, casts of
+  them, or `+ - * /` of them. `repeat` may only repeat a constant text or list. Lists may have at
+  most 10 million items, texts at most 1 MiB. A computed size is refused, because its result
+  cannot be judged before it runs.
+- A cell whose JSON is larger than 4 KiB is cut and ends in `...[truncated]`. At most 200 columns
+  are returned. Rows stop once the result holds more than 2 MiB of JSON, with `truncated` set;
+  the remaining cells of the last row are cut. `notes` says when any of this happened.
 
 DuckDB's memory limit covers its buffer pool, but not every value a scalar function builds, and
-DuckDB cannot always interrupt one such function. A host that runs the daemon for others should
+DuckDB cannot always interrupt one such function. The checks above catch the common cases, not
+every one. A host that runs the daemon for others should
 also give the process an operating system memory limit (for example a container or cgroup
 limit), so that one query cannot exhaust the machine.
 - PostgreSQL and MySQL DataSources are attached before the session is locked.

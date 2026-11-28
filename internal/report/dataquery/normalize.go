@@ -84,33 +84,66 @@ func normalize(v any) any {
 const (
 	// maxCellBytes caps the JSON size of one cell.
 	maxCellBytes = 4 << 10
-	// maxResultBytes caps the JSON size of all cells of a query_data result.
-	maxResultBytes = 2 << 20
-	cutMark        = "...[truncated]"
+	// maxColumns caps the columns of a query_data result.
+	maxColumns = 200
+	cutMark    = "...[truncated]"
 )
 
-// capCell returns v, or a string holding its first maxCellBytes bytes ending
-// in cutMark when v is larger, with its encoded size and whether it was cut.
-// A cut list, map or struct becomes the start of its JSON text.
+// maxResultBytes caps the JSON size of all cells of a query_data result. A
+// var so tests can lower it.
+var maxResultBytes = 2 << 20
+
+// capCell returns v, or a string holding its start ending in cutMark when
+// its JSON encoding is longer than maxCellBytes, with the encoded size of
+// what it returns and whether it was cut. A cut list, map or struct becomes
+// the start of its JSON text.
 func capCell(v any) (out any, size int, cut bool) {
-	if str, ok := v.(string); ok {
-		if len(str) <= maxCellBytes {
-			return str, len(str) + 2, false
+	str, isString := v.(string)
+	if !isString {
+		b, err := json.Marshal(v)
+		if err != nil || len(b) <= maxCellBytes {
+			return v, len(b), false
 		}
-		return cutString(str), maxCellBytes + len(cutMark) + 2, true
+		str = string(b)
 	}
-	b, err := json.Marshal(v)
-	if err != nil || len(b) <= maxCellBytes {
-		return v, len(b), false
+	head, n, cut := cutJSON(str, maxCellBytes)
+	if !cut && isString {
+		return str, n, false
 	}
-	return cutString(string(b)), maxCellBytes + len(cutMark) + 2, true
+	head += cutMark
+	return head, n + len(cutMark), true
 }
 
-// cutString keeps the first maxCellBytes bytes of s, not splitting a rune.
-func cutString(s string) string {
-	n := maxCellBytes
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
+// cutJSON returns the longest start of s whose JSON string encoding (quotes
+// included) fits in limit bytes, that encoded length, and whether s was
+// cut. It never cuts inside a rune or an escape.
+func cutJSON(s string, limit int) (head string, size int, cut bool) {
+	size = 2
+	for i := 0; i < len(s); {
+		r, w := utf8.DecodeRuneInString(s[i:])
+		n := jsonRuneLen(r, w)
+		if size+n > limit {
+			return s[:i], size, true
+		}
+		size += n
+		i += w
 	}
-	return s[:n] + cutMark
+	return s, size, false
+}
+
+// jsonRuneLen is how many bytes encoding/json writes for the rune r that
+// took w bytes in the input: it escapes quotes, backslashes, control
+// characters, <, >, &, U+2028 and U+2029, and writes each invalid byte as
+// U+FFFD.
+func jsonRuneLen(r rune, w int) int {
+	switch {
+	case r == utf8.RuneError && w == 1:
+		return utf8.RuneLen(utf8.RuneError)
+	case r == '"' || r == '\\' || r == '\n' || r == '\r' || r == '\t' || r == '\b' || r == '\f':
+		return 2
+	case r < 0x20 || r == '<' || r == '>' || r == '&' || r == '\u2028' || r == '\u2029':
+		return 6
+	default:
+		return w
+	}
 }

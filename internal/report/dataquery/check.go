@@ -174,87 +174,194 @@ func nonEmpty(parts ...string) []string {
 }
 
 const (
-	// maxGeneratedItems bounds range and generate_series with constant
-	// arguments: DuckDB builds such a list in one vector, outside its memory
-	// limit and without a point where it can be interrupted.
+	// maxGeneratedItems bounds the lists range, generate_series, list_resize
+	// and repeat build: DuckDB builds such a list in one vector, outside its
+	// memory limit and without a point where it can be interrupted.
 	maxGeneratedItems = 10_000_000
-	// maxRepeatBytes bounds the string repeat builds from constant arguments.
-	maxRepeatBytes = 1 << 20
+	// maxGeneratedBytes bounds the strings repeat, lpad and rpad build.
+	maxGeneratedBytes = 1 << 20
 )
 
-// checkGenerator refuses range, generate_series and repeat calls whose
-// constant arguments ask for a huge result. Arguments that are not
-// constants cannot be judged here and pass.
+// checkGenerator refuses calls that build a list or a string whose size an
+// argument sets, unless that argument is a constant (literals, casts and
+// + - * / of them) and the result stays under the limits. The size of a
+// computed value cannot be judged before it runs, so it is refused.
 func checkGenerator(fn map[string]any) error {
 	name, _ := fn["function_name"].(string)
 	args, _ := fn["arguments"].([]any)
+	needConst := func(what string) error {
+		return fmt.Errorf("%s() is refused: its %s must be a constant (a literal, a cast of one, or + - * / of them)", name, what)
+	}
 	switch strings.ToLower(name) {
 	case "range", "generate_series":
-		nums, ok := constNumbers(args)
-		if !ok || len(nums) == 0 || len(nums) > 3 {
-			return nil
+		nums := make([]float64, len(args))
+		for i, a := range args {
+			f, ok := fold(a)
+			if !ok {
+				return needConst("arguments")
+			}
+			nums[i] = f
 		}
-		start, stop, step := 0.0, nums[0], 1.0
-		if len(nums) >= 2 {
-			start, stop = nums[0], nums[1]
-		}
-		if len(nums) == 3 {
-			step = nums[2]
-		}
-		if step == 0 {
-			return nil
-		}
-		if items := (stop - start) / step; items > maxGeneratedItems {
+		if items, ok := rangeItems(nums); ok && items > maxGeneratedItems {
 			return fmt.Errorf("%s() with %.0f items is refused: at most %d are allowed", name, items, maxGeneratedItems)
+		}
+	case "list_resize", "array_resize":
+		if len(args) < 2 {
+			return nil
+		}
+		n, ok := fold(args[1])
+		if !ok {
+			return needConst("size")
+		}
+		if n > maxGeneratedItems {
+			return fmt.Errorf("%s() to %.0f items is refused: at most %d are allowed", name, n, maxGeneratedItems)
+		}
+	case "lpad", "rpad":
+		if len(args) < 2 {
+			return nil
+		}
+		n, ok := fold(args[1])
+		if !ok {
+			return needConst("length")
+		}
+		if n > maxGeneratedBytes {
+			return fmt.Errorf("%s() to %.0f bytes is refused: at most %d are allowed", name, n, maxGeneratedBytes)
 		}
 	case "repeat":
 		if len(args) != 2 {
 			return nil
 		}
-		text, okText := constString(args[0])
-		count, okCount := constNumbers(args[1:])
-		if okText && okCount && float64(len(text))*count[0] > maxRepeatBytes {
-			return fmt.Errorf("repeat() building %.0f bytes is refused: at most %d are allowed", float64(len(text))*count[0], maxRepeatBytes)
+		if _, ok := fold(args[1]); !ok {
+			return needConst("count")
+		}
+		size, items, ok := built(fn)
+		if !ok {
+			return fmt.Errorf("repeat() is refused: it may only repeat a constant text or list, or another repeat, lpad or rpad of one")
+		}
+		if size > maxGeneratedBytes || items > maxGeneratedItems {
+			return fmt.Errorf("repeat() building %.0f bytes or items is refused: at most %d bytes of text or %d list items are allowed", max(size, items), maxGeneratedBytes, maxGeneratedItems)
 		}
 	}
 	return nil
 }
 
-// constArg unwraps a serialized function argument to its constant literal.
-func constArg(a any) (map[string]any, bool) {
+// rangeItems is the number of items range(stop), range(start, stop) or
+// range(start, stop, step) yields.
+func rangeItems(nums []float64) (float64, bool) {
+	start, step := 0.0, 1.0
+	var stop float64
+	switch len(nums) {
+	case 1:
+		stop = nums[0]
+	case 2:
+		start, stop = nums[0], nums[1]
+	case 3:
+		start, stop, step = nums[0], nums[1], nums[2]
+	default:
+		return 0, false
+	}
+	if step == 0 {
+		return 0, false
+	}
+	return (stop - start) / step, true
+}
+
+// built returns the bytes of text or the list items e builds, when e is a
+// constant text or list, or repeat, lpad or rpad of one with constant sizes.
+func built(e any) (size, items float64, ok bool) {
+	m := unwrap(e)
+	switch m["class"] {
+	case "CONSTANT":
+		lit, _ := m["literal"].(map[string]any)
+		text, _ := lit["text"].(string)
+		return float64(len(text)), 0, true
+	case "CAST":
+		return built(m["child"])
+	case "FUNCTION":
+		name, _ := m["function_name"].(string)
+		args, _ := m["arguments"].([]any)
+		switch strings.ToLower(name) {
+		case "list_value":
+			for _, a := range args {
+				if _, _, ok := built(a); !ok {
+					return 0, 0, false
+				}
+			}
+			return 0, float64(len(args)), true
+		case "repeat":
+			if len(args) != 2 {
+				return 0, 0, false
+			}
+			n, okN := fold(args[1])
+			s, it, okS := built(args[0])
+			return s * n, it * n, okN && okS
+		case "lpad", "rpad":
+			if len(args) < 2 {
+				return 0, 0, false
+			}
+			n, okN := fold(args[1])
+			return n, 0, okN
+		}
+	}
+	return 0, 0, false
+}
+
+// fold evaluates a constant number: a literal, a cast of one, a unary minus
+// or + - * / of constants.
+func fold(e any) (float64, bool) {
+	m := unwrap(e)
+	switch m["class"] {
+	case "CONSTANT":
+		lit, _ := m["literal"].(map[string]any)
+		text, _ := lit["text"].(string)
+		f, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		return f, err == nil
+	case "CAST":
+		return fold(m["child"])
+	case "FUNCTION":
+		if op, _ := m["is_operator"].(bool); !op {
+			return 0, false
+		}
+		name, _ := m["function_name"].(string)
+		args, _ := m["arguments"].([]any)
+		vals := make([]float64, len(args))
+		for i, a := range args {
+			v, ok := fold(a)
+			if !ok {
+				return 0, false
+			}
+			vals[i] = v
+		}
+		switch {
+		case len(vals) == 1 && name == "-":
+			return -vals[0], true
+		case len(vals) == 1 && name == "+":
+			return vals[0], true
+		case len(vals) != 2:
+			return 0, false
+		}
+		switch name {
+		case "+":
+			return vals[0] + vals[1], true
+		case "-":
+			return vals[0] - vals[1], true
+		case "*":
+			return vals[0] * vals[1], true
+		case "/", "//":
+			if vals[1] == 0 {
+				return 0, false
+			}
+			return vals[0] / vals[1], true
+		}
+	}
+	return 0, false
+}
+
+// unwrap returns the expression of a serialized function argument.
+func unwrap(a any) map[string]any {
 	m, _ := a.(map[string]any)
 	if e, ok := m["expression"].(map[string]any); ok {
-		m = e
+		return e
 	}
-	if m["class"] != "CONSTANT" {
-		return nil, false
-	}
-	lit, ok := m["literal"].(map[string]any)
-	return lit, ok
-}
-
-func constNumbers(args []any) ([]float64, bool) {
-	out := make([]float64, 0, len(args))
-	for _, a := range args {
-		lit, ok := constArg(a)
-		if !ok {
-			return nil, false
-		}
-		text, _ := lit["text"].(string)
-		f, err := strconv.ParseFloat(text, 64)
-		if err != nil {
-			return nil, false
-		}
-		out = append(out, f)
-	}
-	return out, true
-}
-
-func constString(a any) (string, bool) {
-	lit, ok := constArg(a)
-	if !ok || lit["kind"] != "STRING" {
-		return "", false
-	}
-	text, ok := lit["text"].(string)
-	return text, ok
+	return m
 }
