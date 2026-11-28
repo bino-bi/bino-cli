@@ -206,9 +206,9 @@ func TestProfileCSVClean(t *testing.T) {
 	}
 }
 
-func TestProfileDataSetOnCSVWithoutHeader(t *testing.T) {
+func TestProfileDataSetGetsNoCSVCheck(t *testing.T) {
 	p := profileCSV(t, "orders_set", "North,2024-01-01,10\nSouth,2024-02-01,20\n", "")
-	if !hasWarning(p, `DataSource "orders": the file has no header row`) || p.CSV == nil {
+	if p.CSV != nil || hasWarning(p, "header row") {
 		t.Fatalf("warnings = %v, csv = %+v", p.Warnings, p.CSV)
 	}
 }

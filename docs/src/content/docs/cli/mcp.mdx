@@ -207,8 +207,8 @@ cgroup limit), so that one query cannot exhaust the machine.
 An error returns DuckDB's own message, for example `Binder Error: Referenced column "x" not found`.
 `profile_data` runs on such a session too.
 
-When the DataSource is a local CSV file, or a DataSet reads only one such DataSource,
-`profile_data` also sniffs the file. `csv` holds the `delimiter`, `hasHeader` and `dateFormat`
+When the target is a DataSource over a local CSV file, `profile_data` also sniffs the file.
+Profile the DataSource itself to check the file behind a DataSet. `csv` holds the `delimiter`, `hasHeader` and `dateFormat`
 DuckDB detects, and `warnings` adds what `bino lint --with-data` reports for the file: a header
 row that looks missing (columns named `column0`, `column1`, ...) or is read as data, a delimiter
 other than the declared one, and dates the declared `dateFormat` does not parse.

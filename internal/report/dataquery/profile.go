@@ -38,8 +38,8 @@ type Profile struct {
 	SampleRows int             `json:"sampleRows"`
 	Columns    []ColumnProfile `json:"columns"`
 	Warnings   []string        `json:"warnings"`
-	// CSV is what DuckDB's sniffer detects in the local CSV file the target
-	// reads: the target itself, or the only DataSource of a DataSet.
+	// CSV is what DuckDB's sniffer detects when the target is a DataSource
+	// over a local CSV file.
 	CSV *CSVFormat `json:"csv,omitempty"`
 }
 
@@ -177,19 +177,16 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 	return p, nil
 }
 
-// inspectCSV adds the format and the issues of the local CSV file the target
-// reads to p. A DataSet is checked only when it reads exactly one DataSource.
+// inspectCSV adds the format and the issues of the target's CSV file to p.
+// Only a DataSource is checked: which sources a DataSet really reads is not
+// known here, so its warnings could name another file.
 func (s *session) inspectCSV(ctx context.Context, target *config.Document, p *Profile) error {
-	if len(s.sources) != 1 {
+	if target.Kind != "DataSource" {
 		return nil
 	}
-	path, declared, ok := datasource.LocalCSV(s.sources[0])
+	path, declared, ok := datasource.LocalCSV(*target)
 	if !ok {
 		return nil
-	}
-	prefix := ""
-	if target.Kind == "DataSet" {
-		prefix = fmt.Sprintf("DataSource %q: ", s.sources[0].Name)
 	}
 	rep, err := datasource.InspectCSV(ctx, s.sess.DB(), path, declared)
 	if err != nil {
@@ -197,12 +194,12 @@ func (s *session) inspectCSV(ctx context.Context, target *config.Document, p *Pr
 			return ctx.Err()
 		}
 		msg, _, _ := strings.Cut(err.Error(), "\n")
-		p.Warnings = append(p.Warnings, prefix+"DuckDB cannot sniff the CSV file: "+msg)
+		p.Warnings = append(p.Warnings, "DuckDB cannot sniff the CSV file: "+msg)
 		return nil
 	}
 	p.CSV = &CSVFormat{Delimiter: rep.Delimiter, HasHeader: rep.HasHeader, DateFormat: rep.DateFormat}
 	for _, issue := range rep.Issues {
-		p.Warnings = append(p.Warnings, prefix+issue.Message)
+		p.Warnings = append(p.Warnings, issue.Message)
 	}
 	return nil
 }
