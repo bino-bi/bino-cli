@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/report/datasummary"
 	"bino.bi/bino/internal/runtimecfg"
 )
 
@@ -230,14 +231,14 @@ func handleSummarize(session *Session) http.HandlerFunc {
 		var summarizeSQL string
 		switch {
 		case req.Name != "":
-			summarizeSQL = fmt.Sprintf("SUMMARIZE SELECT * FROM %q", req.Name)
+			summarizeSQL = datasummary.TableSQL(req.Name)
 		case req.SQL != "":
 			sqlText := strings.TrimSpace(req.SQL)
 			if isWriteOperation(sqlText) {
 				writeJSON(w, http.StatusBadRequest, queryResponse{Error: "write operations are not allowed"})
 				return
 			}
-			summarizeSQL = fmt.Sprintf("SUMMARIZE (%s)", sqlText)
+			summarizeSQL = datasummary.QuerySQL(sqlText)
 		default:
 			writeJSON(w, http.StatusBadRequest, queryResponse{Error: "name or sql is required"})
 			return
@@ -255,42 +256,15 @@ func handleSummarize(session *Session) http.HandlerFunc {
 		start := time.Now()
 
 		err := session.WithDB(func(db *sql.DB) error {
-			rows, err := db.QueryContext(ctx, summarizeSQL)
-			if err != nil {
-				return err
-			}
-			defer rows.Close()
-
-			colTypes, err := rows.ColumnTypes()
-			if err != nil {
-				return err
-			}
-
-			resp.Columns = make([]columnInfo, len(colTypes))
-			for i, ct := range colTypes {
-				resp.Columns[i] = columnInfo{
-					Name: ct.Name(),
-					Type: ct.DatabaseTypeName(),
+			cols, rows, err := datasummary.Summarize(ctx, db, summarizeSQL, normalizeValue)
+			if cols != nil {
+				resp.Columns = make([]columnInfo, len(cols))
+				for i, c := range cols {
+					resp.Columns[i] = columnInfo{Name: c.Name, Type: c.Type}
 				}
 			}
-
-			resp.Rows = make([][]any, 0)
-			for rows.Next() {
-				vals := make([]any, len(colTypes))
-				ptrs := make([]any, len(colTypes))
-				for i := range vals {
-					ptrs[i] = &vals[i]
-				}
-				if err := rows.Scan(ptrs...); err != nil {
-					return err
-				}
-				normalized := make([]any, len(vals))
-				for i, v := range vals {
-					normalized[i] = normalizeValue(v)
-				}
-				resp.Rows = append(resp.Rows, normalized)
-			}
-			return rows.Err()
+			resp.Rows = rows
+			return err
 		})
 
 		resp.DurationMs = time.Since(start).Milliseconds()
