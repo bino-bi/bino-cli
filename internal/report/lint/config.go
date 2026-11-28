@@ -37,6 +37,7 @@ var nonRuleFindingIDs = []string{
 	RuleScenarioColumn,                                // needs data: datacheck
 	RuleCSVFormat,                                     // needs data: datacheck
 	RuleDataTimeout,                                   // needs data: datacheck
+	RuleDataUnchecked,                                 // needs data: datacheck
 }
 
 // The rule IDs of the data checks behind `bino lint --with-data`.
@@ -46,6 +47,7 @@ const (
 	RuleScenarioColumn = "scenario-column"
 	RuleCSVFormat      = "csv-format"
 	RuleDataTimeout    = "data-timeout"
+	RuleDataUnchecked  = "data-unchecked"
 )
 
 // IsDataRule reports whether a finding comes from the data checks. Their own
@@ -54,7 +56,7 @@ const (
 // build must not leave lint green.
 func IsDataRule(id string) bool {
 	switch id {
-	case RuleDatasetSQL, RuleDatasetColumn, RuleScenarioColumn, RuleCSVFormat, RuleDataTimeout:
+	case RuleDatasetSQL, RuleDatasetColumn, RuleScenarioColumn, RuleCSVFormat, RuleDataTimeout, RuleDataUnchecked:
 		return true
 	}
 	return false

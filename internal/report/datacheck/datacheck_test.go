@@ -281,3 +281,41 @@ spec:
 		t.Errorf("want one dataset-sql finding in v_en.yaml, got %+v", got)
 	}
 }
+
+func TestVariantsCoverOtherArtefactKinds(t *testing.T) {
+	shot := `apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: shot
+  labels:
+    target: shot
+spec:
+  filenamePrefix: shot
+  refs:
+    - kind: ChartStructure
+      name: c
+`
+	set := strings.Replace(salesSet, "  name: sales\n", "  name: sales\n  constraints: [labels.target==shot]\n", 1)
+	orphan := `apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: orphan
+  constraints: [mode==preview]
+spec:
+  query: SELECT 1 AS ac1
+`
+	docs := loadProject(t, map[string]string{"shot.yaml": shot, "src.yaml": salesSource, "set.yaml": set, "orphan.yaml": orphan})
+	sets, uncovered := Variants(docs)
+	if len(sets) != 1 || len(uncovered) != 1 || uncovered[0] != "orphan" {
+		t.Fatalf("sets %d, uncovered %v; want 1 set and [orphan]", len(sets), uncovered)
+	}
+	found := false
+	for _, d := range sets[0] {
+		if d.Kind == "DataSet" && d.Name == "sales" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the DataSet only a ScreenshotArtefact selects is not checked")
+	}
+}
