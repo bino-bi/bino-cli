@@ -17,7 +17,6 @@ import (
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
-	"bino.bi/bino/internal/report/diagnostics"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/spec"
@@ -32,6 +31,7 @@ func newLintCommand() *cobra.Command { //nolint:gocognit // grandfathered comple
 		outDir         string
 		lintLogFormat  string
 		executeQueries bool
+		dataTimeout    time.Duration
 		failOnWarnings bool
 	)
 
@@ -39,14 +39,20 @@ func newLintCommand() *cobra.Command { //nolint:gocognit // grandfathered comple
 		Use:   "lint",
 		Short: "Validate manifests and run lint rules without building",
 		Long: strings.TrimSpace(`Load manifests, validate against the schema, and run lint rules.
-This command does not execute queries or generate PDFs.
+It never generates PDFs. Without --with-data it runs no query.
+
+With --with-data (alias --execute-queries) lint also checks the data: every
+DataSet query runs with LIMIT 0, the columns components read are compared
+with the query results, and local CSV files are sniffed for header,
+delimiter and date format problems. --data-timeout bounds these checks.
 
 Lint findings are warnings by default; the exit code is non-zero when manifests
-fail to load, when a rule is raised to "error" in bino.toml's [lint] table, or
-with --fail-on-warnings.`),
+fail to load, when a rule is raised to "error" in bino.toml's [lint] table, when
+--with-data finds a failing query or a missing column, or with --fail-on-warnings.`),
 		Example: strings.TrimSpace(`  bino lint
   bino lint --work-dir ./reports
-  bino lint --lint-log-format json`),
+  bino lint --lint-log-format json
+  bino lint --with-data --data-timeout 2m`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("lint")
@@ -181,29 +187,17 @@ with --fail-on-warnings.`),
 			}
 			findings = append(tableEngineFindings(projectRoot, projectCfg, documents), findings...)
 
-			// Step 3: Execute queries and validate data (optional)
+			// Step 3: Check the data (optional)
 			var dataValidationWarnings []dataset.Warning
 			if executeQueries {
-				out.Step("Executing dataset queries...")
-				queryStart := time.Now()
-
-				execOpts := &dataset.ExecuteOptions{
-					DataValidation:           dataset.DataValidationWarn,
-					DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
-					ContinueOnQueryError:     true,
-				}
-				results, warnings, err := dataset.Execute(ctx, projectRoot, documents, execOpts)
-				if err != nil {
-					out.StepDone("Query execution failed", time.Since(queryStart))
-					out.Warning(fmt.Sprintf("Query execution error: %v", err))
-				} else {
-					out.StepDone(fmt.Sprintf("Executed %d dataset(s)", len(results)), time.Since(queryStart))
-					dataValidationWarnings = warnings
-					findings = append(findings, runner.Apply(diagnostics.AnnotationPointFindings(ctx, documents, results))...)
-					findings = append(findings, runner.Apply(diagnostics.CategoryIntervalPositionFindings(documents, results))...)
-					findings = append(findings, runner.Apply(diagnostics.SmallMultipleOverrideFindings(documents, results))...)
-					findings = append(tableDefaultEngineFindings(projectRoot, projectCfg, documents, results), findings...)
-				}
+				findings, dataValidationWarnings = runDataChecks(ctx, out, dataRun{
+					projectRoot: projectRoot,
+					projectCfg:  projectCfg,
+					documents:   documents,
+					kinds:       kindProvider,
+					runner:      runner,
+					timeout:     dataTimeout,
+				}, findings)
 			}
 
 			// Print schema validation issues
@@ -297,8 +291,11 @@ with --fail-on-warnings.`),
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing report manifests")
 	cmd.Flags().StringVar(&outDir, "out-dir", "dist", "Directory (relative to --work-dir) for lint logs")
 	cmd.Flags().StringVar(&lintLogFormat, "lint-log-format", "text", "Lint log file format: 'text' for human-readable or 'json' for machine-parseable")
-	cmd.Flags().BoolVar(&executeQueries, "execute-queries", false,
-		"Execute dataset queries and validate data (slower but catches data issues)")
+	cmd.Flags().BoolVar(&executeQueries, "with-data", false,
+		"Run the dataset queries and check the data: SQL errors, missing columns, CSV format (slower)")
+	cmd.Flags().BoolVar(&executeQueries, "execute-queries", false, "Alias for --with-data")
+	cmd.Flags().DurationVar(&dataTimeout, "data-timeout", 60*time.Second,
+		"Time limit for the --with-data checks; on expiry lint reports what it found so far (0 = no limit)")
 	cmd.Flags().BoolVar(&failOnWarnings, "fail-on-warnings", false,
 		"Exit with non-zero code if any warnings are found (useful for CI)")
 
@@ -340,7 +337,7 @@ func schemaFindingsFromErrors(loadErrors []error) []lint.Finding {
 // keyed on.
 func countByLintSeverity(runner *lint.Runner, findings []lint.Finding) (errCount, warnCount, infoCount int) {
 	for _, f := range findings {
-		switch runner.SeverityOverride(f.RuleID) {
+		switch lintSeverity(runner, f) {
 		case "error":
 			errCount++
 		case "info":
@@ -350,6 +347,18 @@ func countByLintSeverity(runner *lint.Runner, findings []lint.Finding) (errCount
 		}
 	}
 	return errCount, warnCount, infoCount
+}
+
+// lintSeverity is the severity a finding counts with: the [lint] override,
+// else the own severity of a data check, else none (a warning).
+func lintSeverity(runner *lint.Runner, f lint.Finding) string {
+	if sev := runner.SeverityOverride(f.RuleID); sev != "" {
+		return sev
+	}
+	if lint.IsDataRule(f.RuleID) {
+		return f.Severity
+	}
+	return ""
 }
 
 // lintFindingSummary renders the count line above the finding list. Without a
@@ -387,7 +396,7 @@ func printFindingLines(out *Output, projectRoot string, findings []lint.Finding,
 			loc = fmt.Sprintf("%s (%s)", loc, f.Path)
 		}
 		line := fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message)
-		if sev := runner.SeverityOverride(f.RuleID); sev != "" {
+		if sev := lintSeverity(runner, f); sev != "" {
 			line = fmt.Sprintf("[%s] %s", sev, line)
 		}
 		out.List(line)

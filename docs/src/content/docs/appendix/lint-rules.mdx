@@ -71,6 +71,11 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `small-multiple-axis-titles` | Small Multiple Axis Titles | Error | `axisTitles: rowEnd` of a SmallMultiple needs a `ChartTime` base. `axisTitles: shared` needs a `ChartScatter` or `ChartBubble` base by `rowGroup` or `category`, without card, items, overrides, order or limit. |
 | `small-multiple-xy-facet` | Small Multiple XY Facet | Info | A SmallMultiple of `ChartScatter` or `ChartBubble` by `rowGroup` or `category` repeats axes and legend in every panel. `facet` on the chart shares them. |
 | `small-multiple-override-unmatched` | Small Multiple Override Unmatched | Warning | A `panels.overrides` value of a SmallMultiple must be a value of the `by` column. Needs the data: `--execute-queries`, build and preview. |
+| `dataset-sql` | DataSet SQL | Error | A DataSet query must run in DuckDB. Needs `--with-data`. |
+| `dataset-column` | DataSet Column | Error | A column a component reads (filter, order, level, attributes, measures, template) must be in its DataSet. Needs `--with-data`. |
+| `scenario-column` | Scenario Column | Error | Every scenario slot that the scenarios and variances of a component read must be a column of its DataSet. Needs `--with-data`. |
+| `csv-format` | CSV Format | Warning | A local CSV file must match the declared header, delimiter and `dateFormat`. Needs `--with-data`. |
+| `data-timeout` | Data Timeout | Info | The `--with-data` checks stopped at `--data-timeout`; the message names what was not checked. |
 | `grid-cell-span` | Grid Cell Span | Error | A `rowSpan` or `columnSpan` of a Grid child must end inside the grid, and no child may sit in a position that a span covers. |
 | `total-only-scenario` | Total Only Scenario | Warning | A scenario of `totals.scenarios` (ChartTime) or `sumScenarios` (ChartStructure) must not be in `scenarios` of the chart. |
 | `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
@@ -1172,6 +1177,69 @@ If you stay with the SmallMultiple, `seriesNames` in the [`ComponentStyle`](/ref
 An entry of `panels.overrides` names a `by` panel by its value, and no panel has this value. The entry does nothing. A panel that `limit` drops counts as missing too. The rule needs the rows of the dataset, so `bino lint` reports it with `--execute-queries` only. `bino build` and `bino preview` write it to their log.
 
 **Fix:** write the value as it is in the `by` column. Text is case-sensitive, and spaces at the start or the end count.
+
+### dataset-sql
+
+The query of a DataSet fails in DuckDB. `bino lint --with-data` runs every DataSet query with `LIMIT 0`, so this is fast, and reports the DuckDB error. For an inline query in a `|` block, the finding is on the line that DuckDB names in its `LINE n:` excerpt, like the error in the editor. A `$file` query, a `prql` query and a `source` get the line of their field. When the query reads a DataSource that could not be registered (a missing file, say), the message adds that error too.
+
+```yaml
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: |
+    SELECT category,
+           amout          # reported here: Referenced column "amout" not found
+    FROM sales_src
+```
+
+**Fix:** correct the query. The message names the column or table DuckDB cannot find, often with the names it has.
+
+### dataset-column
+
+A component reads a column that its DataSet does not have: a column of `filter`, `order`, `level`, `attributes`, the grouping columns that `grouped`, `thereof`, `partof`, `columnthereof` and `interval` need, an XY or bullet measure, or a `data.<dataset>[i].<column>` in a Text template. The query runs, but the build or the rendered component fails or stays empty. Column names are case sensitive; when the DataSet has the name in another case, the message says so. A component with several datasets is reported only when none of them has the column. Columns the engine finds by itself (`auto`), parameters (`${...}`), `setnameIndex` and the columns a component reads without a field (such as `category` and `operation` of a Table, or `date` of a ChartTime) are not checked.
+
+```yaml
+kind: ChartStructure
+spec:
+  dataset: sales
+  filter: "region = 'EU'"   # sales has no column region
+```
+
+**Fix:** add the column to the query of the DataSet, or correct the name in the component.
+
+### scenario-column
+
+A scenario or a variance of a table or chart needs a slot column that the DataSet does not have. `scenarios: [ac1, pl1]` reads the columns `ac1` and `pl1`. A variance reads both of its slots: `dac1_pl1_pos` and `drac1_pl1_pos` read `ac1` and `pl1`. The finding is on the list entry that names the slot, and the message names the variance when one causes it. A missing slot column is reported here only, not also as `dataset-column`.
+
+```yaml
+kind: Table
+spec:
+  dataset: sales            # has ac1, no pl1
+  scenarios: [ac1, pl1]     # reported on pl1
+```
+
+**Fix:** add the slot column to the DataSet, or remove the scenario or variance.
+
+### csv-format
+
+The file of a local `csv` DataSource does not match its declared options. `bino lint --with-data` sniffs the file with DuckDB and reports:
+
+- the file has no header row: DuckDB names the columns `column0`, `column1`, ... (or `column00`, ...). This is not reported when `columnNames` is set or `header: false` is declared.
+- the first row is a header that is read as data: every column is `VARCHAR`, but the values below the first row are numbers or dates.
+- a header value also occurs as data in its column: the first row may be data, not a header.
+- the file uses another delimiter than `delimiter`.
+- a date column has values that `dateFormat` does not parse. The message shows such a value and the format DuckDB detects.
+
+The finding is on the option it concerns, or on `path`. URLs, globs and directories are not checked.
+
+**Fix:** correct the file or the options: `header`, `columnNames`, `delimiter` or `dateFormat`.
+
+### data-timeout
+
+The data checks of `--with-data` ran longer than `--data-timeout` (default `60s`) and stopped. What was found until then is reported; the message names the DataSets (and `$DataSources`) that were not checked. The finding is info and does not fail the command, also not with `--fail-on-warnings`.
+
+**Fix:** set a larger `--data-timeout`, or `0` for no limit.
 
 ### grid-cell-span
 

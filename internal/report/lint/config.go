@@ -32,6 +32,32 @@ var nonRuleFindingIDs = []string{
 	"table-calculation-scheme-engine-version",         // cli/engine_compat.go
 	"small-multiple-override-unmatched",               // needs data: SmallMultipleOverrideFindings, called by cli/lint.go
 	"annotation-panel-ambiguous",                      // emitted by annotation-target-missing, and with data by AnnotationPointFindings
+	RuleDatasetSQL,                                    // needs data: datacheck, called by cli/lint.go
+	RuleDatasetColumn,                                 // needs data: datacheck
+	RuleScenarioColumn,                                // needs data: datacheck
+	RuleCSVFormat,                                     // needs data: datacheck
+	RuleDataTimeout,                                   // needs data: datacheck
+}
+
+// The rule IDs of the data checks behind `bino lint --with-data`.
+const (
+	RuleDatasetSQL     = "dataset-sql"
+	RuleDatasetColumn  = "dataset-column"
+	RuleScenarioColumn = "scenario-column"
+	RuleCSVFormat      = "csv-format"
+	RuleDataTimeout    = "data-timeout"
+)
+
+// IsDataRule reports whether a finding comes from the data checks. Their own
+// severity counts toward the exit code when [lint] sets none: they are new,
+// so no project relies on them being advisory, and a query that fails the
+// build must not leave lint green.
+func IsDataRule(id string) bool {
+	switch id {
+	case RuleDatasetSQL, RuleDatasetColumn, RuleScenarioColumn, RuleCSVFormat, RuleDataTimeout:
+		return true
+	}
+	return false
 }
 
 // fixedSeverityIDs are known finding IDs whose weight is decided by the state

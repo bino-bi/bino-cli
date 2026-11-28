@@ -185,6 +185,20 @@ var (
 	measureToken  = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)[1-4])_((?:ac|pp|fc|pl)[1-4])(?:_(?:pos|neg|neu|opinv|op))?$`)
 )
 
+// VarianceSlots returns the two scenario slots a variance token reads
+// ("dac1_pl1_pos" reads ac1 and pl1); ok is false for any other token.
+func VarianceSlots(tok string) (a, b string, ok bool) {
+	tok = strings.TrimSpace(tok)
+	m := varianceToken.FindStringSubmatch(tok)
+	if m == nil {
+		m = measureToken.FindStringSubmatch(strings.ToLower(tok))
+	}
+	if m == nil {
+		return "", "", false
+	}
+	return m[1], m[2], true
+}
+
 // addTokens adds a scenario or variance list. A variance reads both slots;
 // any other token is a column as written (the engine pastes it into SQL).
 func (u *uses) addTokens(role, field, list string) {
