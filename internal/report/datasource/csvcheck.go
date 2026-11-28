@@ -86,14 +86,19 @@ func LocalCSV(doc config.Document) (path string, declared CSVOptions, ok bool) {
 func InspectCSV(ctx context.Context, db *sql.DB, path string, declared CSVOptions) (CSVReport, error) {
 	var rep CSVReport
 	quoted := escapeSQLString(path)
+	// The sniffer reads the file as the build does after the declared skip.
+	skip := ""
+	if declared.SkipRows > 0 {
+		skip = fmt.Sprintf(", skip = %d", declared.SkipRows)
+	}
 
 	var dateFormat sql.NullString
-	row := db.QueryRowContext(ctx, fmt.Sprintf("SELECT Delimiter, HasHeader, DateFormat FROM sniff_csv('%s')", quoted)) //nolint:gosec // G201: path is SQL-string-escaped
+	row := db.QueryRowContext(ctx, fmt.Sprintf("SELECT Delimiter, HasHeader, DateFormat FROM sniff_csv('%s'%s)", quoted, skip)) //nolint:gosec // G201: path is SQL-string-escaped
 	if err := row.Scan(&rep.Delimiter, &rep.HasHeader, &dateFormat); err != nil {
 		return rep, fmt.Errorf("sniff %s: %w", path, err)
 	}
 	rep.DateFormat = dateFormat.String
-	sniffed, err := queryColumns(ctx, db, fmt.Sprintf("SELECT * FROM read_csv('%s') LIMIT 0", quoted)) //nolint:gosec // G201: path is SQL-string-escaped
+	sniffed, err := queryColumns(ctx, db, fmt.Sprintf("SELECT * FROM read_csv('%s'%s) LIMIT 0", quoted, skip)) //nolint:gosec // G201: path is SQL-string-escaped
 	if err != nil {
 		return rep, fmt.Errorf("sniff %s: %w", path, err)
 	}
@@ -126,7 +131,7 @@ func InspectCSV(ctx context.Context, db *sql.DB, path string, declared CSVOption
 	}
 
 	if declared.DateFormat != "" && declared.DateFormat != rep.DateFormat {
-		issue, err := dateFormatIssue(ctx, db, quoted, declared.DateFormat, rep.DateFormat, sniffed)
+		issue, err := dateFormatIssue(ctx, db, quoted, skip, declared.DateFormat, rep.DateFormat, sniffed)
 		if err != nil {
 			return rep, err
 		}
@@ -288,7 +293,7 @@ func looksTyped(v string) bool {
 
 // dateFormatIssue finds a value in a column the sniffer reads as a date that
 // the declared dateFormat does not parse.
-func dateFormatIssue(ctx context.Context, db *sql.DB, quotedPath, declared, detected string, sniffed []ProbeColumn) (*CSVIssue, error) {
+func dateFormatIssue(ctx context.Context, db *sql.DB, quotedPath, skip, declared, detected string, sniffed []ProbeColumn) (*CSVIssue, error) {
 	var dateCols []string
 	for _, c := range sniffed {
 		if c.Type == "DATE" {
@@ -297,8 +302,8 @@ func dateFormatIssue(ctx context.Context, db *sql.DB, quotedPath, declared, dete
 	}
 	for _, col := range dateCols {
 		q := quoteIdent(col)
-		query := fmt.Sprintf("SELECT %s FROM read_csv('%s', all_varchar = true) WHERE %s IS NOT NULL AND try_strptime(%s, '%s') IS NULL LIMIT 1", //nolint:gosec // G201: identifiers are quoted, values escaped
-			q, quotedPath, q, q, escapeSQLString(declared))
+		query := fmt.Sprintf("SELECT %s FROM read_csv('%s', all_varchar = true%s) WHERE %s IS NOT NULL AND try_strptime(%s, '%s') IS NULL LIMIT 1", //nolint:gosec // G201: identifiers are quoted, values escaped
+			q, quotedPath, skip, q, q, escapeSQLString(declared))
 		var value string
 		err := db.QueryRowContext(ctx, query).Scan(&value)
 		if err == sql.ErrNoRows {

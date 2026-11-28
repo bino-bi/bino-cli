@@ -122,3 +122,48 @@ func TestLintWithDataTimeout(t *testing.T) {
 		t.Errorf("a stopped check reported findings:\n%s", out)
 	}
 }
+
+// The deadline falls inside the full execution of the last DataSet: its
+// LIMIT 0 check is fast, its full query is not.
+func TestLintWithDataTimeoutDuringExecution(t *testing.T) {
+	slow := `apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: slow
+spec:
+  query: SELECT count(*) AS n FROM range(100000000) a, range(1000) b
+`
+	dir := writeLintProject(t, lintDataTOML, map[string]string{"src.yaml": lintDataSource, "set.yaml": lintDataSetOK, "slow.yaml": slow})
+	out, err := runLintCommand(t, dir, "--with-data", "--data-timeout", "1500ms", "--fail-on-warnings")
+	if err != nil {
+		t.Fatalf("the time limit must not fail lint, got %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Query execution stopped by --data-timeout") {
+		t.Fatalf("the deadline did not fall inside the execution:\n%s", out)
+	}
+	if !strings.Contains(out, "[info] [data-timeout] bino.toml:1:1: data checks stopped after 1.5s; not checked: slow") {
+		t.Errorf("missing data-timeout finding naming slow:\n%s", out)
+	}
+	if strings.Contains(out, "data validation warning") || strings.Contains(out, "BNR_MAX_QUERY_DURATION_MS") {
+		t.Errorf("the cancelled query is reported as a warning:\n%s", out)
+	}
+}
+
+func TestLintWithDataMissingFileReportedOnce(t *testing.T) {
+	src := `apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_src
+spec:
+  type: csv
+  path: missing.csv
+`
+	dir := writeLintProject(t, lintDataTOML, map[string]string{"src.yaml": src, "set.yaml": lintDataSetOK})
+	out, _ := runLintCommand(t, dir, "--with-data")
+	if !strings.Contains(out, "[dataset-sql]") || !strings.Contains(out, `DataSource "sales_src"`) {
+		t.Fatalf("missing dataset-sql finding naming the DataSource:\n%s", out)
+	}
+	if strings.Contains(out, "data validation warning") {
+		t.Errorf("the missing file is reported twice:\n%s", out)
+	}
+}

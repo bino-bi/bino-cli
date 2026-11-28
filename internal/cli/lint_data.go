@@ -61,15 +61,19 @@ func runDataChecks(ctx context.Context, out *Output, run dataRun, findings []lin
 		}
 		results, execWarnings, err := dataset.Execute(dataCtx, run.projectRoot, run.documents, execOpts)
 		switch {
-		case err != nil && dataCtx.Err() != nil && ctx.Err() == nil:
+		// With ContinueOnQueryError a query the deadline cancels is only a
+		// warning, and err stays nil when it was the last one.
+		case dataCtx.Err() != nil && ctx.Err() == nil:
 			out.StepDone("Query execution stopped by --data-timeout", time.Since(queryStart))
+			warnings = dropReportedQueryErrors(execWarnings, res)
+			warnings = dropInterrupted(warnings, results)
 			unchecked = appendNotRun(unchecked, run.documents, results, res.FailedDataSets)
 		case err != nil:
 			out.StepDone("Query execution failed", time.Since(queryStart))
 			out.Warning(fmt.Sprintf("Query execution error: %v", err))
 		default:
 			out.StepDone(fmt.Sprintf("Executed %d dataset(s)", len(results)), time.Since(queryStart))
-			warnings = dropReportedQueryErrors(execWarnings, res.FailedDataSets)
+			warnings = dropReportedQueryErrors(execWarnings, res)
 			findings = append(findings, run.runner.Apply(diagnostics.AnnotationPointFindings(ctx, run.documents, results))...)
 			findings = append(findings, run.runner.Apply(diagnostics.CategoryIntervalPositionFindings(run.documents, results))...)
 			findings = append(findings, run.runner.Apply(diagnostics.SmallMultipleOverrideFindings(run.documents, results))...)
@@ -111,12 +115,34 @@ func appendNotRun(unchecked []string, docs []config.Document, results []dataset.
 	return unchecked
 }
 
-// dropReportedQueryErrors removes the execution warnings of DataSets whose
-// query error is already a dataset-sql finding.
-func dropReportedQueryErrors(warnings []dataset.Warning, failed []string) []dataset.Warning {
+// dropReportedQueryErrors removes the execution warnings that a data
+// finding already reports: the query error of a DataSet with a dataset-sql
+// finding, and the view error of a DataSource that such a finding names.
+func dropReportedQueryErrors(warnings []dataset.Warning, res datacheck.Result) []dataset.Warning {
 	out := warnings[:0]
 	for _, w := range warnings {
-		if slices.Contains(failed, w.DataSet) && strings.HasPrefix(w.Message, "execute:") {
+		if slices.Contains(res.FailedDataSets, w.DataSet) && strings.HasPrefix(w.Message, "execute:") {
+			continue
+		}
+		if slices.Contains(res.FailedSources, w.DataSet) && strings.HasPrefix(w.Message, "datasource:") {
+			continue
+		}
+		out = append(out, w)
+	}
+	return out
+}
+
+// dropInterrupted removes the execution warnings of DataSets that have no
+// result: after the deadline their error is the cancellation, not the data.
+// appendNotRun lists them as not checked instead.
+func dropInterrupted(warnings []dataset.Warning, results []dataset.Result) []dataset.Warning {
+	ran := map[string]bool{}
+	for _, r := range results {
+		ran[r.Name] = true
+	}
+	out := warnings[:0]
+	for _, w := range warnings {
+		if !ran[w.DataSet] && strings.HasPrefix(w.Message, "execute:") {
 			continue
 		}
 		out = append(out, w)

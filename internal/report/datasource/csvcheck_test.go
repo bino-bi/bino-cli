@@ -103,3 +103,11 @@ func TestLocalCSV(t *testing.T) {
 		t.Error("a missing file is not a local CSV")
 	}
 }
+
+func TestInspectCSVSkipRows(t *testing.T) {
+	body := "exported by tool x\nexported on 2024-01-01\nid;date\n1;2024-01-03\n2;2024-02-03\n"
+	rep := inspect(t, body, CSVOptions{Delimiter: ";", SkipRows: 2})
+	if len(rep.Issues) != 0 || rep.Delimiter != ";" || !rep.HasHeader {
+		t.Errorf("skipRows must apply to the sniffer, got %+v %v", rep, issueOptions(rep))
+	}
+}

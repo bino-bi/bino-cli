@@ -17,6 +17,7 @@ import (
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -28,16 +29,103 @@ type Result struct {
 	Unchecked []string
 	// FailedDataSets are the DataSets with a dataset-sql finding.
 	FailedDataSets []string
+	// FailedSources are the DataSources whose view error a dataset-sql
+	// finding already names.
+	FailedSources []string
 }
 
-// Run checks the data of docs. It stops when ctx ends and returns what it
-// found so far; only a failure to start DuckDB is an error.
+// Run checks the data of docs. Documents with constraints are checked once
+// per ReportArtefact, on the documents the build would use for it, so two
+// variants of one DataSet never meet. It stops when ctx ends and returns
+// what it found so far; only a failure to start DuckDB is an error.
 func Run(ctx context.Context, docs []config.Document, kindProvider config.KindProvider) (Result, error) {
+	var merged Result
+	failed := map[string]bool{}
+	sources := map[string]bool{}
+	for _, set := range variants(docs) {
+		res, err := runSet(ctx, set, kindProvider)
+		if err != nil {
+			return Result{}, err
+		}
+		merged.Findings = append(merged.Findings, res.Findings...)
+		for _, n := range res.Unchecked {
+			if !slices.Contains(merged.Unchecked, n) {
+				merged.Unchecked = append(merged.Unchecked, n)
+			}
+		}
+		for _, n := range res.FailedDataSets {
+			failed[n] = true
+		}
+		for _, n := range res.FailedSources {
+			sources[n] = true
+		}
+	}
+	merged.Findings = dedupe(merged.Findings)
+	merged.FailedDataSets = sortedKeys(failed)
+	merged.FailedSources = sortedKeys(sources)
+	return merged, nil
+}
+
+// variants returns the document sets to check. Without constraints that is
+// docs itself. Otherwise it is the constraint-filtered set of every
+// ReportArtefact in build mode, without repeats; a document whose
+// constraints cannot be evaluated is left out, as in introspection. A
+// project with constraints and no artefact is checked on the documents
+// introspection would pick.
+func variants(docs []config.Document) [][]config.Document {
+	constrained := false
+	var artefacts []config.Document
+	for _, d := range docs {
+		if len(d.Constraints) > 0 {
+			constrained = true
+		}
+		if d.Kind == "ReportArtefact" {
+			artefacts = append(artefacts, d)
+		}
+	}
+	if !constrained {
+		return [][]config.Document{docs}
+	}
+	if len(artefacts) == 0 {
+		resolved, _ := config.ResolveForIntrospection(docs)
+		return [][]config.Document{resolved}
+	}
+	var out [][]config.Document
+	seen := map[string]bool{}
+	for _, a := range artefacts {
+		specMap, err := spec.ToMap(a.Raw)
+		if err != nil {
+			continue
+		}
+		cctx := &spec.ConstraintContext{Labels: a.Labels, Spec: specMap, Mode: spec.ModeBuild, ArtefactKind: "report"}
+		var set []config.Document
+		var key strings.Builder
+		for i, d := range docs {
+			if d.Kind != "ReportArtefact" && len(d.Constraints) > 0 {
+				match, err := spec.EvaluateParsedConstraintsWithContext(d.Constraints, cctx, d.Kind, d.Name)
+				if err != nil || !match {
+					continue
+				}
+			}
+			set = append(set, d)
+			fmt.Fprintf(&key, "%d,", i)
+		}
+		if !seen[key.String()] {
+			seen[key.String()] = true
+			out = append(out, set)
+		}
+	}
+	return out
+}
+
+// runSet checks one consistent set of documents.
+func runSet(ctx context.Context, docs []config.Document, kindProvider config.KindProvider) (Result, error) {
 	c := &checker{
-		docs:    docs,
-		src:     newSources(docs),
-		columns: map[string]columnSet{},
-		failed:  map[string]bool{},
+		docs:         docs,
+		src:          newSources(docs),
+		columns:      map[string]columnSet{},
+		failed:       map[string]bool{},
+		usedViewErrs: map[string]bool{},
 	}
 	opts, err := duckdb.DefaultOptions()
 	if err != nil {
@@ -77,12 +165,12 @@ func Run(ctx context.Context, docs []config.Document, kindProvider config.KindPr
 		}
 	}
 
-	failed := make([]string, 0, len(c.failed))
-	for name := range c.failed {
-		failed = append(failed, name)
-	}
-	sort.Strings(failed)
-	return Result{Findings: dedupe(c.findings), Unchecked: c.unchecked, FailedDataSets: failed}, nil
+	return Result{
+		Findings:       dedupe(c.findings),
+		Unchecked:      c.unchecked,
+		FailedDataSets: sortedKeys(c.failed),
+		FailedSources:  sortedKeys(c.usedViewErrs),
+	}, nil
 }
 
 type columnSet map[string]bool
@@ -94,10 +182,12 @@ type checker struct {
 	viewErrs map[string]error
 	// columns maps a binding ("name" for a DataSet, "$name" for a
 	// DataSource) to its result columns; a missing entry was not probed.
-	columns   map[string]columnSet
-	failed    map[string]bool
-	findings  []lint.Finding
-	unchecked []string
+	columns map[string]columnSet
+	failed  map[string]bool
+	// usedViewErrs are the DataSources whose view error a finding names.
+	usedViewErrs map[string]bool
+	findings     []lint.Finding
+	unchecked    []string
 }
 
 func (c *checker) skip(name string) {
@@ -163,6 +253,7 @@ func (c *checker) sqlFinding(doc config.Document, err error) lint.Finding {
 	for _, name := range sortedKeys(c.viewErrs) {
 		if strings.Contains(text, strings.ToLower(name)) {
 			f.Message += fmt.Sprintf("; DataSource %q: %v", name, c.viewErrs[name])
+			c.usedViewErrs[name] = true
 		}
 	}
 	return f

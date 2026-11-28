@@ -223,3 +223,61 @@ func TestRunStopsAtDeadline(t *testing.T) {
 		t.Errorf("Unchecked = %v, want [sales]", res.Unchecked)
 	}
 }
+
+// Two variants of a DataSource and a DataSet, picked by the artefact
+// language, must each be checked with their own partner only.
+func TestConstraintVariantsCheckedPerArtefact(t *testing.T) {
+	artefact := func(name, lang string) string {
+		return `apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: ` + name + `
+spec:
+  format: a4
+  orientation: portrait
+  language: ` + lang + `
+  filename: ` + name + `.pdf
+  title: T
+  layoutPages: [p]
+`
+	}
+	variant := func(lang, col string) string {
+		return `apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: src
+  constraints: [spec.language==` + lang + `]
+spec:
+  type: inline
+  content:
+    - ` + col + `: 1
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+  constraints: [spec.language==` + lang + `]
+spec:
+  query: SELECT ` + col + ` AS ac1 FROM src
+`
+	}
+	docs := loadProject(t, map[string]string{
+		"de.yaml": artefact("r_de", "de"), "en.yaml": artefact("r_en", "en"),
+		"v_de.yaml": variant("de", "umsatz"), "v_en.yaml": variant("en", "revenue"),
+	})
+	res := run(t, docs)
+	if got := byRule(res.Findings, lint.RuleDatasetSQL); len(got) != 0 {
+		t.Errorf("each artefact builds, got %+v", got)
+	}
+
+	// A real error in one variant is still found, once.
+	docs = loadProject(t, map[string]string{
+		"de.yaml": artefact("r_de", "de"), "en.yaml": artefact("r_en", "en"),
+		"v_de.yaml": variant("de", "umsatz"), "v_en.yaml": strings.Replace(variant("en", "revenue"), "SELECT revenue", "SELECT revnue", 1),
+	})
+	res = run(t, docs)
+	got := byRule(res.Findings, lint.RuleDatasetSQL)
+	if len(got) != 1 || !strings.HasSuffix(got[0].File, "v_en.yaml") {
+		t.Errorf("want one dataset-sql finding in v_en.yaml, got %+v", got)
+	}
+}
