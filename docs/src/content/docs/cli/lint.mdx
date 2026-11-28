@@ -69,7 +69,7 @@ With this flag the points of [annotations](/reference/annotation/) are also chec
 
 Every data finding has the file and line of the field that is wrong, in the console and in the `--lint-log-format json` log. SQL errors and missing columns are errors, CSV findings are warnings. `[lint]` in `bino.toml` can disable or re-grade them like any other rule.
 
-With constraints in the project, the data checks run once for each artefact, on the documents its constraints select, as in the build. A DataSet or DataSource that no artefact selects is named in one info finding [`data-unchecked`](/appendix/lint-rules/#data-unchecked).
+With constraints in the project, the data checks run once for each ReportArtefact and ScreenshotArtefact in build mode and for each ReportArtefact a LiveReportArtefact route serves in serve mode, on the documents the constraints select there, as in the build and in serve. A DataSet or DataSource that no artefact selects is named in one info finding [`data-unchecked`](/appendix/lint-rules/#data-unchecked).
 
 `--data-timeout` bounds the data checks (default `60s`). When the time runs out, lint stops the checks, keeps what it found, and adds one info finding [`data-timeout`](/appendix/lint-rules/#data-timeout) that names the DataSets it did not check. The time limit alone never fails the command, also not with `--fail-on-warnings`.
 

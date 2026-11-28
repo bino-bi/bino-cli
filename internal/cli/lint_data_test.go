@@ -250,3 +250,97 @@ spec:
 		t.Errorf("missing data-unchecked finding:\n%s", out)
 	}
 }
+
+// lintSharedSetFiles: an unconstrained DataSet sales reads src, which has
+// one variant per artefact language.
+func lintSharedSetFiles(extra map[string]string) map[string]string {
+	files := lintVariantFiles()
+	for _, lang := range []string{"de", "en"} {
+		col := map[string]string{"de": "umsatz", "en": "revenue"}[lang]
+		files["v_"+lang+".yaml"] = `apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: src
+  constraints: [spec.language==` + lang + `]
+spec:
+  type: inline
+  content:
+    - category: EU
+      categoryIndex: 1
+      ac1: 1
+      ` + col + `: 1
+`
+	}
+	files["sales.yaml"] = `apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  dependencies: [src]
+  query: SELECT category, categoryIndex, ac1 FROM src
+`
+	for k, v := range extra {
+		files[k] = v
+	}
+	return files
+}
+
+const (
+	lintDocumentArtefact = `apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: manual
+spec:
+  format: a4
+  sources: [./docs/*.md]
+`
+	lintLiveArtefact = `apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: live
+spec:
+  title: Live
+  routes:
+    "/":
+      artefact: r_de
+`
+)
+
+func TestLintWithDataArtefactKinds(t *testing.T) {
+	for name, extra := range map[string]map[string]string{
+		"document artefact": {"doc.yaml": lintDocumentArtefact},
+		"live artefact":     {"live.yaml": lintLiveArtefact},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := writeLintProject(t, lintVariantTOML, lintSharedSetFiles(extra))
+			out, err := runLintCommand(t, dir, "--with-data", "--fail-on-warnings")
+			if err != nil {
+				t.Fatalf("every artefact builds, so lint must pass, got %v\n%s", err, out)
+			}
+			if strings.Contains(out, "dataset-sql") {
+				t.Errorf("a set without src was checked:\n%s", out)
+			}
+		})
+	}
+}
+
+// A DataSet that only a live route selects is checked through it.
+func TestLintWithDataLiveRouteServeMode(t *testing.T) {
+	served := `apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: served
+  constraints: [mode==serve, spec.language==de]
+spec:
+  dependencies: [src]
+  query: SELECT umsatz_typo FROM src
+`
+	dir := writeLintProject(t, lintVariantTOML, lintSharedSetFiles(map[string]string{"live.yaml": lintLiveArtefact, "served.yaml": served}))
+	out, _ := runLintCommand(t, dir, "--with-data")
+	if strings.Contains(out, "data-unchecked") {
+		t.Errorf("served is selected by the live route:\n%s", out)
+	}
+	if !strings.Contains(out, `[dataset-sql] served.yaml:8:10 (spec.query): DataSet "served"`) {
+		t.Errorf("served was not checked:\n%s", out)
+	}
+}

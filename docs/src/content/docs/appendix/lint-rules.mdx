@@ -76,7 +76,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `scenario-column` | Scenario Column | Error | Every scenario slot that the scenarios and variances of a component read must be a column of its DataSet. Needs `--with-data`. |
 | `csv-format` | CSV Format | Warning | A local CSV file must match the declared header, delimiter and `dateFormat`. Needs `--with-data`. |
 | `data-timeout` | Data Timeout | Info | The `--with-data` checks stopped at `--data-timeout`; the message names what was not checked. |
-| `data-unchecked` | Data Unchecked | Info | A DataSet or DataSource that the constraints of no artefact select is not checked by `--with-data`. |
+| `data-unchecked` | Data Unchecked | Info | A DataSet or DataSource that no ReportArtefact, ScreenshotArtefact or live route selects is not checked by `--with-data`. |
 | `grid-cell-span` | Grid Cell Span | Error | A `rowSpan` or `columnSpan` of a Grid child must end inside the grid, and no child may sit in a position that a span covers. |
 | `total-only-scenario` | Total Only Scenario | Warning | A scenario of `totals.scenarios` (ChartTime) or `sumScenarios` (ChartStructure) must not be in `scenarios` of the chart. |
 | `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
@@ -1244,7 +1244,13 @@ The data checks of `--with-data` ran longer than `--data-timeout` (default `60s`
 
 ### data-unchecked
 
-With constraints in the project, `--with-data` checks the data once for each artefact (ReportArtefact, DocumentArtefact, ScreenshotArtefact, LiveReportArtefact), on the documents its constraints select, the way the build does. So two variants of a DataSet, for example one per language, are each checked with their own DataSource. A DataSet or DataSource that no artefact selects is not checked at all; this info finding names them. It does not fail the command. The same happens to a document whose constraints cannot be evaluated for any artefact.
+With constraints in the project, `--with-data` checks the data once for each way the build and serve select documents, on the documents the constraints select there:
+
+- each `ReportArtefact`, in build mode;
+- each `ScreenshotArtefact`, in build mode with `artefactKind` `screenshot`;
+- each `ReportArtefact` that a route of a `LiveReportArtefact` serves, in serve mode.
+
+So two variants of a DataSet, for example one per language, are each checked with their own DataSource. A `DocumentArtefact` adds no check of its own: its build applies no constraints and runs only the DataSets its markdown uses. A DataSet or DataSource that none of these selects is not checked at all; this info finding names them. It does not fail the command. The same happens to a document whose constraints cannot be evaluated in any of them.
 
 **Fix:** nothing, if the document is only meant for preview. Otherwise check its constraints.
 

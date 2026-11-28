@@ -6,6 +6,7 @@ package datacheck
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -66,38 +67,44 @@ func Run(ctx context.Context, docs []config.Document, kindProvider config.KindPr
 	return merged, nil
 }
 
-// artefactKinds maps each artefact kind to the ArtefactKind its constraint
-// context carries, as the build and serve evaluate it.
-var artefactKinds = map[string]string{
-	"ReportArtefact":     "report",
-	"ScreenshotArtefact": "screenshot",
-	"DocumentArtefact":   "document",
-	"LiveReportArtefact": "livereport",
+// artefactKinds are the kinds that constraints never filter out.
+var artefactKinds = map[string]bool{
+	"ReportArtefact":     true,
+	"ScreenshotArtefact": true,
+	"DocumentArtefact":   true,
+	"LiveReportArtefact": true,
 }
 
 // Variants returns the document sets the data checks run on, so two
 // variants of one DataSet never meet. Without constraints that is docs
-// itself. Otherwise it is the constraint-filtered set of every artefact,
-// without repeats; a document whose constraints cannot be evaluated is left
-// out of that set. A project with constraints and no artefact uses the
-// documents introspection would pick. uncovered names the DataSets ("name")
-// and DataSources ("$name") that no set contains.
+// itself. Otherwise there is one set per constraint context the build and
+// serve use, without repeats:
+//   - each ReportArtefact in build mode, ArtefactKind "report";
+//   - each ScreenshotArtefact in build mode, ArtefactKind "screenshot"; its
+//     build runs every DataSet its constraints keep, so the set does too;
+//   - each ReportArtefact a LiveReportArtefact route serves, in serve mode,
+//     ArtefactKind "report", as serve renders the route.
+//
+// A DocumentArtefact gets no set: its build applies no constraint filter and
+// only runs the DataSets its markdown reaches, so those are checked through
+// the other sets or named as not checked. A document whose constraints
+// cannot be evaluated is left out of a set. A project with constraints and
+// none of these contexts uses the documents introspection would pick.
+// uncovered names the DataSets ("name") and DataSources ("$name") that no
+// set contains.
 func Variants(docs []config.Document) (sets [][]config.Document, uncovered []string) {
 	constrained := false
-	var artefacts []config.Document
 	for _, d := range docs {
 		if len(d.Constraints) > 0 {
 			constrained = true
-		}
-		if _, ok := artefactKinds[d.Kind]; ok {
-			artefacts = append(artefacts, d)
 		}
 	}
 	if !constrained {
 		return [][]config.Document{docs}, nil
 	}
+	ctxs := constraintContexts(docs)
 	covered := map[int]bool{}
-	if len(artefacts) == 0 {
+	if len(ctxs) == 0 {
 		resolved, _ := config.ResolveForIntrospection(docs)
 		for i, d := range docs {
 			for _, r := range resolved {
@@ -109,20 +116,11 @@ func Variants(docs []config.Document) (sets [][]config.Document, uncovered []str
 		sets = [][]config.Document{resolved}
 	}
 	seen := map[string]bool{}
-	for _, a := range artefacts {
-		specMap, err := spec.ToMap(a.Raw)
-		if err != nil {
-			continue
-		}
-		mode := spec.ModeBuild
-		if a.Kind == "LiveReportArtefact" {
-			mode = spec.ModeServe
-		}
-		cctx := &spec.ConstraintContext{Labels: a.Labels, Spec: specMap, Mode: mode, ArtefactKind: artefactKinds[a.Kind]}
+	for _, cctx := range ctxs {
 		var set []config.Document
 		var key strings.Builder
 		for i, d := range docs {
-			if _, isArtefact := artefactKinds[d.Kind]; !isArtefact && len(d.Constraints) > 0 {
+			if !artefactKinds[d.Kind] && len(d.Constraints) > 0 {
 				match, err := spec.EvaluateParsedConstraintsWithContext(d.Constraints, cctx, d.Kind, d.Name)
 				if err != nil || !match {
 					continue
@@ -151,6 +149,53 @@ func Variants(docs []config.Document) (sets [][]config.Document, uncovered []str
 		}
 	}
 	return sets, uncovered
+}
+
+// constraintContexts returns the contexts Variants filters with, in
+// document order.
+func constraintContexts(docs []config.Document) []*spec.ConstraintContext {
+	reports := map[string]config.Document{}
+	for _, d := range docs {
+		if d.Kind == "ReportArtefact" {
+			if _, dup := reports[d.Name]; !dup {
+				reports[d.Name] = d
+			}
+		}
+	}
+	newContext := func(d config.Document, mode spec.Mode, kind string) *spec.ConstraintContext {
+		specMap, err := spec.ToMap(d.Raw)
+		if err != nil {
+			return nil
+		}
+		return &spec.ConstraintContext{Labels: d.Labels, Spec: specMap, Mode: mode, ArtefactKind: kind}
+	}
+	var out []*spec.ConstraintContext
+	add := func(c *spec.ConstraintContext) {
+		if c != nil {
+			out = append(out, c)
+		}
+	}
+	for _, d := range docs {
+		switch d.Kind {
+		case "ReportArtefact":
+			add(newContext(d, spec.ModeBuild, "report"))
+		case "ScreenshotArtefact":
+			add(newContext(d, spec.ModeBuild, "screenshot"))
+		case "LiveReportArtefact":
+			var live struct {
+				Spec config.LiveReportArtefactSpec `json:"spec"`
+			}
+			if json.Unmarshal(d.Raw, &live) != nil {
+				continue
+			}
+			for _, route := range sortedKeys(live.Spec.Routes) {
+				if r, ok := reports[live.Spec.Routes[route].Artifact]; ok {
+					add(newContext(r, spec.ModeServe, "report"))
+				}
+			}
+		}
+	}
+	return out
 }
 
 // RunSet checks one consistent set of documents, one of Variants.
