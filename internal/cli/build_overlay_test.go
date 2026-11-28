@@ -600,3 +600,45 @@ func TestBuildOverlay_CopyProjectFileFollowsLinks(t *testing.T) {
 		t.Errorf("copy = %q, %v", data, err)
 	}
 }
+
+// The build writes caches below .bino. With --overlay they land in the tree:
+// the project's .bino, registry and old cache included, stays byte-identical,
+// and installed registry packages are still read.
+func TestBuildOverlay_BinoCacheStaysInTree(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	writeFiles(t, project, map[string]string{
+		".bino/registry/@acme/vendor/kit.yaml": "apiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: kit_values\nspec:\n  query: SELECT 1 AS ac1\n",
+		".bino/cache/datasets/old.json":        "{\"old\":true}\n",
+		".bino/cache/datasources/keep.csv":     "a\n1\n",
+	})
+	overlayDir := t.TempDir()
+	writeFiles(t, overlayDir, overlayDraft)
+	before := treeSnapshot(t, project)
+
+	overlay, err := newBuildOverlay(project, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifests := loadOverlayManifests(t, overlay.Root)
+	found := false
+	for _, doc := range manifests.Documents {
+		found = found || doc.Name == "kit_values"
+	}
+	if !found {
+		t.Error("the registry package below .bino/registry is not loaded")
+	}
+	builder := &pipeline.Builder{Workdir: overlay.Root, Logger: logx.Nop()}
+	if _, err := builder.RenderArtefactHTML(context.Background(), manifests.Documents, manifests.Selected[0]); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(filepath.Join(overlay.Root, ".bino", "cache")); err != nil || !info.IsDir() {
+		t.Errorf("the cache is not a directory of the tree: %v, %v", info, err)
+	}
+	if err := overlay.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if after := treeSnapshot(t, project); !reflect.DeepEqual(before, after) {
+		t.Errorf("the project changed:\nbefore %v\nafter  %v", before, after)
+	}
+}

@@ -45,12 +45,17 @@ type buildOverlay struct {
 }
 
 // linkedDirs are linked as a whole instead of walked, unless the overlay has
-// a file inside: the manifest loader skips them (it still reads
-// .bino/registry through the link), and they can hold many files.
+// a file inside: the manifest loader skips them, and they can hold many
+// files. Not below .bino: the loader reads .bino/registry with no name skips,
+// and the build writes caches below .bino, which must land in the tree.
 var linkedDirs = map[string]struct{}{
-	".git": {}, ".hg": {}, ".svn": {}, ".bino": {}, "node_modules": {}, "vendor": {}, "venv": {}, ".venv": {},
+	".git": {}, ".hg": {}, ".svn": {}, "node_modules": {}, "vendor": {}, "venv": {}, ".venv": {},
 	"dist": {}, "build": {}, "target": {},
 }
+
+// binoCache is left out of the tree: the build writes its caches there, and
+// they must go to the tree, not through a link into the project.
+const binoCache = ".bino/cache"
 
 // Limits for an overlay: it can come from an untrusted agent. Entries count
 // files and directories.
@@ -208,6 +213,13 @@ func (o *buildOverlay) Sync() error {
 			return nil
 		}
 		slashRel := filepath.ToSlash(rel)
+		if slashRel == binoCache {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		inBino := slashRel == ".bino" || strings.HasPrefix(slashRel, ".bino/")
 		existing, statErr := o.tree.Lstat(rel)
 		if d.IsDir() {
 			if statErr == nil {
@@ -216,7 +228,7 @@ func (o *buildOverlay) Sync() error {
 				}
 				return nil
 			}
-			if _, link := linkedDirs[d.Name()]; link && !o.hasFilesIn(slashRel) {
+			if _, link := linkedDirs[d.Name()]; link && !inBino && !o.hasFilesIn(slashRel) {
 				if err := o.link(path, rel, true); err != nil {
 					return err
 				}
@@ -234,6 +246,9 @@ func (o *buildOverlay) Sync() error {
 			// one of the two would replace the other on a case-insensitive file system
 			return fmt.Errorf("%s differs only in case from the overlay file %s", slashRel, spelled)
 		}
+		if slashRel == ".bino" && d.Type()&fs.ModeSymlink != 0 {
+			return o.linkBinoChildren(path)
+		}
 		if d.Type()&fs.ModeSymlink != 0 && o.hasFilesIn(slashRel) {
 			// an overlay file below a link would be written through it into the link's target
 			return fmt.Errorf("%s is a link in the project, the overlay cannot have files below it", slashRel)
@@ -242,6 +257,28 @@ func (o *buildOverlay) Sync() error {
 	})
 	if err != nil {
 		return fmt.Errorf("--overlay: mirror project: %w", err)
+	}
+	return nil
+}
+
+// linkBinoChildren mirrors a project .bino that is itself a link: a real
+// directory with its entries linked, but no cache, as for a plain .bino.
+func (o *buildOverlay) linkBinoChildren(path string) error {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	if err := o.tree.Mkdir(".bino", 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	for _, e := range entries {
+		rel := filepath.Join(".bino", e.Name())
+		if filepath.ToSlash(rel) == binoCache {
+			continue
+		}
+		if err := o.link(filepath.Join(path, e.Name()), rel, e.IsDir()); err != nil {
+			return err
+		}
 	}
 	return nil
 }
