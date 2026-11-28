@@ -15,7 +15,7 @@ var readTools = []string{
 	"list_kinds", "describe_kind", "describe_project", "describe_document", "validate_project",
 	"get_columns", "get_rows", "graph_deps", "validate_draft", "introspect_source",
 	"outline_kind", "scaffold_kind", "registry_packages", "registry_search", "registry_info",
-	"registry_auth_status", "registry_publish_check",
+	"registry_auth_status", "registry_publish_check", "query_data", "profile_data",
 }
 
 func fullDeps(t *testing.T) Deps {
@@ -70,7 +70,7 @@ func TestReadOnlyServesOnlyReadTools(t *testing.T) {
 			t.Errorf("read-only server lists %s", tool.Name)
 		}
 	}
-	for _, want := range []string{"list_kinds", "describe_kind", "outline_kind", "describe_project", "describe_document", "validate_project", "validate_draft", "get_columns", "get_rows", "graph_deps"} {
+	for _, want := range []string{"list_kinds", "describe_kind", "outline_kind", "describe_project", "describe_document", "validate_project", "validate_draft", "get_columns", "get_rows", "graph_deps", "query_data", "profile_data"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("read-only server misses %s", want)
 		}

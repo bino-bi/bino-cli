@@ -92,6 +92,10 @@ and returns its URL; with name, embedding_url shows that one document without th
 preview UI. If you can drive a browser, open the URL there to look at the result;
 otherwise give it to the human.
 
+Data: query_data(sql, limit?) runs one SELECT over the DataSources and DataSets by
+name (no table functions, no file access); profile_data(name) gives row count, column
+statistics, top values and the gaps of date columns.
+
 Typical authoring loop: outline_kind(kind) -> scaffold_kind(kind) -> get_columns to
 learn a dataset's columns -> draft YAML -> validate_draft -> create_manifest /
 write_manifest -> build. bino's schema and validation are your guardrails.
@@ -127,6 +131,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 	h.registerResources(srv)
 	h.registerSkills(srv)
 	h.registerReadTools(srv)
+	h.registerDataTools(srv)
 	h.registerSchemaTools(srv)
 	h.registerAuthoringTools(srv)
 	h.registerPackagesTools(srv)
