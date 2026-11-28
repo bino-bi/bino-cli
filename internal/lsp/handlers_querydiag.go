@@ -3,9 +3,7 @@ package lsp
 import (
 	"context"
 	"os"
-	"regexp"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -234,7 +232,7 @@ func (s *Server) runQueryCheck(path string, seq uint64) {
 		if err == nil {
 			continue
 		}
-		msg, n, ok := parseDuckDBError(err.Error())
+		msg, n, ok := reportspec.ParseDuckDBError(err.Error())
 		if !ok {
 			continue
 		}
@@ -288,36 +286,12 @@ func sqlQueryBlock(d reportspec.OutlineDoc) (reportspec.OutlineBlock, bool) {
 	return out, found
 }
 
-var (
-	duckdbErrorClass = regexp.MustCompile(`[A-Z][A-Za-z]*(?: [A-Z][A-Za-z]*)* Error: `)
-	duckdbErrorLine  = regexp.MustCompile(`\bLINE (\d+):`)
-)
-
-// parseDuckDBError extracts a DuckDB error ("Binder Error: ...") from a
-// backend error and the query line its "LINE n:" excerpt points at (0 when
-// absent). Errors that are not DuckDB's (timeouts, unknown names) yield ok=false.
-func parseDuckDBError(text string) (msg string, line int, ok bool) {
-	loc := duckdbErrorClass.FindStringIndex(text)
-	if loc == nil {
-		return "", 0, false
-	}
-	msg = text[loc[0]:]
-	if m := duckdbErrorLine.FindStringSubmatchIndex(msg); m != nil {
-		line, _ = strconv.Atoi(msg[m[2]:m[3]]) //nolint:errcheck // the pattern only matches digits
-		msg = msg[:m[0]]
-	}
-	return strings.TrimSpace(msg), line, true
-}
-
 // queryErrorRange maps query line n (1-based, 0 = unknown) to the source line
 // of a query block. Only a literal block scalar keeps the query's line breaks;
 // folded and single-line queries mark their first line.
 func queryErrorRange(doc *Document, b reportspec.OutlineBlock, n int) reportspec.Range {
 	c := b.Content
-	line := c.StartLine
-	if n > 1 && c.StartLine+n-1 <= c.EndLine && !b.Folded {
-		line = c.StartLine + n - 1
-	}
+	line := reportspec.QueryErrorLine(b, n)
 	if line == c.StartLine && c.StartLine == c.EndLine {
 		return c
 	}
