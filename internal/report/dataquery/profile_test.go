@@ -148,3 +148,67 @@ func TestProfileExactNullCount(t *testing.T) {
 		}
 	}
 }
+
+func profileCSV(t *testing.T, target, csv, spec string) Profile {
+	t.Helper()
+	root, _, _ := writeProject(t)
+	if err := os.WriteFile(filepath.Join(root, "data", "check.csv"), []byte(csv), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := "apiVersion: bino.bi/v1alpha1\nkind: DataSource\nmetadata:\n  name: orders\nspec:\n  type: csv\n  path: ./data/check.csv\n" + spec +
+		"---\napiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: orders_set\nspec:\n  query: SELECT * FROM orders\n"
+	if err := os.WriteFile(filepath.Join(root, "check.yaml"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := config.LoadDirWithOptions(context.Background(), root, config.LoadOptions{Lenient: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs, amb := config.ResolveForIntrospection(docs)
+	p, err := ProfileData(context.Background(), docs, amb, newCatalog(docs).entries[target].doc, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func hasWarning(p Profile, sub string) bool {
+	return slices.ContainsFunc(p.Warnings, func(w string) bool { return strings.Contains(w, sub) })
+}
+
+func TestProfileCSVWithoutHeader(t *testing.T) {
+	p := profileCSV(t, "orders", "North,2024-01-01,10\nSouth,2024-02-01,20\nNorth,2024-03-01,30\n", "")
+	if !hasWarning(p, "no header row") {
+		t.Fatalf("warnings = %v", p.Warnings)
+	}
+	if p.CSV == nil || p.CSV.HasHeader || p.CSV.Delimiter != "," {
+		t.Fatalf("csv = %+v", p.CSV)
+	}
+}
+
+func TestProfileCSVWrongDelimiter(t *testing.T) {
+	p := profileCSV(t, "orders", "region;date;ac1\nNorth;2024-01-01;10\nSouth;2024-02-01;20\n", "  delimiter: \",\"\n")
+	if !hasWarning(p, `delimited by ";"`) {
+		t.Fatalf("warnings = %v", p.Warnings)
+	}
+	if p.CSV == nil || p.CSV.Delimiter != ";" {
+		t.Fatalf("csv = %+v", p.CSV)
+	}
+}
+
+func TestProfileCSVClean(t *testing.T) {
+	p := profileCSV(t, "orders", "region,date,ac1\nNorth,2024-01-01,10\nSouth,2024-02-01,20\n", "")
+	if len(p.Warnings) != 0 {
+		t.Fatalf("warnings = %v", p.Warnings)
+	}
+	if p.CSV == nil || !p.CSV.HasHeader || p.CSV.Delimiter != "," || p.CSV.DateFormat == "" {
+		t.Fatalf("csv = %+v", p.CSV)
+	}
+}
+
+func TestProfileDataSetOnCSVWithoutHeader(t *testing.T) {
+	p := profileCSV(t, "orders_set", "North,2024-01-01,10\nSouth,2024-02-01,20\n", "")
+	if !hasWarning(p, `DataSource "orders": the file has no header row`) || p.CSV == nil {
+		t.Fatalf("warnings = %v, csv = %+v", p.Warnings, p.CSV)
+	}
+}

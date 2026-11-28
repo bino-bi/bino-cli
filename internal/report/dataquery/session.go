@@ -114,6 +114,7 @@ type session struct {
 	sess    *duckdb.Session
 	conn    *sql.Conn
 	access  datasource.Access // what the views read, set by prepare
+	sources []config.Document // the DataSources the views read, set by prepare
 	release func()
 }
 
@@ -239,6 +240,7 @@ func (s *session) prepare(ctx context.Context, docs []config.Document, ambiguous
 		out[key] = strings.TrimRight(strings.TrimSpace(c.Query), "; \t\r\n")
 	}
 	s.access = datasource.AccessFor(sources)
+	s.sources = sources
 	return out, nil
 }
 

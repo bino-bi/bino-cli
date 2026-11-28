@@ -161,7 +161,7 @@ Code specific machinery (subagents, questions to the human) and mean nothing to 
 | `get_columns(name)`                              | Column names of a DataSet or DataSource (prefix `$` to force a DataSource).                                                                                                                   |
 | `get_rows(name, limit?)`                         | A sample of rows from a DataSet or DataSource.                                                                                                                                                |
 | `query_data(sql, limit?)`                        | Run one SELECT over the DataSources and DataSets by name, for example an aggregation, without saving a DataSet. Returns columns with DuckDB types, rows and `truncated`. `limit` defaults to 100, at most 1000. See [Querying data](#querying-data). |
-| `profile_data(name, sample_rows?)`               | What the data looks like: row count; per column type, min, max, approximate distinct count and null count; the top 5 values of columns with few distinct values; for date columns the range, the step (`day`, `weekday`, `week`, `month`, `quarter`, `year`) and the missing periods; `warnings`. Above `sample_rows` rows (default 100000) the column statistics use a random sample. |
+| `profile_data(name, sample_rows?)`               | What the data looks like: row count; per column type, min, max, approximate distinct count and null count; the top 5 values of columns with few distinct values; for date columns the range, the step (`day`, `weekday`, `week`, `month`, `quarter`, `year`) and the missing periods; `warnings`; for a local CSV file, `csv` (see below). Above `sample_rows` rows (default 100000) the column statistics use a random sample. |
 | `graph_deps(kind, name, direction?, max_depth?)` | Dependencies (`out`), dependents (`in`), or `both`. Component nodes carry a `columns` list (`dataset`, `column`, `role`, `field`) of the dataset columns they read.                           |
 
 #### Querying data
@@ -206,6 +206,12 @@ cgroup limit), so that one query cannot exhaust the machine.
 
 An error returns DuckDB's own message, for example `Binder Error: Referenced column "x" not found`.
 `profile_data` runs on such a session too.
+
+When the DataSource is a local CSV file, or a DataSet reads only one such DataSource,
+`profile_data` also sniffs the file. `csv` holds the `delimiter`, `hasHeader` and `dateFormat`
+DuckDB detects, and `warnings` adds what `bino lint --with-data` reports for the file: a header
+row that looks missing (columns named `column0`, `column1`, ...) or is read as data, a delimiter
+other than the declared one, and dates the declared `dateFormat` does not parse.
 
 #### Duplicate names
 
