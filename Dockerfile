@@ -71,14 +71,11 @@ COPY --from=builder /out/bino /usr/local/bin/bino
 # Both runs also set state.SetupCompleted, which suppresses the "Setup required"
 # banner bino prints on every command.
 #
-# ENGINE_VERSION is pinned rather than resolved: the engine's GitHub "latest"
-# release skips pre-releases and still points at a 0.x version, which no current
-# CLI accepts. Keep this inside engine.SupportedEngineRanges (internal/engine/compat.go),
-# and keep it in step with ENGINE_VERSION in .github/workflows/release.yml.
-# TestDockerEngineVersionPin (internal/engine/pin_test.go) enforces both rules.
-# Note the engine line was renamed alpha -> next after alpha.18; per semver
-# pre-release ordering next.N sorts above alpha.19, so the next.* line is what
-# satisfies the current floor.
+# ENGINE_VERSION is pinned rather than resolved, so an image always ships the
+# engine it was tested with. Keep this inside engine.SupportedEngineRanges
+# (internal/engine/compat.go), and keep it in step with ENGINE_VERSION in
+# .github/workflows/release.yml. TestDockerEngineVersionPin
+# (internal/engine/pin_test.go) enforces both rules.
 #
 # Loading webdavfs prints one "[WebDAV Extension] ..." line from C++ that --quiet
 # cannot suppress; it is expected in the build log and is not an error.
@@ -88,7 +85,7 @@ COPY --from=builder /out/bino /usr/local/bin/bino
 # The chgrp/chmod share this layer on purpose: group 0 gets the owner's rights so
 # an arbitrary UID can still read the caches, and a separate RUN would duplicate
 # every cached file into a second layer (~200 MB).
-ARG ENGINE_VERSION=v1.0.0-next.88
+ARG ENGINE_VERSION=v0.50.0
 LABEL bi.bino.engine-version="${ENGINE_VERSION}"
 RUN bino setup --template-engine --quiet --engine-version "$ENGINE_VERSION" \
   && bino setup --duckdb-extensions --quiet \

@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/mod/semver"
-
 	"bino.bi/bino/internal/archive"
 	"bino.bi/bino/internal/pathutil"
 )
@@ -123,9 +121,9 @@ func (m *Manager) ListLocalVersions() ([]VersionInfo, error) {
 		})
 	}
 
-	// Sort by semver, newest first
+	// Newest first, in release order: v0.50.0 is newer than v1.0.0-next.88.
 	sort.Slice(versions, func(i, j int) bool {
-		return semver.Compare(versions[i].Version, versions[j].Version) > 0
+		return CompareVersions(versions[i].Version, versions[j].Version) > 0
 	})
 
 	return versions, nil
