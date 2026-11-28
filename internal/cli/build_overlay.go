@@ -66,14 +66,17 @@ const (
 
 // newBuildOverlay builds the temporary tree. The caller must Close it.
 func newBuildOverlay(projectRoot, dir string) (*buildOverlay, error) {
+	// absDir keeps the form the user gave, for messages; realDir is resolved
+	// for the checks and for reading.
 	absDir, err := filepath.Abs(dir)
+	var realDir string
 	if err == nil {
-		absDir, err = filepath.EvalSymlinks(absDir)
+		realDir, err = filepath.EvalSymlinks(absDir)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
 	}
-	info, err := os.Stat(absDir)
+	info, err := os.Stat(realDir)
 	if err != nil {
 		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
 	}
@@ -84,13 +87,13 @@ func newBuildOverlay(projectRoot, dir string) (*buildOverlay, error) {
 	if r, err := filepath.EvalSymlinks(projectRoot); err == nil {
 		resolvedRoot = r
 	}
-	if sameOrInside(resolvedRoot, absDir) {
+	if sameOrInside(resolvedRoot, realDir) {
 		return nil, fmt.Errorf("--overlay %s: must not contain the project", dir)
 	}
 
 	// The overlay is read through an os.Root, so a directory swapped for a
 	// link after the walk cannot lead outside it.
-	src, err := os.OpenRoot(absDir)
+	src, err := os.OpenRoot(realDir)
 	if err != nil {
 		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
 	}
@@ -111,7 +114,7 @@ func newBuildOverlay(projectRoot, dir string) (*buildOverlay, error) {
 	for rel := range files {
 		o.lower[strings.ToLower(rel)] = rel
 	}
-	if rel, err := filepath.Rel(resolvedRoot, absDir); err == nil && sameOrInside(absDir, resolvedRoot) {
+	if rel, err := filepath.Rel(resolvedRoot, realDir); err == nil && sameOrInside(realDir, resolvedRoot) {
 		o.inProject = filepath.Join(projectRoot, rel)
 	}
 	if o.tree, err = os.OpenRoot(root); err == nil {
@@ -254,15 +257,17 @@ func (o *buildOverlay) syncDir(base, prefix string) error {
 			}
 			return o.syncDir(target, ".bino")
 		}
-		if statErr == nil {
-			return nil
-		}
 		if _, replaced := o.files[slashRel]; replaced {
 			return nil
 		}
+		// before the existence check: on a case-insensitive file system the
+		// overlay's copy is found under the project file's name
 		if spelled, clash := o.lower[strings.ToLower(slashRel)]; clash {
 			// one of the two would replace the other on a case-insensitive file system
 			return fmt.Errorf("%s differs only in case from the overlay file %s", slashRel, spelled)
+		}
+		if statErr == nil {
+			return nil
 		}
 		if d.Type()&fs.ModeSymlink != 0 && o.hasFilesIn(slashRel) {
 			// an overlay file below a link would be written through it into the link's target

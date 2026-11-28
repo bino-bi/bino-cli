@@ -684,3 +684,25 @@ func TestBuildOverlay_LinkedBinoLoadsRegistry(t *testing.T) {
 		t.Errorf("the linked .bino changed:\nbefore %v\nafter  %v", before, after)
 	}
 }
+
+// Paths in messages keep the form the user gave, also when the overlay is
+// reached through a link (as /var is on macOS).
+func TestBuildOverlay_KeepsUserPathForm(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	target := t.TempDir()
+	writeFiles(t, target, overlayDraft)
+	viaLink := filepath.Join(t.TempDir(), "drafts")
+	if err := os.Symlink(target, viaLink); err != nil {
+		t.Skipf("no symlinks: %v", err)
+	}
+	overlay, err := newBuildOverlay(project, viaLink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer overlay.Close() //nolint:errcheck // test cleanup
+	page := filepath.Join(project, "pages", "sales.yaml")
+	if src, ok := overlay.FromOverlay(page); !ok || src != filepath.Join(viaLink, "pages", "sales.yaml") {
+		t.Errorf("FromOverlay = %s, %v; want the path through %s", src, ok, viaLink)
+	}
+}
