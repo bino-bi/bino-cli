@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -414,19 +415,84 @@ func TestBuildOverlay_CopyNeverWritesThroughLinks(t *testing.T) {
 	if err := os.Symlink(filepath.Join(project, "pages", "sales.yaml"), filepath.Join(root, "pages", "sales.yaml")); err != nil {
 		t.Fatal(err)
 	}
-	o := &buildOverlay{ProjectRoot: project, Dir: overlayDir, Root: root, realRoot: root}
+	o, src := treeOverlay(t, project, overlayDir, root)
+	budget := int64(maxOverlayBytes)
 
-	if err := o.copyOverlayFile("linked/x.yaml"); err == nil {
+	if err := o.copyOverlayFile(src, "linked/x.yaml", &budget); err == nil {
 		t.Error("a file below a linked directory must be refused")
+	}
+	if err := o.copyOverlayFile(src, "linked/deeper/x.yaml", &budget); err == nil {
+		t.Error("a directory below a linked directory must not be created")
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Errorf("written through the link: %v", entries)
 	}
-	if err := o.copyOverlayFile("pages/sales.yaml"); err == nil {
+	if err := o.copyOverlayFile(src, "pages/sales.yaml", &budget); err == nil {
 		t.Error("an existing linked file must be refused")
 	}
 	if data, _ := os.ReadFile(filepath.Join(project, "pages", "sales.yaml")); string(data) != "original\n" {
 		t.Errorf("the project file was overwritten: %q", data)
+	}
+}
+
+// treeOverlay is a buildOverlay over an existing tree, for tests of single steps.
+func treeOverlay(t *testing.T, project, overlayDir, root string) (*buildOverlay, *os.Root) {
+	t.Helper()
+	tree, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.OpenRoot(overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { tree.Close(); src.Close() })
+	return &buildOverlay{ProjectRoot: project, Dir: overlayDir, Root: root, tree: tree, files: map[string]struct{}{}, lower: map[string]string{}}, src
+}
+
+// The byte budget holds while copying, also when a file grew after the walk.
+func TestBuildOverlay_CopyBudget(t *testing.T) {
+	overlayDir := t.TempDir()
+	writeFiles(t, overlayDir, map[string]string{"data/a.csv": "0123456789"})
+	o, src := treeOverlay(t, t.TempDir(), overlayDir, t.TempDir())
+	budget := int64(4)
+	if err := o.copyOverlayFile(src, "data/a.csv", &budget); !errors.Is(err, errOverlayTooLarge) {
+		t.Errorf("err = %v, want the size limit", err)
+	}
+}
+
+// Directories count against the entry limit, not only files.
+func TestBuildOverlay_EntryLimitCountsDirectories(t *testing.T) {
+	overlayDir := t.TempDir()
+	for i := 0; i <= maxOverlayEntries; i++ {
+		if err := os.Mkdir(filepath.Join(overlayDir, fmt.Sprintf("d%d", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	if _, err := newBuildOverlay(project, overlayDir); err == nil || !strings.Contains(err.Error(), "files and directories") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// A project file whose name differs only in case from an overlay file is
+// refused, also when a hook writes it later: on a case-insensitive file
+// system the two would be one file.
+func TestBuildOverlay_SyncRefusesCaseClash(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	overlayDir := t.TempDir()
+	writeFiles(t, overlayDir, overlayDraft)
+	overlay, err := newBuildOverlay(project, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer overlay.Close() //nolint:errcheck // test cleanup
+
+	writeFiles(t, project, map[string]string{"Datasets/Draft.yaml": "x\n"})
+	if err := overlay.Sync(); err == nil || !strings.Contains(err.Error(), "differs only in case") {
+		t.Errorf("err = %v", err)
 	}
 }
 
@@ -465,5 +531,72 @@ func TestBuildStatelessRefusesDraftFlags(t *testing.T) {
 		if err := root.ExecuteContext(context.Background()); err == nil || !strings.Contains(err.Error(), "cannot be combined with --stateless") {
 			t.Errorf("%v: err = %v", flag, err)
 		}
+	}
+}
+
+func TestCheckOutputPath(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "dist")
+	for _, name := range []string{"report.pdf", "sub/report.pdf"} {
+		if err := checkOutputPath(true, out, name); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for _, name := range []string{"../pages/sales.yaml", "/etc/passwd", "a/../../x.pdf", "."} {
+		if err := checkOutputPath(true, out, name); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+	if err := checkOutputPath(false, out, "../x.pdf"); err != nil {
+		t.Errorf("without --overlay nothing is refused: %v", err)
+	}
+}
+
+// An overlay's ReportArtefact cannot write its PDF over a project file.
+func TestBuildOverlay_ArtefactFilenameStaysInOutDir(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	overlayDir := t.TempDir()
+	writeFiles(t, overlayDir, map[string]string{"reports/report.yaml": strings.Replace(overlayProject["reports/report.yaml"],
+		"filename: report.pdf", "filename: ../pages/sales.yaml", 1)})
+	before := treeSnapshot(t, project)
+	overlay, err := newBuildOverlay(project, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer overlay.Close() //nolint:errcheck // test cleanup
+	manifests := loadOverlayManifests(t, overlay.Root)
+
+	_, err = buildArtefact(context.Background(), buildArtefactConfig{
+		Builder:       &pipeline.Builder{Workdir: overlay.Root, Logger: logx.Nop()},
+		Logger:        logx.Nop(),
+		Docs:          manifests.Documents,
+		Artifact:      manifests.Selected[0],
+		OutputDir:     filepath.Join(project, "dist"),
+		ConfineOutput: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "must stay inside the output directory") {
+		t.Errorf("err = %v", err)
+	}
+	if after := treeSnapshot(t, project); !reflect.DeepEqual(before, after) {
+		t.Error("the project changed")
+	}
+}
+
+// The copy that stands in for a link (Windows without link rights) follows a
+// project link to its file, as the build does without --overlay.
+func TestBuildOverlay_CopyProjectFileFollowsLinks(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, map[string]string{"data/real.csv": "a\n1\n"})
+	link := filepath.Join(project, "data", "alias.csv")
+	if err := os.Symlink(filepath.Join(project, "data", "real.csv"), link); err != nil {
+		t.Skipf("no symlinks: %v", err)
+	}
+	root := t.TempDir()
+	o, _ := treeOverlay(t, project, t.TempDir(), root)
+	if err := o.copyProjectFile(link, "alias.csv"); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "alias.csv")); err != nil || string(data) != "a\n1\n" {
+		t.Errorf("copy = %q, %v", data, err)
 	}
 }

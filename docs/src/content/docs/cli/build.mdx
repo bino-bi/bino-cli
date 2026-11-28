@@ -109,6 +109,10 @@ holds for every kind of file: manifests, SQL files, CSV files, images.
 bino build --overlay /tmp/draft --out-dir /tmp/draft-out
 ```
 
+- `--overlay` gives no isolation. A manifest in the overlay can do everything a project manifest
+  can: read any file the build can read, through a DataSource path or the SQL of a DataSet, and
+  run any query. The only promise is that bino itself writes nothing into the project. A host that
+  builds drafts it does not trust must sandbox the build, as for any project it does not trust.
 - Nothing is written to the project, so the project can be read-only. Pass an `--out-dir` outside
   the project in that case.
 - `<dir>` can be anywhere, also outside the project.
@@ -119,7 +123,10 @@ bino build --overlay /tmp/draft --out-dir /tmp/draft-out
   so does an overlay file below a directory that is a link in the project, or a file whose name
   differs only in case from a project file.
 - The overlay may hold only regular files: a link, a device or a pipe fails the build. It may hold
-  at most 2000 files and 8 MiB.
+  at most 2000 files and directories, and 8 MiB. A hard link counts as a regular file, so it is
+  read like one.
+- An artefact `filename` (and a ScreenshotArtefact `filenamePrefix`) must stay inside the output
+  directory: an absolute path or one with `..` that leaves it fails the build.
 - Files that a `pre-build` or `pre-datasource` [hook](/concepts/hooks/) writes into the project
   are seen, as without `--overlay`.
 - Lint, the layout state and all other flags work as usual.
@@ -219,8 +226,9 @@ result to the values file:
 - A scenario slot is expected to be the sum of that column over the rows with the same data point.
   A `date` matches the period of the component's date interval (`dateInterval` of a chart,
   `interval` of a table), so a row dated `2025-01-31` belongs to the point `2025-01-01` of a
-  monthly chart. When that interval is not known (`auto`, or `setname`), the value is unmatched. A `total` row sums all rows, a `subtotal` row the rows
-  of its `rowGroup`.
+  monthly chart. When that interval is not known (blank or `auto` on a chart, `setname` or
+  `auto` on a table), the value is unmatched. A `total` row sums all rows, a `subtotal` row the
+  rows of its `rowGroup`.
 - A variance is computed from the two sums like the engine does it: `a - b` for `d...`,
   `(a - b) / |b|` for `dr...`. When `b` is 0 the engine shows `n/a`, and so the check expects no value.
 - The raw `value` is compared, with a small tolerance for float rounding. `text` is only for

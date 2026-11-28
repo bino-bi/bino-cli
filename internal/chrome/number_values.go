@@ -75,13 +75,6 @@ const numberValuesExpression = `(async () => {
       const meta = state.metadata || {};
       if (!entry.measureScale && meta.measureScale) entry.measureScale = meta.measureScale;
       if (!entry.measureUnit && meta.measureUnit) entry.measureUnit = meta.measureUnit;
-      if (!entry.dateInterval && el.localName === 'bn-chart-time') {
-        // a blank date-interval is detected by the engine, which says so in a warning
-        for (const d of state.diagnostics || []) {
-          const m = /auto-detected: (\w+)/.exec(d.message || '');
-          if (m) entry.dateInterval = m[1];
-        }
-      }
       if (state.error) entry.error = state.error;
       for (const item of state.elements || []) {
         const keep = { kind: item.kind };

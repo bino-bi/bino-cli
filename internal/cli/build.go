@@ -430,6 +430,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 				CaptureLayoutState: layoutState,
 				NumberValues:       numberValues || verifyNumbers,
 				SyncOverlay:        overlay.Sync,
+				ConfineOutput:      overlay != nil,
 				VerifyNumbers:      verifyNumbers,
 				Builder:            builder,
 				Logger:             logger,
@@ -643,8 +644,9 @@ type buildArtefactConfig struct {
 	// VerifyNumbers also checks it against the DataSet rows.
 	NumberValues  bool
 	VerifyNumbers bool
-	// SyncOverlay works as in buildExecutionConfig.
-	SyncOverlay func() error
+	// SyncOverlay and ConfineOutput work as in buildExecutionConfig.
+	SyncOverlay   func() error
+	ConfineOutput bool
 }
 
 // syncOverlay adds files the pre-datasource hook wrote, with --overlay.
@@ -729,6 +731,9 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		pdfFilename = artefactName + ".pdf"
 	}
 	pdfPath, err := pathutil.ResolveFilePath(cfg.OutputDir, pdfFilename)
+	if err == nil {
+		err = checkOutputPath(cfg.ConfineOutput, cfg.OutputDir, pdfFilename)
+	}
 	if err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to resolve PDF path for %s", artefactName))
@@ -879,6 +884,8 @@ type buildDocumentArtefactConfig struct {
 	Spinner         *Spinner
 	// AllowIncompletePlugins works as in buildArtefactConfig.
 	AllowIncompletePlugins bool
+	// ConfineOutput works as in buildExecutionConfig.
+	ConfineOutput bool
 }
 
 // buildDocumentArtefact renders a DocumentArtefact (markdown to PDF) using Chrome.
@@ -904,6 +911,12 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		filename = artefactName + ".pdf"
 	}
 	pdfPath := filepath.Join(cfg.OutputDir, filename)
+	if err := checkOutputPath(cfg.ConfineOutput, cfg.OutputDir, filename); err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to resolve PDF path for %s", artefactName))
+		}
+		return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
+	}
 
 	// Build shared PDF render options (used for both passes)
 	basePDFOpts := pipeline.PDFRenderOptions{
@@ -1167,6 +1180,8 @@ type buildScreenshotArtefactConfig struct {
 	ChromePath string
 	Debug      bool
 	Spinner    *Spinner
+	// ConfineOutput works as in buildExecutionConfig.
+	ConfineOutput bool
 }
 
 // buildScreenshotArtefact captures screenshots of specific components.
@@ -1189,6 +1204,9 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		spinner.Start(fmt.Sprintf("Rendering %s", artefactName))
 	}
 	logger.Debugf("Rendering HTML for screenshot artefact %s", artefactName)
+	if err := checkOutputPath(cfg.ConfineOutput, cfg.OutputDir, cfg.Artifact.Spec.FilenamePrefix+"-x.png"); err != nil {
+		return nil, fmt.Errorf("screenshot artefact %s: filenamePrefix: %w", artefactName, err)
+	}
 
 	renderResult, err := cfg.Builder.RenderScreenshotHTML(ctx, cfg.Docs, cfg.Artifact)
 	if err != nil {
@@ -1283,6 +1301,9 @@ type buildExecutionConfig struct {
 	HostService        *plugin.BinoHostServer
 	// SyncOverlay, with --overlay, adds files a hook wrote to the project.
 	SyncOverlay func() error
+	// ConfineOutput, with --overlay, refuses an artefact file name that
+	// leaves the output directory.
+	ConfineOutput bool
 }
 
 // clearPluginDatasets drops the previous artefact's datasets so plugin calls
@@ -1330,6 +1351,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 			NumberValues:       cfg.NumberValues,
 			VerifyNumbers:      cfg.VerifyNumbers,
 			SyncOverlay:        cfg.SyncOverlay,
+			ConfineOutput:      cfg.ConfineOutput,
 			Builder:            cfg.Builder,
 			Logger:             cfg.Logger.Channel(artifact.Document.Name),
 			Docs:               manifests.Documents,
@@ -1374,6 +1396,8 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 				ChromePath: cfg.ChromePath,
 				Debug:      cfg.Debug,
 				Spinner:    NewSpinner(spinnerCfg),
+
+				ConfineOutput: cfg.ConfineOutput,
 			})
 			if err != nil {
 				return nil, RuntimeError(config.WithSource(ssArtefact.Document, err))
@@ -1401,6 +1425,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 				ChromePath:      cfg.ChromePath,
 				Debug:           cfg.Debug,
 				Spinner:         NewSpinner(spinnerCfg),
+				ConfineOutput:   cfg.ConfineOutput,
 			})
 			if err != nil {
 				return nil, RuntimeError(config.WithSource(docArtefact.Document, err))

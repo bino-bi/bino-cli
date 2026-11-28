@@ -33,11 +33,15 @@ type buildOverlay struct {
 	Root string
 	// files are the overlay files, as slash-separated paths relative to Dir.
 	files map[string]struct{}
-	// realRoot is Root with links resolved, to check writes stay inside it.
-	realRoot string
+	// lower maps a lower-case overlay path to its spelling, to find names
+	// that differ only in case.
+	lower map[string]string
 	// inProject is Dir as a path below ProjectRoot when the overlay lives in
 	// the project, so the mirror leaves it out. Empty otherwise.
 	inProject string
+	// tree is Root opened as an os.Root: every write goes through it, so
+	// none can follow a link out of the temporary tree.
+	tree *os.Root
 }
 
 // linkedDirs are linked as a whole instead of walked, unless the overlay has
@@ -48,6 +52,13 @@ var linkedDirs = map[string]struct{}{
 	"dist": {}, "build": {}, "target": {},
 }
 
+// Limits for an overlay: it can come from an untrusted agent. Entries count
+// files and directories.
+const (
+	maxOverlayEntries = 2000
+	maxOverlayBytes   = 8 << 20
+)
+
 // newBuildOverlay builds the temporary tree. The caller must Close it.
 func newBuildOverlay(projectRoot, dir string) (*buildOverlay, error) {
 	absDir, err := filepath.Abs(dir)
@@ -57,7 +68,6 @@ func newBuildOverlay(projectRoot, dir string) (*buildOverlay, error) {
 	if err != nil {
 		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
 	}
-
 	info, err := os.Stat(absDir)
 	if err != nil {
 		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
@@ -73,28 +83,36 @@ func newBuildOverlay(projectRoot, dir string) (*buildOverlay, error) {
 		return nil, fmt.Errorf("--overlay %s: must not contain the project", dir)
 	}
 
-	files, err := overlayFiles(absDir)
+	// The overlay is read through an os.Root, so a directory swapped for a
+	// link after the walk cannot lead outside it.
+	src, err := os.OpenRoot(absDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
 	}
-	for rel := range files {
-		if rel == "bino.toml" {
-			return nil, fmt.Errorf("--overlay %s: bino.toml cannot be replaced, it is always read from the project", dir)
-		}
+	defer src.Close() //nolint:errcheck // read-only
+	files, err := overlayFiles(src)
+	if err != nil {
+		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
+	}
+	if _, ok := files["bino.toml"]; ok {
+		return nil, fmt.Errorf("--overlay %s: bino.toml cannot be replaced, it is always read from the project", dir)
 	}
 
 	root, err := os.MkdirTemp("", "bino-overlay-*")
 	if err != nil {
 		return nil, fmt.Errorf("--overlay: create temporary directory: %w", err)
 	}
-	o := &buildOverlay{ProjectRoot: projectRoot, Dir: absDir, Root: root, files: files, realRoot: root}
-	if r, err := filepath.EvalSymlinks(root); err == nil {
-		o.realRoot = r
+	o := &buildOverlay{ProjectRoot: projectRoot, Dir: absDir, Root: root, files: files, lower: map[string]string{}}
+	for rel := range files {
+		o.lower[strings.ToLower(rel)] = rel
 	}
 	if rel, err := filepath.Rel(resolvedRoot, absDir); err == nil && sameOrInside(absDir, resolvedRoot) {
 		o.inProject = filepath.Join(projectRoot, rel)
 	}
-	if err := o.mirror(); err != nil {
+	if o.tree, err = os.OpenRoot(root); err == nil {
+		err = o.mirror(src)
+	}
+	if err != nil {
 		o.Close() //nolint:errcheck,gosec // the mirror error is the one to report
 		return nil, err
 	}
@@ -106,58 +124,61 @@ func (o *buildOverlay) Close() error {
 	if o == nil {
 		return nil
 	}
+	if o.tree != nil {
+		o.tree.Close() //nolint:errcheck,gosec // the tree is removed next
+	}
 	return os.RemoveAll(o.Root)
 }
 
-// Limits for an overlay: it can come from an untrusted agent.
-const (
-	maxOverlayFiles = 2000
-	maxOverlayBytes = 8 << 20
-)
-
 // overlayFiles lists the overlay's files. Only regular files are accepted: a
 // link or a device could make the build read a file outside the overlay.
-func overlayFiles(dir string) (map[string]struct{}, error) {
+func overlayFiles(src *os.Root) (map[string]struct{}, error) {
 	files := map[string]struct{}{}
+	entries := 0
 	var total int64
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(src.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		entries++
+		if entries > maxOverlayEntries {
+			return fmt.Errorf("more than %d files and directories", maxOverlayEntries)
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
 		if !d.Type().IsRegular() {
-			return fmt.Errorf("%s is not a regular file (links, devices and pipes are not allowed)", filepath.ToSlash(rel))
+			return fmt.Errorf("%s is not a regular file (links, devices and pipes are not allowed)", rel)
 		}
 		info, err := d.Info()
 		if err != nil {
 			return err
 		}
-		total += info.Size()
-		if len(files) >= maxOverlayFiles || total > maxOverlayBytes {
-			return fmt.Errorf("more than %d files or %d MiB", maxOverlayFiles, maxOverlayBytes>>20)
+		if total += info.Size(); total > maxOverlayBytes {
+			return errOverlayTooLarge
 		}
-		files[filepath.ToSlash(rel)] = struct{}{}
+		files[rel] = struct{}{}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("--overlay %s: %w", dir, err)
+		return nil, err
 	}
 	return files, nil
 }
 
+var errOverlayTooLarge = fmt.Errorf("more than %d MiB", maxOverlayBytes>>20)
+
 // mirror links the project into Root, then copies the overlay files in.
-func (o *buildOverlay) mirror() error {
+func (o *buildOverlay) mirror(src *os.Root) error {
 	if err := o.Sync(); err != nil {
 		return err
 	}
+	budget := int64(maxOverlayBytes)
 	for rel := range o.files {
-		if err := o.copyOverlayFile(rel); err != nil {
+		if err := o.copyOverlayFile(src, rel, &budget); err != nil {
 			return fmt.Errorf("--overlay: %s: %w", rel, err)
 		}
 	}
@@ -180,14 +201,14 @@ func (o *buildOverlay) Sync() error {
 		if err != nil || rel == "." {
 			return err
 		}
-		target := filepath.Join(o.Root, rel)
 		if o.inProject != "" && sameOrInside(path, o.inProject) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		existing, statErr := os.Lstat(target)
+		slashRel := filepath.ToSlash(rel)
+		existing, statErr := o.tree.Lstat(rel)
 		if d.IsDir() {
 			if statErr == nil {
 				if existing.Mode()&fs.ModeSymlink != 0 {
@@ -195,25 +216,29 @@ func (o *buildOverlay) Sync() error {
 				}
 				return nil
 			}
-			if _, link := linkedDirs[d.Name()]; link && !o.hasFilesIn(rel) {
-				if err := linkOrCopy(path, target, true); err != nil {
+			if _, link := linkedDirs[d.Name()]; link && !o.hasFilesIn(slashRel) {
+				if err := o.link(path, rel, true); err != nil {
 					return err
 				}
 				return filepath.SkipDir
 			}
-			return os.Mkdir(target, 0o755)
+			return o.tree.Mkdir(rel, 0o755)
 		}
 		if statErr == nil {
 			return nil
 		}
-		if _, replaced := o.files[filepath.ToSlash(rel)]; replaced {
+		if _, replaced := o.files[slashRel]; replaced {
 			return nil
 		}
-		if d.Type()&fs.ModeSymlink != 0 && o.hasFilesIn(rel) {
-			// an overlay file below a link would be written through it into the link's target
-			return fmt.Errorf("%s is a link in the project, the overlay cannot have files below it", filepath.ToSlash(rel))
+		if spelled, clash := o.lower[strings.ToLower(slashRel)]; clash {
+			// one of the two would replace the other on a case-insensitive file system
+			return fmt.Errorf("%s differs only in case from the overlay file %s", slashRel, spelled)
 		}
-		return linkOrCopy(path, target, false)
+		if d.Type()&fs.ModeSymlink != 0 && o.hasFilesIn(slashRel) {
+			// an overlay file below a link would be written through it into the link's target
+			return fmt.Errorf("%s is a link in the project, the overlay cannot have files below it", slashRel)
+		}
+		return o.link(path, rel, false)
 	})
 	if err != nil {
 		return fmt.Errorf("--overlay: mirror project: %w", err)
@@ -221,81 +246,98 @@ func (o *buildOverlay) Sync() error {
 	return nil
 }
 
-// copyOverlayFile copies one overlay file into Root. It never writes
-// through a link: the parent must resolve inside Root and the file must not
-// exist yet, which also catches a name that only differs in case from a
-// project file on a case-insensitive file system.
-func (o *buildOverlay) copyOverlayFile(rel string) error {
-	src := filepath.Join(o.Dir, filepath.FromSlash(rel))
-	target := filepath.Join(o.Root, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
-	parent, err := filepath.EvalSymlinks(filepath.Dir(target))
+// copyOverlayFile copies one overlay file into the tree, within the byte
+// budget. Directories and the file are created through the os.Root of the
+// tree, so they cannot go through a link, and the file must be new, which
+// also catches a name that only differs in case from a project file on a
+// case-insensitive file system.
+func (o *buildOverlay) copyOverlayFile(src *os.Root, rel string, budget *int64) error {
+	in, err := src.Open(rel)
 	if err != nil {
 		return err
 	}
-	if !sameOrInside(parent, o.realRoot) {
-		return fmt.Errorf("its directory is a link in the project, the overlay cannot have files below it")
+	defer in.Close() //nolint:errcheck // read-only
+	info, err := in.Stat()
+	if err != nil {
+		return err
 	}
-	if _, err := os.Lstat(target); err == nil {
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("not a regular file")
+	}
+	if dir := filepath.Dir(filepath.FromSlash(rel)); dir != "." {
+		if err := o.tree.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("its directory is a link in the project or cannot be created: %w", err)
+		}
+	}
+	out, err := o.tree.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("the project has a file with this name (does the name differ only in case?)")
 	}
-	return copyFile(src, target)
+	if err != nil {
+		return err
+	}
+	n, err := io.Copy(out, io.LimitReader(in, *budget+1))
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	if n > *budget {
+		return errOverlayTooLarge
+	}
+	*budget -= n
+	return nil
 }
 
-// hasFilesIn reports whether the overlay has a file below the project-relative dir.
+// hasFilesIn reports whether the overlay has a file below the
+// project-relative dir, in any case.
 func (o *buildOverlay) hasFilesIn(dir string) bool {
-	prefix := filepath.ToSlash(dir) + "/"
-	for rel := range o.files {
-		if strings.HasPrefix(rel, prefix) {
+	prefix := strings.ToLower(dir) + "/"
+	for lower := range o.lower {
+		if strings.HasPrefix(lower, prefix) {
 			return true
 		}
 	}
 	return false
 }
 
-// linkOrCopy links target to path, and copies a file where the system does
-// not allow links (Windows without developer mode).
-func linkOrCopy(path, target string, dir bool) error {
-	err := os.Symlink(path, target)
+// link links rel in the tree to the project path. Where the system does not
+// allow links (Windows without developer mode) it copies instead.
+func (o *buildOverlay) link(path, rel string, dir bool) error {
+	err := o.tree.Symlink(path, rel)
 	if err == nil || errors.Is(err, fs.ErrExist) {
 		return err
 	}
 	if dir {
-		return os.CopyFS(target, os.DirFS(path))
+		if err := os.CopyFS(filepath.Join(o.Root, rel), os.DirFS(path)); err != nil {
+			return fmt.Errorf("cannot link or copy %s: %w", filepath.ToSlash(rel), err)
+		}
+		return nil
 	}
-	return copyFile(path, target)
+	return o.copyProjectFile(path, rel)
 }
 
-// copyFile copies a regular file to a new file. It refuses a source that is
-// not a regular file, or that changed into one between the check and the
-// open, and a destination that exists.
-func copyFile(src, dst string) error {
-	before, err := os.Lstat(src)
-	if err != nil {
-		return err
-	}
-	if !before.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", src)
-	}
-	in, err := os.Open(src) //nolint:gosec // G304: a file of the project or of the overlay the user named
+// copyProjectFile copies a project file into the tree. A project link is
+// followed, as the build would follow it without --overlay.
+func (o *buildOverlay) copyProjectFile(path, rel string) error {
+	in, err := os.Open(path) //nolint:gosec // G304: a file of the project
 	if err != nil {
 		return err
 	}
 	defer in.Close() //nolint:errcheck // read-only
-	opened, err := in.Stat()
+	info, err := in.Stat()
 	if err != nil {
 		return err
 	}
-	if !os.SameFile(before, opened) {
-		return fmt.Errorf("%s changed while it was read", src)
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("cannot link or copy %s: not a regular file", filepath.ToSlash(rel))
 	}
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // G304: inside the temporary tree
+	out, err := o.tree.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, io.LimitReader(in, opened.Size())); err != nil {
+	if _, err := io.Copy(out, in); err != nil {
 		out.Close() //nolint:errcheck,gosec // the copy error is the one to report
 		return err
 	}
@@ -476,4 +518,18 @@ func (o *buildOverlay) projectFindings(findings []lint.Finding) []lint.Finding {
 		out[i] = f
 	}
 	return out
+}
+
+// checkOutputPath refuses, when confine is set (--overlay), an output file
+// name that is absolute or leaves the output directory: a draft must not be
+// able to write over a project file.
+func checkOutputPath(confine bool, outputDir, filename string) error {
+	if !confine {
+		return nil
+	}
+	path := filepath.Join(outputDir, filename)
+	if filepath.IsAbs(filename) || path == filepath.Clean(outputDir) || !sameOrInside(path, outputDir) {
+		return fmt.Errorf("with --overlay the output file %q must stay inside the output directory %s", filename, outputDir)
+	}
+	return nil
 }
