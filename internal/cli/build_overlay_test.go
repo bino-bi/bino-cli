@@ -642,3 +642,45 @@ func TestBuildOverlay_BinoCacheStaysInTree(t *testing.T) {
 		t.Errorf("the project changed:\nbefore %v\nafter  %v", before, after)
 	}
 }
+
+// A project .bino that is a link is mirrored for real: the loader does not
+// walk a linked .bino/registry, and the cache must still land in the tree.
+func TestBuildOverlay_LinkedBinoLoadsRegistry(t *testing.T) {
+	project := t.TempDir()
+	writeFiles(t, project, overlayProject)
+	elsewhere := t.TempDir()
+	writeFiles(t, elsewhere, map[string]string{
+		"registry/@acme/kit/kit.yaml": "apiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: kit_values\nspec:\n  query: SELECT 1 AS ac1\n",
+		"cache/datasets/old.json":     "{}\n",
+	})
+	if err := os.Symlink(elsewhere, filepath.Join(project, ".bino")); err != nil {
+		t.Skipf("no symlinks: %v", err)
+	}
+	overlayDir := t.TempDir()
+	writeFiles(t, overlayDir, overlayDraft)
+	before := treeSnapshot(t, elsewhere)
+
+	overlay, err := newBuildOverlay(project, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer overlay.Close() //nolint:errcheck // test cleanup
+	manifests := loadOverlayManifests(t, overlay.Root)
+	found := false
+	for _, doc := range manifests.Documents {
+		found = found || doc.Name == "kit_values"
+	}
+	if !found {
+		t.Error("the registry package below a linked .bino is not loaded")
+	}
+	builder := &pipeline.Builder{Workdir: overlay.Root, Logger: logx.Nop()}
+	if _, err := builder.RenderArtefactHTML(context.Background(), manifests.Documents, manifests.Selected[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := overlay.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	if after := treeSnapshot(t, elsewhere); !reflect.DeepEqual(before, after) {
+		t.Errorf("the linked .bino changed:\nbefore %v\nafter  %v", before, after)
+	}
+}
