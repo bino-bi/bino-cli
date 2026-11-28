@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/datasummary"
 )
 
@@ -37,6 +38,17 @@ type Profile struct {
 	SampleRows int             `json:"sampleRows"`
 	Columns    []ColumnProfile `json:"columns"`
 	Warnings   []string        `json:"warnings"`
+	// CSV is what DuckDB's sniffer detects when the target is a DataSource
+	// over a local CSV file.
+	CSV *CSVFormat `json:"csv,omitempty"`
+}
+
+// CSVFormat is the format DuckDB detects in a CSV file, without the
+// declared reader options.
+type CSVFormat struct {
+	Delimiter  string `json:"delimiter"`
+	HasHeader  bool   `json:"hasHeader"`
+	DateFormat string `json:"dateFormat,omitempty"`
 }
 
 // ColumnProfile describes one column. The statistics refer to the
@@ -96,6 +108,9 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 		return p, err
 	}
 	if err := s.lock(ctx); err != nil {
+		return p, err
+	}
+	if err := s.inspectCSV(ctx, target, &p); err != nil {
 		return p, err
 	}
 	full := "(\n" + srcs[strings.ToLower(target.Name)] + "\n) AS _bino_p"
@@ -160,6 +175,33 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 	}
 	p.Warnings = append(p.Warnings, warns...)
 	return p, nil
+}
+
+// inspectCSV adds the format and the issues of the target's CSV file to p.
+// Only a DataSource is checked: which sources a DataSet really reads is not
+// known here, so its warnings could name another file.
+func (s *session) inspectCSV(ctx context.Context, target *config.Document, p *Profile) error {
+	if target.Kind != "DataSource" {
+		return nil
+	}
+	path, declared, ok := datasource.LocalCSV(*target)
+	if !ok {
+		return nil
+	}
+	rep, err := datasource.InspectCSV(ctx, s.sess.DB(), path, declared)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		msg, _, _ := strings.Cut(err.Error(), "\n")
+		p.Warnings = append(p.Warnings, "DuckDB cannot sniff the CSV file: "+msg)
+		return nil
+	}
+	p.CSV = &CSVFormat{Delimiter: rep.Delimiter, HasHeader: rep.HasHeader, DateFormat: rep.DateFormat}
+	for _, issue := range rep.Issues {
+		p.Warnings = append(p.Warnings, issue.Message)
+	}
+	return nil
 }
 
 // nullCounts counts the nulls of every column exactly, in one scan of src.
