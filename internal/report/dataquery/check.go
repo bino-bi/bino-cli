@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -91,10 +90,13 @@ func (w *walker) walk(node any, scope map[string]bool) error {
 				scope = with(scope, name)
 			}
 		}
-		if n["class"] == "FUNCTION" {
-			if err := checkGenerator(n); err != nil {
+		switch n["class"] {
+		case "FUNCTION":
+			if err := checkFunction(n); err != nil {
 				return err
 			}
+		case "LAMBDA":
+			return errors.New("lambda functions and list comprehensions (list_transform, list_filter, list_reduce, [x FOR x IN ...]) are not allowed in query_data: they can multiply the size of a list")
 		}
 		if _, isExpr := n["class"]; !isExpr {
 			typ, _ := n["type"].(string)
@@ -173,195 +175,40 @@ func nonEmpty(parts ...string) []string {
 	return out
 }
 
-const (
-	// maxGeneratedItems bounds the lists range, generate_series, list_resize
-	// and repeat build: DuckDB builds such a list in one vector, outside its
-	// memory limit and without a point where it can be interrupted.
-	maxGeneratedItems = 10_000_000
-	// maxGeneratedBytes bounds the strings repeat, lpad and rpad build.
-	maxGeneratedBytes = 1 << 20
-)
+// refusedFunctions build a value whose size an argument sets (a count, a
+// width, a range). DuckDB builds such a value in one piece, outside its
+// memory limit and without a point where it can be interrupted, so query_data
+// refuses them whatever the arguments. Lambda functions are refused as LAMBDA
+// nodes, which also covers list comprehensions.
+var refusedFunctions = map[string]string{
+	"repeat":          "it builds a value from a count",
+	"range":           "it builds a list from a range",
+	"generate_series": "it builds a list from a range",
+	"list_resize":     "it builds a list of a given size",
+	"array_resize":    "it builds a list of a given size",
+	"lpad":            "it builds a text of a given width",
+	"rpad":            "it builds a text of a given width",
+	"printf":          "a format width builds a text of any size",
+	"format":          "a format width builds a text of any size",
+	"sprintf":         "a format width builds a text of any size",
+	"list_transform":  "it takes a lambda function",
+	"array_transform": "it takes a lambda function",
+	"list_apply":      "it takes a lambda function",
+	"array_apply":     "it takes a lambda function",
+	"apply":           "it takes a lambda function",
+	"list_filter":     "it takes a lambda function",
+	"array_filter":    "it takes a lambda function",
+	"filter":          "it takes a lambda function",
+	"list_reduce":     "it takes a lambda function",
+	"array_reduce":    "it takes a lambda function",
+	"reduce":          "it takes a lambda function",
+}
 
-// checkGenerator refuses calls that build a list or a string whose size an
-// argument sets, unless that argument is a constant (literals, casts and
-// + - * / of them) and the result stays under the limits. The size of a
-// computed value cannot be judged before it runs, so it is refused.
-func checkGenerator(fn map[string]any) error {
+// checkFunction refuses the functions in refusedFunctions.
+func checkFunction(fn map[string]any) error {
 	name, _ := fn["function_name"].(string)
-	args, _ := fn["arguments"].([]any)
-	needConst := func(what string) error {
-		return fmt.Errorf("%s() is refused: its %s must be a constant (a literal, a cast of one, or + - * / of them)", name, what)
-	}
-	switch strings.ToLower(name) {
-	case "range", "generate_series":
-		nums := make([]float64, len(args))
-		for i, a := range args {
-			f, ok := fold(a)
-			if !ok {
-				return needConst("arguments")
-			}
-			nums[i] = f
-		}
-		if items, ok := rangeItems(nums); ok && items > maxGeneratedItems {
-			return fmt.Errorf("%s() with %.0f items is refused: at most %d are allowed", name, items, maxGeneratedItems)
-		}
-	case "list_resize", "array_resize":
-		if len(args) < 2 {
-			return nil
-		}
-		n, ok := fold(args[1])
-		if !ok {
-			return needConst("size")
-		}
-		if n > maxGeneratedItems {
-			return fmt.Errorf("%s() to %.0f items is refused: at most %d are allowed", name, n, maxGeneratedItems)
-		}
-	case "lpad", "rpad":
-		if len(args) < 2 {
-			return nil
-		}
-		n, ok := fold(args[1])
-		if !ok {
-			return needConst("length")
-		}
-		if n > maxGeneratedBytes {
-			return fmt.Errorf("%s() to %.0f bytes is refused: at most %d are allowed", name, n, maxGeneratedBytes)
-		}
-	case "repeat":
-		if len(args) != 2 {
-			return nil
-		}
-		if _, ok := fold(args[1]); !ok {
-			return needConst("count")
-		}
-		size, items, ok := built(fn)
-		if !ok {
-			return fmt.Errorf("repeat() is refused: it may only repeat a constant text or list, or another repeat, lpad or rpad of one")
-		}
-		if size > maxGeneratedBytes || items > maxGeneratedItems {
-			return fmt.Errorf("repeat() building %.0f bytes or items is refused: at most %d bytes of text or %d list items are allowed", max(size, items), maxGeneratedBytes, maxGeneratedItems)
-		}
+	if why, ok := refusedFunctions[strings.ToLower(name)]; ok {
+		return fmt.Errorf("%s is not allowed in query_data: %s", name, why)
 	}
 	return nil
-}
-
-// rangeItems is the number of items range(stop), range(start, stop) or
-// range(start, stop, step) yields.
-func rangeItems(nums []float64) (float64, bool) {
-	start, step := 0.0, 1.0
-	var stop float64
-	switch len(nums) {
-	case 1:
-		stop = nums[0]
-	case 2:
-		start, stop = nums[0], nums[1]
-	case 3:
-		start, stop, step = nums[0], nums[1], nums[2]
-	default:
-		return 0, false
-	}
-	if step == 0 {
-		return 0, false
-	}
-	return (stop - start) / step, true
-}
-
-// built returns the bytes of text or the list items e builds, when e is a
-// constant text or list, or repeat, lpad or rpad of one with constant sizes.
-func built(e any) (size, items float64, ok bool) {
-	m := unwrap(e)
-	switch m["class"] {
-	case "CONSTANT":
-		lit, _ := m["literal"].(map[string]any)
-		text, _ := lit["text"].(string)
-		return float64(len(text)), 0, true
-	case "CAST":
-		return built(m["child"])
-	case "FUNCTION":
-		name, _ := m["function_name"].(string)
-		args, _ := m["arguments"].([]any)
-		switch strings.ToLower(name) {
-		case "list_value":
-			for _, a := range args {
-				if _, _, ok := built(a); !ok {
-					return 0, 0, false
-				}
-			}
-			return 0, float64(len(args)), true
-		case "repeat":
-			if len(args) != 2 {
-				return 0, 0, false
-			}
-			n, okN := fold(args[1])
-			s, it, okS := built(args[0])
-			return s * n, it * n, okN && okS
-		case "lpad", "rpad":
-			if len(args) < 2 {
-				return 0, 0, false
-			}
-			n, okN := fold(args[1])
-			return n, 0, okN
-		}
-	}
-	return 0, 0, false
-}
-
-// fold evaluates a constant number: a literal, a cast of one, a unary minus
-// or + - * / of constants.
-func fold(e any) (float64, bool) {
-	m := unwrap(e)
-	switch m["class"] {
-	case "CONSTANT":
-		lit, _ := m["literal"].(map[string]any)
-		text, _ := lit["text"].(string)
-		f, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
-		return f, err == nil
-	case "CAST":
-		return fold(m["child"])
-	case "FUNCTION":
-		if op, _ := m["is_operator"].(bool); !op {
-			return 0, false
-		}
-		name, _ := m["function_name"].(string)
-		args, _ := m["arguments"].([]any)
-		vals := make([]float64, len(args))
-		for i, a := range args {
-			v, ok := fold(a)
-			if !ok {
-				return 0, false
-			}
-			vals[i] = v
-		}
-		switch {
-		case len(vals) == 1 && name == "-":
-			return -vals[0], true
-		case len(vals) == 1 && name == "+":
-			return vals[0], true
-		case len(vals) != 2:
-			return 0, false
-		}
-		switch name {
-		case "+":
-			return vals[0] + vals[1], true
-		case "-":
-			return vals[0] - vals[1], true
-		case "*":
-			return vals[0] * vals[1], true
-		case "/", "//":
-			if vals[1] == 0 {
-				return 0, false
-			}
-			return vals[0] / vals[1], true
-		}
-	}
-	return 0, false
-}
-
-// unwrap returns the expression of a serialized function argument.
-func unwrap(a any) map[string]any {
-	m, _ := a.(map[string]any)
-	if e, ok := m["expression"].(map[string]any); ok {
-		return e
-	}
-	return m
 }

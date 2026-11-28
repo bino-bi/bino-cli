@@ -297,7 +297,7 @@ func TestNormalizeTimes(t *testing.T) {
 func TestQueryCapsCellsAndResultSize(t *testing.T) {
 	_, docs, amb := writeProject(t)
 	ctx := context.Background()
-	res, err := Query(ctx, docs, amb, "SELECT repeat('x', 10000) AS s, [repeat('y', 5000)] AS l", 0)
+	res, err := Query(ctx, docs, amb, "SELECT '"+strings.Repeat("x", 10000)+"' AS s, ['"+strings.Repeat("y", 5000)+"'] AS l", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,31 +312,12 @@ func TestQueryCapsCellsAndResultSize(t *testing.T) {
 		t.Errorf("notes = %v", res.Notes)
 	}
 
-	res, err = Query(ctx, docs, amb, "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 1000) SELECT n, repeat('x', 4000) FROM c", MaxLimit)
+	res, err = Query(ctx, docs, amb, "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 1000) SELECT n, '"+strings.Repeat("x", 4000)+"' FROM c", MaxLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !res.Truncated || len(res.Rows) >= 1000 || len(res.Rows) < 400 || len(res.Notes) == 0 {
 		t.Fatalf("rows=%d truncated=%v notes=%v", len(res.Rows), res.Truncated, res.Notes)
-	}
-}
-
-func TestQueryRefusesHugeGenerators(t *testing.T) {
-	_, docs, amb := writeProject(t)
-	for _, q := range []string{
-		"SELECT count(*) FROM (SELECT unnest(generate_series(1, 3000000000)) x)",
-		"SELECT len(range(0, 1e12))",
-		"SELECT len(range(100000000))",
-		"SELECT len(range(0, 50000000, 2))",
-		"SELECT length(repeat('ab', 10000000))",
-	} {
-		if _, err := Query(context.Background(), docs, amb, q, 0); err == nil || !strings.Contains(err.Error(), "is refused") {
-			t.Errorf("%s: err = %v", q, err)
-		}
-	}
-	res, err := Query(context.Background(), docs, amb, "SELECT unnest(generate_series(1, 10)) AS x, repeat('ab', 3) AS r", 0)
-	if err != nil || len(res.Rows) != 10 {
-		t.Fatalf("small generator: rows=%d err=%v", len(res.Rows), err)
 	}
 }
 
@@ -356,26 +337,53 @@ func TestQueryInterruptedAtTimeout(t *testing.T) {
 	}
 }
 
-func TestQueryRefusesComputedGeneratorSizes(t *testing.T) {
+// TestQueryRefusesSizeBuilders covers every bypass the earlier size checks
+// let through: the functions are refused whatever their arguments.
+func TestQueryRefusesSizeBuilders(t *testing.T) {
 	_, docs, amb := writeProject(t)
 	for q, want := range map[string]string{
-		"SELECT len(range(0, 10000000 * 100))":                  "is refused",
-		"SELECT len(range(0, 10000000000::BIGINT))":             "is refused",
-		"SELECT length(repeat(repeat('x', 1000), 200000))":      "is refused",
-		"SELECT len(range(0, n)) FROM (SELECT 5 AS n)":          "must be a constant",
-		"SELECT repeat(region, 2) FROM sales_csv":               "may only repeat a constant",
-		"SELECT length(lpad('x', 2000000, ' '))":                "is refused",
-		"SELECT len(list_resize([1], 20000000))":                "is refused",
-		"SELECT len(array_resize([1], n)) FROM (SELECT 5 AS n)": "must be a constant",
-		"SELECT len(repeat([1, 2], 6000000))":                   "is refused",
+		"SELECT count(*) FROM (SELECT unnest(generate_series(1, 3000000000)) x)": "generate_series is not allowed",
+		"SELECT len(range(0, 10000000 * 100))":                                   "range is not allowed",
+		"SELECT len(range(0, 10000000000::BIGINT))":                              "range is not allowed",
+		"SELECT len(range(3))":                                                   "range is not allowed",
+		"SELECT length(repeat(repeat('x', 1000), 200000))":                       "repeat is not allowed",
+		"SELECT repeat(region, 2) FROM sales_csv":                                "repeat is not allowed",
+		"SELECT length(lpad('x', 2000000, ' '))":                                 "lpad is not allowed",
+		"SELECT length(rpad('x', 5, ' '))":                                       "rpad is not allowed",
+		"SELECT len(list_resize([1], 20000000))":                                 "list_resize is not allowed",
+		"SELECT len(array_resize([1], n)) FROM (SELECT 5 AS n)":                  "array_resize is not allowed",
+		"SELECT length(printf('%100000000d', 1))":                                "printf is not allowed",
+		"SELECT length(format('{:>100000000}', 'x'))":                            "format is not allowed",
+		"SELECT len(list_transform([1, 2], x -> x + 1))":                         "list_transform is not allowed",
+		"SELECT len(list_filter([1, 2], lambda x: x > 1))":                       "list_filter is not allowed",
+		"SELECT list_reduce([1, 2], (a, b) -> a + b)":                            "list_reduce is not allowed",
+		"SELECT len([x * 2 FOR x IN [1, 2] IF x > 1])":                           "is not allowed in query_data",
+		"SELECT len([[y FOR y IN [1, 2]] FOR x IN [1, 2]])":                      "is not allowed in query_data",
+		"SELECT list_sort([1, 2], x -> -x)":                                      "lambda functions",
 	} {
 		if _, err := Query(context.Background(), docs, amb, q, 0); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want %q", q, err, want)
 		}
 	}
-	res, err := Query(context.Background(), docs, amb, "SELECT len(range(0, 10 * 10, 2)), lpad('x', 5, ' '), len(list_resize([1], 3)), repeat(repeat('ab', 2), 3), len(range(-5::INT, 5))", 0)
-	if err != nil || len(res.Rows) != 1 || res.Rows[0][0] != int64(50) || res.Rows[0][3] != "abababababab" {
-		t.Fatalf("small constants: rows=%v err=%v", res.Rows, err)
+}
+
+func TestQueryOrdinarySQLStillWorks(t *testing.T) {
+	_, docs, amb := writeProject(t)
+	q := `SELECT region,
+	date_trunc('quarter', "date") AS q,
+	strftime("date", '%Y-%m') AS ym,
+	upper(region) || '-' || lower(substr(region, 1, 2)) AS label,
+	CASE WHEN ac1 > 20 THEN 'big' ELSE 'small' END AS size,
+	sum(ac1) OVER (PARTITION BY region ORDER BY "date") AS running,
+	count(*) FILTER (WHERE ac1 > 20) OVER () AS big_rows,
+	string_split('a,b', ',') AS parts
+FROM sales_csv ORDER BY region, "date"`
+	res, err := Query(context.Background(), docs, amb, q, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 5 || res.Rows[0][2] != "2024-01" || res.Rows[0][3] != "NORTH-no" || res.Rows[2][5] != 80.0 {
+		t.Fatalf("rows = %v", res.Rows)
 	}
 }
 
@@ -407,7 +415,7 @@ func TestQueryBudgetInsideAWideRow(t *testing.T) {
 	t.Cleanup(func() { maxResultBytes = old })
 	cols := make([]string, 10)
 	for i := range cols {
-		cols[i] = fmt.Sprintf("repeat('<', 4000) AS c%d", i)
+		cols[i] = fmt.Sprintf("'%s' AS c%d", strings.Repeat("<", 4000), i)
 	}
 	res, err := Query(context.Background(), docs, amb, "SELECT "+strings.Join(cols, ", ")+" FROM sales_csv", 0)
 	if err != nil {
