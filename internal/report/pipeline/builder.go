@@ -228,6 +228,9 @@ type PDFRenderOptions struct {
 	// OnLayoutState, when set, receives a getLayoutState() capture of the page
 	// that produced the PDF. Nil disables the capture.
 	OnLayoutState func(snapshot []byte)
+	// OnNumberValues, when set, receives what the tables and charts of that
+	// page show. Nil disables the capture.
+	OnNumberValues func(capture []byte)
 }
 
 // RenderPDF starts an ephemeral HTTP server with the given HTML and assets,
@@ -278,6 +281,7 @@ func (b *Builder) chromePDFOptions(url string, opts PDFRenderOptions) chrome.PDF
 		MarginTop:              opts.MarginTop,
 		MarginBottom:           opts.MarginBottom,
 		OnLayoutState:          opts.OnLayoutState,
+		OnNumberValues:         opts.OnNumberValues,
 	}
 }
 
