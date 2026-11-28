@@ -64,7 +64,7 @@ func Query(ctx context.Context, docs []config.Document, ambiguous config.Ambigui
 	if err != nil {
 		return res, explain(ambiguous, err)
 	}
-	wrapped := fmt.Sprintf("SELECT * FROM (\n%s\n) AS _bino_q LIMIT %d", sqlText, limit+1)
+	wrapped := fmt.Sprintf("SELECT * FROM (\n%s\n) AS _bino_q LIMIT %d", sqlText, limit+1) //nolint:gosec // G201: sqlText is checked above to be one SELECT over known tables, and again after wrapping
 	if _, err := parseTables(ctx, s.conn, wrapped, cat.known, cat.names()); err != nil {
 		return res, err
 	}

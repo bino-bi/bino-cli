@@ -105,7 +105,7 @@ func ProfileData(ctx context.Context, docs []config.Document, ambiguous config.A
 	}
 	src := full
 	if p.RowCount > int64(sampleRows) {
-		create := fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM %s USING SAMPLE reservoir(%d ROWS) REPEATABLE (1)", sampleTable, full, sampleRows)
+		create := fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM %s USING SAMPLE reservoir(%d ROWS) REPEATABLE (1)", sampleTable, full, sampleRows) //nolint:gosec // G201: full wraps the target's own compiled SQL, sampleTable is a constant
 		if _, err := s.conn.ExecContext(ctx, create); err != nil {
 			return p, explain(ambiguous, err)
 		}
@@ -177,7 +177,7 @@ func (s *session) nullCounts(ctx context.Context, src string, cols []ColumnProfi
 }
 
 func (s *session) topValues(ctx context.Context, src, col, typ string) ([]ValueCount, error) {
-	q := fmt.Sprintf("SELECT %s, count(*) FROM %s GROUP BY 1 ORDER BY 2 DESC, 1 NULLS LAST LIMIT %d", quoteIdent(col), src, topValuesCount)
+	q := fmt.Sprintf("SELECT %s, count(*) FROM %s GROUP BY 1 ORDER BY 2 DESC, 1 NULLS LAST LIMIT %d", quoteIdent(col), src, topValuesCount) //nolint:gosec // G201: col is quoted by quoteIdent, src is built here
 	rows, err := s.conn.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -197,7 +197,7 @@ func (s *session) topValues(ctx context.Context, src, col, typ string) ([]ValueC
 
 // series reads the distinct dates of col over all rows and finds the gaps.
 func (s *session) series(ctx context.Context, full, col string) (*Series, string, error) {
-	q := fmt.Sprintf("SELECT DISTINCT CAST(%[1]s AS DATE) FROM %[2]s WHERE %[1]s IS NOT NULL ORDER BY 1 LIMIT %[3]d", quoteIdent(col), full, maxDistinctDates+1)
+	q := fmt.Sprintf("SELECT DISTINCT CAST(%[1]s AS DATE) FROM %[2]s WHERE %[1]s IS NOT NULL ORDER BY 1 LIMIT %[3]d", quoteIdent(col), full, maxDistinctDates+1) //nolint:gosec // G201: col is quoted by quoteIdent, full is built here
 	rows, err := s.conn.QueryContext(ctx, q)
 	if err != nil {
 		return nil, "", err

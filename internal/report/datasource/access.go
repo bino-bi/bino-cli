@@ -46,8 +46,8 @@ func AccessFor(docs []config.Document) Access {
 	// DuckDB compares the path as written; a symlinked dir (macOS /tmp) can appear either way.
 	withReal := func(p string, add func(string)) {
 		add(p)
-		if real, err := filepath.EvalSymlinks(p); err == nil && filepath.ToSlash(real) != p {
-			add(filepath.ToSlash(real))
+		if resolved, err := filepath.EvalSymlinks(p); err == nil && filepath.ToSlash(resolved) != p {
+			add(filepath.ToSlash(resolved))
 		}
 	}
 	for _, doc := range docs {

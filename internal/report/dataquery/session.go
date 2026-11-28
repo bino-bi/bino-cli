@@ -255,8 +255,8 @@ func (s *session) lock(ctx context.Context) error {
 	}
 	spill := filepath.Join(scratch, "spill")
 	dirs := append([]string{filepath.ToSlash(scratch) + "/"}, s.access.Prefixes...)
-	if real, err := filepath.EvalSymlinks(scratch); err == nil && real != scratch {
-		dirs = append(dirs, filepath.ToSlash(real)+"/")
+	if resolved, err := filepath.EvalSymlinks(scratch); err == nil && resolved != scratch {
+		dirs = append(dirs, filepath.ToSlash(resolved)+"/")
 	}
 	stmts := []string{
 		"SET GLOBAL temp_directory = " + quoteString(spill),

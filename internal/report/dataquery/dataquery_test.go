@@ -254,7 +254,7 @@ func TestQueryDataSetReadingAFileDirectly(t *testing.T) {
 }
 
 func TestAcquireRespectsContext(t *testing.T) {
-	var releases []func()
+	releases := make([]func(), 0, maxConcurrent)
 	for range maxConcurrent {
 		r, err := acquire(context.Background())
 		if err != nil {
