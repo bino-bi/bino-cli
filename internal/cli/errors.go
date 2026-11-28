@@ -254,6 +254,15 @@ func FormatError(ctx context.Context, err error) (msg string, code int) {
 		b.WriteString("\n")
 	}
 
+	var oe *overlayError
+	if errors.As(err, &oe) {
+		if note := oe.Note(); note != "" {
+			style.Dim.Fprint(&b, "  "+SymbolArrow+" ")
+			style.Dim.Fprint(&b, note)
+			b.WriteString("\n")
+		}
+	}
+
 	// Verbose mode: show error chain
 	if logx.DebugEnabled(ctx) {
 		if detail := buildErrorChain(err); detail != "" {

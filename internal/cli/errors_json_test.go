@@ -54,7 +54,7 @@ func TestDocumentStartLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	for pos, want := range map[int]int{1: 3, 2: 9, 3: 0, 0: 0} {
-		if got := documentStartLine(file, pos); got != want {
+		if got := documentStartLine(nil, file, pos); got != want {
 			t.Errorf("documentStartLine(%d) = %d, want %d", pos, got, want)
 		}
 	}
@@ -68,7 +68,7 @@ func TestDocumentStartLineSkipsEmptyDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	for pos, want := range map[int]int{1: 7, 2: 13, 3: 0} {
-		if got := documentStartLine(file, pos); got != want {
+		if got := documentStartLine(nil, file, pos); got != want {
 			t.Errorf("documentStartLine(%d) = %d, want %d", pos, got, want)
 		}
 	}

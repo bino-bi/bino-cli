@@ -24,6 +24,7 @@ import (
 	"bino.bi/bino/internal/report/dataset"
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
+	"bino.bi/bino/internal/report/numbervalues"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/version"
@@ -98,6 +99,13 @@ func newBuildCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathere
 		// Capture the rendered layout alongside each PDF.
 		layoutState bool
 
+		// Read the build from the project with these files on top.
+		overlayDir string
+
+		// Write what every table and chart shows, and check it against the data.
+		numberValues  bool
+		verifyNumbers bool
+
 		// Stateless single-shot mode (see build_stateless.go).
 		stateless       bool
 		statelessFormat string
@@ -132,7 +140,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
   bino build --work-dir ./reports --artefact weekly --artefact monthly --out-dir dist
   bino build --screenshot ReportArtefact/weekly --build-log-format json
   bino build --screenshot LayoutPage/overview --screenshot ChartStructure/revenue --screenshot-scale 2`),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (retErr error) {
 			ctx := cmd.Context()
 
 			// Stateless single-shot mode bypasses project-root discovery entirely:
@@ -141,6 +149,9 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 			if stateless {
 				if len(screenshots) > 0 {
 					return ConfigErrorf("--screenshot cannot be combined with --stateless")
+				}
+				if err := checkStatelessDraftFlags(overlayDir, numberValues, verifyNumbers); err != nil {
+					return err
 				}
 				var inputArg string
 				if len(args) > 0 {
@@ -183,6 +194,20 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 				defer env.PluginManager.ShutdownAll(ctx)
 			}
 
+			// With --overlay the manifests are read from a temporary tree;
+			// everything else (bino.toml, out-dir, hooks) stays the project's.
+			manifestRoot := env.ProjectRoot
+			var overlay *buildOverlay
+			if overlayDir != "" {
+				overlay, err = newBuildOverlay(env.ProjectRoot, overlayDir)
+				if err != nil {
+					return ConfigError(err)
+				}
+				defer overlay.Close() //nolint:errcheck // a temporary directory
+				defer func() { retErr = overlay.WrapError(retErr) }()
+				manifestRoot = overlay.Root
+				logger.Infof("Reading the project with the files of %s on top", overlay.Dir)
+			}
 			outDir = env.Resolver.ResolveString("out-dir", "out-dir", outDir)
 			chromePath = resolveChromePath(env.Resolver.ResolveString("chrome-path", "chrome-path", chromePath))
 			buildLogFormat = env.Resolver.ResolveString("build-log-format", "build-log-format", buildLogFormat)
@@ -227,7 +252,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 			if env.PluginRegistry != nil {
 				pluginLinters = plugin.NewLinterRegistry(env.PluginRegistry)
 			}
-			manifests, err := loadBuildManifests(ctx, out, logger, env.ProjectRoot, include, exclude, noLint, noGraph, screenshotOnly, env.PluginRegistry, pluginLinters)
+			manifests, err := loadBuildManifests(ctx, out, logger, manifestRoot, include, exclude, noLint, noGraph, screenshotOnly, env.PluginRegistry, pluginLinters)
 			if err != nil {
 				return err
 			}
@@ -348,7 +373,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 				hostSvc = env.PluginManager.HostService()
 			}
 			if env.PluginRegistry != nil {
-				pluginOpts = plugin.BuildRenderOptions(ctx, env.PluginRegistry, env.ProjectRoot, "build")
+				pluginOpts = plugin.BuildRenderOptions(ctx, env.PluginRegistry, manifestRoot, "build")
 				hookBus := plugin.NewHookBus(env.PluginRegistry, logger.Channel("plugin-hooks"))
 				postRenderHTMLHook = func(hookCtx context.Context, html []byte) ([]byte, error) {
 					modified, _, err := hookBus.DispatchPostRenderHTML(hookCtx, html)
@@ -381,7 +406,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 
 			// Step 2: Build all artifacts
 			builder := &pipeline.Builder{
-				Workdir:                  env.ProjectRoot,
+				Workdir:                  manifestRoot,
 				EngineVersion:            env.EngineVersion,
 				CacheDir:                 env.CacheDir,
 				Logger:                   logger,
@@ -400,6 +425,8 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 
 			execCfg := buildExecutionConfig{
 				CaptureLayoutState: layoutState,
+				NumberValues:       numberValues || verifyNumbers,
+				VerifyNumbers:      verifyNumbers,
 				Builder:            builder,
 				Logger:             logger,
 				OutputDir:          outputDir,
@@ -425,7 +452,12 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 			for _, r := range results {
 				buildWarnings = append(buildWarnings, r.RenderWarnings...)
 				buildWarnings = append(buildWarnings, r.LayoutWarnings...)
+				if r.NumbersWarning != "" {
+					out.Warning(r.NumbersWarning)
+					buildWarnings = append(buildWarnings, r.NumbersWarning)
+				}
 			}
+			logDocuments := overlay.projectDocuments(documents)
 
 			var screenshotEntries []buildlog.ScreenshotEntry
 			if len(screenshotJobs) > 0 {
@@ -444,7 +476,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 
 			// Write build log
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.log", shortRunID))
-			if err := writeBuildLog(logPath, runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, documents, results, documentResults, executedQueries, buildWarnings); err != nil {
+			if err := writeBuildLog(logPath, runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, logDocuments, results, documentResults, executedQueries, buildWarnings); err != nil {
 				logger.Warnf("failed to write build log: %v", err)
 			}
 
@@ -452,7 +484,7 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 			var jsonLogPath string
 			if buildLogFormat == "json" || embedDataCSV {
 				jsonLogPath = filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.json", shortRunID))
-				jsonLog := assembleJSONBuildLog(runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
+				jsonLog := assembleJSONBuildLog(runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, logDocuments, results, queryExecMetas, embedOpts, execPlan, overlay.projectFindings(lintFindings), buildWarnings)
 				jsonLog.Screenshots = append(screenshotArtefactEntries(screenshotResults), screenshotEntries...)
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
 					logger.Warnf("failed to write JSON build log: %v", err)
@@ -497,6 +529,12 @@ without a ScreenshotArtefact manifest. Without --artefact, only the screenshots 
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal and build log")
 	cmd.Flags().BoolVar(&layoutState, "layout-state", false,
 		"Write <artefact>.layout.json describing the rendered report, and report render issues (empty components, overflow, diverging scales) as build warnings")
+	cmd.Flags().StringVar(&overlayDir, "overlay", "",
+		"Build with the files of this directory on top of the project: each replaces the project file at the same relative path or is added (this run only, nothing is written to the project)")
+	cmd.Flags().BoolVar(&numberValues, "number-values", false,
+		"Write <artefact>.values.json with every number each table and chart shows (raw value, printed text, scenario or variance, data point)")
+	cmd.Flags().BoolVar(&verifyNumbers, "verify-numbers", false,
+		"Check the shown numbers against the DataSet rows and list differences in <artefact>.values.json (implies --number-values; differences do not fail the build)")
 
 	// CSV embedding flags - WARNING: enabling may include sensitive data in build logs
 	cmd.Flags().BoolVar(&embedDataCSV, "embed-data-csv", false,
@@ -565,6 +603,13 @@ type artefactResult struct {
 	LayoutStatePath string
 	// LayoutWarnings are the render-time findings derived from that snapshot.
 	LayoutWarnings []string
+	// ValuesPath is the --number-values file, empty without the flag or
+	// when the engine gave no capture.
+	ValuesPath string
+	// NumberCheck is the --verify-numbers outcome, nil without the flag.
+	NumberCheck *numbervalues.Summary
+	// NumbersWarning is set when shown numbers differ from the data.
+	NumbersWarning string
 	// RenderWarnings are the HTML renderer's findings (dataset defaults).
 	RenderWarnings []string
 }
@@ -590,6 +635,10 @@ type buildArtefactConfig struct {
 	// AllowIncompletePlugins logs a failed or never-defined plugin element
 	// as a warning instead of failing the PDF. Only the preview PDF sets it.
 	AllowIncompletePlugins bool
+	// NumberValues writes what the tables and charts show next to the PDF,
+	// VerifyNumbers also checks it against the DataSet rows.
+	NumberValues  bool
+	VerifyNumbers bool
 }
 
 // buildArtefact renders a single report artifact to PDF.
@@ -685,8 +734,9 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		capture.SnapshotPath = layoutStatePath(pdfPath)
 	}
 	onLayoutState := capture.Handle
+	numbers := newNumberValuesCapture(cfg, pdfPath, logger)
 
-	if err := renderReportPDF(ctx, cfg, renderResult, pdfPath, onLayoutState); err != nil {
+	if err := renderReportPDF(ctx, cfg, renderResult, pdfPath, onLayoutState, numbers.handler()); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 		}
@@ -748,6 +798,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	result := artefactResult{Name: artefactName, PDFPath: pdfPath, GraphPath: graphPath, RenderWarnings: renderResult.Warnings}
 	result.LayoutStatePath = capture.SnapshotPath
 	result.LayoutWarnings = capture.Warnings(artefactName)
+	numbers.apply(&result, renderResult.Datasets)
 	for _, f := range capture.Findings {
 		logger.Warnf("%s", f)
 	}
@@ -755,7 +806,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 }
 
 // renderReportPDF prints the report to pdfPath and writes its metadata.
-func renderReportPDF(ctx context.Context, cfg buildArtefactConfig, renderResult pipeline.RenderResult, pdfPath string, onLayoutState func([]byte)) error {
+func renderReportPDF(ctx context.Context, cfg buildArtefactConfig, renderResult pipeline.RenderResult, pdfPath string, onLayoutState, onNumberValues func([]byte)) error {
 	spec := cfg.Artifact.Spec
 	// Generate PDF via Builder (ephemeral server + Chrome headless shell)
 	if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, pipeline.PDFRenderOptions{
@@ -768,6 +819,7 @@ func renderReportPDF(ctx context.Context, cfg buildArtefactConfig, renderResult 
 		ReadyConsolePrefix:     componentReadyConsolePrefix,
 		AllowIncompletePlugins: cfg.AllowIncompletePlugins,
 		OnLayoutState:          onLayoutState,
+		OnNumberValues:         onNumberValues,
 	}); err != nil {
 		return err
 	}
@@ -1045,6 +1097,12 @@ func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.T
 		if res.GraphPath != "" {
 			fmt.Fprintf(file, "    Graph: %s\n", res.GraphPath)
 		}
+		if res.ValuesPath != "" {
+			fmt.Fprintf(file, "    Values: %s\n", res.ValuesPath)
+		}
+		if c := res.NumberCheck; c != nil {
+			fmt.Fprintf(file, "    Numbers: %d values, %d matched, %d unmatched, %d differences\n", c.Values, c.Matched, c.Unmatched, c.Differences)
+		}
 	}
 
 	if len(docResults) > 0 {
@@ -1194,6 +1252,8 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 // buildExecutionConfig holds configuration for building all artifact types.
 type buildExecutionConfig struct {
 	CaptureLayoutState bool
+	NumberValues       bool
+	VerifyNumbers      bool
 	Builder            *pipeline.Builder
 	Logger             logx.Logger
 	OutputDir          string
@@ -1248,6 +1308,8 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 
 		entry, err := buildArtefact(ctx, buildArtefactConfig{
 			CaptureLayoutState: cfg.CaptureLayoutState,
+			NumberValues:       cfg.NumberValues,
+			VerifyNumbers:      cfg.VerifyNumbers,
 			Builder:            cfg.Builder,
 			Logger:             cfg.Logger.Channel(artifact.Document.Name),
 			Docs:               manifests.Documents,
@@ -1499,11 +1561,17 @@ func assembleJSONBuildLog(runID, reportID, engineVersion string, startTime time.
 
 	artefactEntries := make([]buildlog.ArtefactEntry, 0, len(results))
 	for _, res := range results {
-		artefactEntries = append(artefactEntries, buildlog.ArtefactEntry{
-			Name:  res.Name,
-			PDF:   res.PDFPath,
-			Graph: res.GraphPath,
-		})
+		entry := buildlog.ArtefactEntry{
+			Name:        res.Name,
+			PDF:         res.PDFPath,
+			Graph:       res.GraphPath,
+			LayoutState: res.LayoutStatePath,
+			Values:      res.ValuesPath,
+		}
+		if c := res.NumberCheck; c != nil {
+			entry.NumberCheck = &buildlog.NumberCheck{Values: c.Values, Matched: c.Matched, Unmatched: c.Unmatched, Differences: c.Differences}
+		}
+		artefactEntries = append(artefactEntries, entry)
 	}
 
 	queryEntries := make([]buildlog.QueryEntry, 0, len(queryExecMetas))

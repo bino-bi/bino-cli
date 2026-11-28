@@ -390,6 +390,8 @@ type RenderResult struct {
 	EmittedData []render.EmittedData
 	// Warnings are render-time findings destined for the build log.
 	Warnings []string
+	// Datasets are the rows of every executed dataset, by name.
+	Datasets []DatasetPayload
 }
 
 // FrameRenderResult captures the outcome of a two-phase (frame + context) render.
@@ -497,7 +499,19 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		Diagnostics: renderDiags,
 		EmittedData: result.EmittedData,
 		Warnings:    result.Warnings,
+		Datasets:    datasetPayloads(datasetResults),
 	}, nil
+}
+
+func datasetPayloads(results []dataset.Result) []DatasetPayload {
+	if len(results) == 0 {
+		return nil
+	}
+	payloads := make([]DatasetPayload, len(results))
+	for i, r := range results {
+		payloads[i] = DatasetPayload{Name: r.Name, JSONRows: r.Data}
+	}
+	return payloads
 }
 
 // RenderArtefactOptions configures HTML rendering for a specific artifact.

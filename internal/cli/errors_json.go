@@ -25,16 +25,16 @@ func LogErrorJSON(logger *logx.JSONLogger, err error) {
 			}
 			line, column := e.Line, e.Column
 			if line <= 0 {
-				line, column = documentStartLine(schemaErr.File, schemaErr.DocPosition), 0
+				line, column = documentStartLine(err, schemaErr.File, schemaErr.DocPosition), 0
 			}
-			addLocation(fields, schemaErr.File, line, column)
+			addLocation(err, fields, schemaErr.File, line, column)
 			logger.Record("error", msg, fields)
 		}
 		return
 	}
 	fields := map[string]any{"kind": kind}
 	if file, pos := errorSource(err); file != "" {
-		addLocation(fields, file, documentStartLine(file, pos), 0)
+		addLocation(err, fields, file, documentStartLine(err, file, pos), 0)
 	}
 	if h := errorHint(err); h != "" {
 		fields["hint"] = h
@@ -42,11 +42,16 @@ func LogErrorJSON(logger *logx.JSONLogger, err error) {
 	logger.Record("error", extractCoreMessage(err), fields)
 }
 
-func addLocation(fields map[string]any, file string, line, column int) {
+// addLocation sets file, line and column. A file whose content came from
+// --overlay also gets "overlay", the file that was read.
+func addLocation(err error, fields map[string]any, file string, line, column int) {
 	if file == "" {
 		return
 	}
 	fields["file"] = file
+	if source, ok := overlaySource(err, file); ok {
+		fields["overlay"] = source
+	}
 	if line > 0 {
 		fields["line"] = line
 	}
@@ -81,9 +86,12 @@ func errorSource(err error) (file string, position int) {
 // documentStartLine is the 1-based line of the first content line of the
 // position-th YAML document in file, or 0 when it cannot be found. Documents
 // are counted like the loader does, so empty ones are skipped.
-func documentStartLine(file string, position int) int {
+func documentStartLine(cause error, file string, position int) int {
 	if file == "" || position <= 0 {
 		return 0
+	}
+	if source, ok := overlaySource(cause, file); ok {
+		file = source
 	}
 	data, err := os.ReadFile(file) //nolint:gosec // G304: the manifest path comes from the loader
 	if err != nil {

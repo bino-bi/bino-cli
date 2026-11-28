@@ -53,6 +53,9 @@ type PDFOptions struct {
 	// predates the API or the capture fails - a missing snapshot never fails a
 	// build.
 	OnLayoutState func(snapshot []byte)
+	// OnNumberValues, when set, receives what every table and chart shows,
+	// read after the layout state. Like OnLayoutState it never fails a build.
+	OnNumberValues func(capture []byte)
 }
 
 // RenderPDF loads the provided URL in a headless Chrome and exports it to PDF.
@@ -125,6 +128,13 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 			logger.Warnf("layout-state capture skipped: %v", err)
 		} else if len(snapshot) > 0 {
 			opts.OnLayoutState(snapshot)
+		}
+	}
+	if opts.OnNumberValues != nil {
+		if capture, err := captureNumberValues(taskCtx); err != nil {
+			logger.Warnf("number values capture skipped: %v", err)
+		} else if len(capture) > 0 {
+			opts.OnNumberValues(capture)
 		}
 	}
 

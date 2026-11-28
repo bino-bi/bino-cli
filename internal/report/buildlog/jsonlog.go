@@ -52,6 +52,23 @@ type ArtefactEntry struct {
 	Name  string `json:"name"`
 	PDF   string `json:"pdf"`
 	Graph string `json:"graph,omitempty"`
+	// LayoutState is the layout snapshot of the render, with --layout-state.
+	LayoutState string `json:"layout_state,omitempty"`
+	// Values is the file of shown numbers, with --number-values.
+	Values string `json:"values,omitempty"`
+	// NumberCheck counts the shown numbers checked against the DataSet rows,
+	// with --verify-numbers.
+	NumberCheck *NumberCheck `json:"number_check,omitempty"`
+}
+
+// NumberCheck is the outcome of --verify-numbers for one artefact. Every
+// shown value is counted once: matched, unmatched (no DataSet row or column
+// to compare it with) or a difference.
+type NumberCheck struct {
+	Values      int `json:"values"`
+	Matched     int `json:"matched"`
+	Unmatched   int `json:"unmatched"`
+	Differences int `json:"differences"`
 }
 
 // ScreenshotEntry is one PNG written by the build: from `bino build

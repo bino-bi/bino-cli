@@ -27,6 +27,9 @@ Common flags:
 - `--warn-on-query-errors` - downgrade a failed dataset query to a warning and render the report with the remaining data. By default a failed query fails the build.
 - `--screenshot` - write a PNG of a report, page or component to `<out-dir>/screenshots/`, with no `ScreenshotArtefact` needed (can be repeated). See [Screenshots](#screenshots).
 - `--screenshot-scale` - device scale factor for `--screenshot`: `1` (default) or `2` for twice the pixels.
+- `--overlay` - build with the files of a directory on top of the project, for this run only. See [Overlay](#overlay).
+- `--number-values` - write `<artefact>.values.json` with every number each table and chart shows. See [Number values](#number-values).
+- `--verify-numbers` - check those numbers against the DataSet rows (implies `--number-values`). See [Checking the numbers](#checking-the-numbers).
 
 Build log flags:
 
@@ -93,6 +96,149 @@ value captures more than one page, and `layout_page` names the page shown:
 bino build --screenshot ReportArtefact/monthly --build-log-format json
 bino build --screenshot overview --screenshot ChartStructure/revenue --screenshot-scale 2
 ```
+
+## Overlay
+
+`--overlay <dir>` builds a draft without saving it in the project. Each file in `<dir>` replaces
+the project file at the same relative path, and a file the project does not have is added. This
+holds for every kind of file: manifests, SQL files, CSV files, images.
+
+```bash
+# /tmp/draft/pages/sales.yaml replaces pages/sales.yaml,
+# /tmp/draft/datasets/forecast.yaml is a new DataSet
+bino build --overlay /tmp/draft --out-dir /tmp/draft-out
+```
+
+- Nothing is written to the project, so the project can be read-only. Pass an `--out-dir` outside
+  the project in that case.
+- `<dir>` can be anywhere, also outside the project.
+- A relative path in a manifest (a CSV file, an image) resolves against the project, as without
+  `--overlay`. When `<dir>` has a file at that path, that file is read instead. A path that leaves
+  the project (`../shared/data.csv`) is not supported with `--overlay`.
+- `bino.toml` is always read from the project. An overlay with a `bino.toml` fails the build, and
+  so does an overlay file below a directory that is a link in the project.
+- Lint, the layout state and all other flags work as usual.
+- A file from the overlay that does not parse or validate fails the build like a project file. The
+  error names the path in the project, as if the file were there, with its line, and a second line
+  says that the content came from the overlay. With `--log-format json`, the error line has
+  `file` (the path in the project) and `overlay` (the file that was read).
+
+## Number values
+
+`--number-values` writes `<artefact>.values.json` next to each report PDF (`report.pdf` gives
+`report.values.json`). It lists, for every table and chart, the numbers it shows as data, so a
+program or an agent can check them without reading the PDF.
+
+```json
+{
+  "version": 1,
+  "components": [
+    {
+      "id": "bn-table[0]",
+      "kind": "Table",
+      "name": "regions",
+      "page": 1,
+      "pageName": "sales_page",
+      "datasets": ["sales_region"],
+      "measureScale": "_",
+      "measureUnit": "kEUR",
+      "values": [
+        { "key": "ac1", "point": { "category": "North" }, "value": 4943.583, "text": "4,944" },
+        { "key": "drac1_pl1_pos", "point": { "category": "North" }, "value": 0.0047932926829267536, "text": "+0.48%" },
+        { "key": "ac1", "point": { "row": "total" }, "value": 23495.97, "text": "23,496" }
+      ]
+    },
+    {
+      "id": "bn-chart-time[0]",
+      "kind": "ChartTime",
+      "page": 1,
+      "pageName": "sales_page",
+      "datasets": ["sales_monthly"],
+      "measureScale": "_",
+      "measureUnit": "kEUR",
+      "values": [
+        { "key": "ac1", "point": { "date": "2025-01-01" }, "value": 1199, "text": "1,199.0" },
+        { "key": "pl1", "point": { "date": "2025-01-01" }, "value": 1208 }
+      ]
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The component id of the rendering engine, the same as in the [layout state](/cli/layout-state/). |
+| `kind`, `name`, `ref` | The manifest kind, the child's `metadata.name` and its `ref`, when known. |
+| `page`, `pageName` | The 1-based `LayoutPage` of the report and its name. |
+| `datasets` | The DataSets the component reads. |
+| `measureScale`, `measureUnit` | As set on the component. `text` is scaled by `measureScale`, `value` is not. |
+| `values[].key` | The column: a scenario slot (`ac1`, `pl1`, ...) or a variance (`dac1_pl1_pos`, `drac1_pl1_pos`). |
+| `values[].point` | The data point: `category`, `subCategory`, `rowGroup`, `date` (the start of the period, `YYYY-MM-DD`), and `row` (`subtotal`, `total`) for sum rows. `part: "total"` marks the total of a stack. |
+| `values[].value` | The raw number the engine computed. A relative variance is a fraction (`0.05` is 5%). |
+| `values[].text` | What is printed: scaled, rounded and formatted for the locale. Missing when the value has no label, like a bar without one. |
+
+A bar and its label are one value: the bar gives `value`, the label gives `text`. Numbers come from
+tables and charts only; a number written in a `Text` is not listed. The data points come from a recent
+rendering engine. With an older `engine-version`, values have no `point` and cannot be checked.
+
+With `--build-log-format json`, each artefact names the file in `values`, next to `layout_state`
+(with `--layout-state`).
+
+## Checking the numbers
+
+`--verify-numbers` also compares each value with the rows of the component's DataSet and adds the
+result to the values file:
+
+```json
+"check": {
+  "values": 60,
+  "matched": 57,
+  "unmatched": 2,
+  "differences": 1,
+  "unmatchedReasons": { "no DataSet row for the data point": 2 }
+},
+"differences": [
+  {
+    "component": "bn-table[0]",
+    "key": "ac1",
+    "point": { "category": "North" },
+    "shown": 4943.5,
+    "text": "4,944",
+    "expected": 5000,
+    "reason": "sum of ac1 over 1 DataSet row(s)"
+  }
+]
+```
+
+- A scenario slot is expected to be the sum of that column over the rows with the same data point.
+  A `date` matches the period of the chart's date interval, so a row dated `2025-01-31` belongs to
+  the point `2025-01-01` of a monthly chart. A `total` row sums all rows, a `subtotal` row the rows
+  of its `rowGroup`.
+- A variance is computed from the two sums like the engine does it: `a - b` for `d...`,
+  `(a - b) / |b|` for `dr...`. When `b` is 0 the engine shows `n/a`, and so the check expects no value.
+- The raw `value` is compared, with a small tolerance for float rounding. `text` is only for
+  information.
+- A value that cannot be compared is counted as `unmatched`, not as a difference, with the reason
+  in `unmatchedReasons`: no row for the point (for example an "other" category), a component with a
+  `filter` or with more than one DataSet, rows with `operation: "-"`, a row whose date cannot be
+  read, a value without a data point, or two values with the same data point.
+- `differences` is always present with `--verify-numbers`; an empty list means nothing differs.
+
+Differences do not fail the build. They are reported as one build warning per artefact, and the
+JSON build log has the counts in `number_check`:
+
+```json
+"artefacts": [
+  {
+    "name": "sales_report",
+    "pdf": "/work/dist/sales_report.pdf",
+    "values": "/work/dist/sales_report.values.json",
+    "number_check": { "values": 60, "matched": 57, "unmatched": 2, "differences": 1 }
+  }
+]
+```
+
+`--overlay`, `--number-values` and `--verify-numbers` cannot be combined with `--stateless`.
 
 ## Default Arguments via bino.toml
 
