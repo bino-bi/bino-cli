@@ -379,3 +379,70 @@ func TestAnnotationNamesMinVersionMatchesExtension(t *testing.T) {
 		t.Fatalf("the names floor %s must be above the annotations floor %s", AnnotationNamesMinVersion, AnnotationsMinVersion)
 	}
 }
+
+func TestCompareVersions_ReleaseLine(t *testing.T) {
+	// oldest first
+	order := []string{"v0.41.11", "v1.0.0-alpha.19", "v1.0.0-next.88", "v0.50.0", "v0.51.0", "v1.0.0", "v1.1.0"}
+	for i := range order {
+		for j := range order {
+			want := 0
+			if i < j {
+				want = -1
+			} else if i > j {
+				want = 1
+			}
+			if got := CompareVersions(order[i], order[j]); got != want {
+				t.Errorf("CompareVersions(%s, %s) = %d, want %d", order[i], order[j], got, want)
+			}
+		}
+	}
+}
+
+func TestCheckCompatibility_ReleaseLine(t *testing.T) {
+	for _, v := range []string{"v0.50.0", "0.50.0", "v0.51.3"} {
+		if err := CheckCompatibility(v); err != nil {
+			t.Errorf("%s: %v", v, err)
+		}
+	}
+	for _, v := range []string{"v0.41.11", "v0.49.0", "v1.0.0-alpha.18"} {
+		if err := CheckCompatibility(v); err == nil {
+			t.Errorf("%s: want an error", v)
+		}
+	}
+}
+
+// v0.50.0 holds every engine feature up to v1.0.0-next.88, so no gate fires.
+func TestFeatureGates_ReleaseLine(t *testing.T) {
+	all := []string{
+		"ChartStructure varianceWaterfall", "ChartStructure rowLines as a list",
+		TimeTotalsFeature, "ChartTime stacked area by series", "ChartTime periodLines",
+	}
+	checks := map[string]func(string) error{
+		"annotations":        CheckAnnotationSupport,
+		"grid cell layout":   CheckGridCellLayoutSupport,
+		"small multiple":     CheckSmallMultipleCardSupport,
+		"op sentiment":       CheckOperationSentimentSupport,
+		"table order":        CheckTableOrderMeasureSupport,
+		"category interval":  CheckCategoryIntervalPositionSupport,
+		"calculation scheme": TableCalculationSchemeCheck([]string{"runningSum"}),
+		"span":               SmallMultipleSpanCheck([]string{"Grid rowSpan"}),
+		"stack series":       StackSeriesCheck([]string{"ChartTime stack"}),
+		"structure":          StructureSumsCheck(all),
+		"time":               TimeTotalsCheck(all),
+	}
+	for name, check := range checks {
+		if err := check(ReleaseLineMinVersion); err != nil {
+			t.Errorf("%s on %s: %v", name, ReleaseLineMinVersion, err)
+		}
+		if err := check("v0.41.11"); err == nil {
+			t.Errorf("%s on v0.41.11: want an error", name)
+		}
+	}
+	if before(semver.MustParse(ReleaseLineMinVersion), AnnotationNamesMinVersion) {
+		t.Errorf("%s must hold %s", ReleaseLineMinVersion, AnnotationNamesMinVersion)
+	}
+	err := CheckAnnotationSupport("v1.0.0-next.29")
+	if err == nil || !strings.Contains(err.Error(), `engine-version = "v0.50.0"`) {
+		t.Errorf("want a pin of v0.50.0, got %v", err)
+	}
+}

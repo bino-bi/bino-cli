@@ -53,3 +53,22 @@ func TestCompatWarnings(t *testing.T) {
 		})
 	}
 }
+
+func TestCompatWarnings_EngineReleaseLine(t *testing.T) {
+	cases := []struct {
+		compat, engine string
+		warn           bool
+	}{
+		{">=1.0.0-alpha.1", "v0.50.0", false},
+		{">=1.0.0-next.40", "v0.51.0", false},
+		{">=0.50.0", "v0.50.0", false},
+		{">=1.0.0-alpha.1, <1.0.0-next.50", "v0.50.0", true},
+		{">=1.0.0-alpha.1", "v0.41.11", true},
+	}
+	for _, c := range cases {
+		got := CompatWarnings("@acme/kit", "1.0.0", c.compat, "", "", c.engine)
+		if (len(got) > 0) != c.warn {
+			t.Errorf("%s on %s: warnings = %v, want warn=%v", c.compat, c.engine, got, c.warn)
+		}
+	}
+}

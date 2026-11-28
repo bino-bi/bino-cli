@@ -289,7 +289,7 @@ Pinning means nothing changes by itself. These two jobs tell you when there is s
 }
 ```
 
-Engine releases are pre-releases named like `v1.0.0-next.88`. With `semver` versioning, a project on a `v1.0.0-next.N` pin is offered the newest `v1.0.0-next.N`, and the old `0.x` releases in the same repository are never offered, because they are lower. `managerFilePatterns` needs Renovate 41 or newer; older versions call it `fileMatch` and take the pattern without the slashes.
+Engine releases from `v0.50.0` on are plain releases. `v0.50.0` holds everything of the last pre-release `v1.0.0-next.88`, but semver sorts every `0.x` below `v1.0.0-next.N`, so Renovate offers no update to a project on a `v1.0.0-next.N` pin. Change that pin to `v0.50.0` once by hand; from then on Renovate offers each new release. `managerFilePatterns` needs Renovate 41 or newer; older versions call it `fileMatch` and take the pattern without the slashes.
 
 To check only this rule and no other dependencies, add `"enabledManagers": ["custom.regex"]`. Without the Renovate GitHub App, Renovate can run as a scheduled workflow in the repository itself:
 

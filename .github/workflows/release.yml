@@ -21,13 +21,13 @@ permissions:
 #
 # ENGINE_VERSION is the bn-template-engine baked into the container image. It MUST
 # satisfy engine.SupportedEngineRanges (internal/engine/compat.go) and MUST match
-# the ENGINE_VERSION default in the Dockerfile. It cannot be resolved dynamically:
-# the engine's GitHub "latest" release skips pre-releases and still points at 0.x.
+# the ENGINE_VERSION default in the Dockerfile. It is pinned, not resolved, so an
+# image always ships the engine it was tested with.
 # TestDockerEngineVersionPin (internal/engine/pin_test.go) enforces both rules -
 # it drifted below the supported floor for four releases before that test existed.
 env:
   DUCKDB_VERSION: "v2.0.0"
-  ENGINE_VERSION: "v1.0.0-next.88"
+  ENGINE_VERSION: "v0.50.0"
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:

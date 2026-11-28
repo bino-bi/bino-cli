@@ -31,8 +31,95 @@ import (
 // content in the engine's "_system" namespace by default, which is only safe
 // since the engine merges bundles instead of replacing them (older engines
 // would wipe the built-in labels on a partial override).
+//
+// The second range is the plain release line from v0.50.0 on, see
+// ReleaseLineMinVersion.
 var SupportedEngineRanges = []string{
 	">=1.0.0-alpha.19, <2.0.0-0",
+	">=0.50.0, <1.0.0-0",
+}
+
+// ReleaseLineMinVersion is the first engine of the plain release line. The
+// engine left the 1.0.0 pre-releases at v1.0.0-next.88 and went on with
+// v0.50.0, which holds all of next.88. Per semver every 0.x sorts below a 1.0.0
+// pre-release, so CompareVersions orders engines by line first.
+const ReleaseLineMinVersion = "v0.50.0"
+
+// Release lines of engine versions, oldest first.
+const (
+	lineOld        = iota // 0.x below v0.50.0
+	linePreRelease        // 1.0.0-alpha.N, 1.0.0-next.N
+	lineRelease           // 0.x from v0.50.0
+	lineMajor             // 1.0.0 and later
+)
+
+func releaseLine(v *semver.Version) int {
+	switch {
+	case v.Major() == 0 && v.LessThan(semver.MustParse(ReleaseLineMinVersion)):
+		return lineOld
+	case v.Major() == 0:
+		return lineRelease
+	case v.Major() == 1 && v.Minor() == 0 && v.Patch() == 0 && v.Prerelease() != "":
+		return linePreRelease
+	default:
+		return lineMajor
+	}
+}
+
+// compareVersions orders a and b by release line, then by semver.
+func compareVersions(a, b *semver.Version) int {
+	la, lb := releaseLine(a), releaseLine(b)
+	if la != lb {
+		if la < lb {
+			return -1
+		}
+		return 1
+	}
+	return a.Compare(b)
+}
+
+// CompareVersions returns -1, 0 or 1 when engine version a is older than, the
+// same as or newer than b, in release order. An unreadable version sorts
+// below a readable one.
+func CompareVersions(a, b string) int {
+	va, errA := semver.NewVersion(a)
+	vb, errB := semver.NewVersion(b)
+	switch {
+	case errA != nil && errB != nil:
+		return strings.Compare(a, b)
+	case errA != nil:
+		return -1
+	case errB != nil:
+		return 1
+	}
+	return compareVersions(va, vb)
+}
+
+// RangeAccepts reports whether a semver range accepts engine version v. An
+// engine from ReleaseLineMinVersion on also counts as every 1.0.0 pre-release,
+// whose features it holds, so ">=1.0.0-next.40" accepts v0.50.0.
+func RangeAccepts(c *semver.Constraints, v *semver.Version) bool {
+	if c.Check(v) {
+		return true
+	}
+	return releaseLine(v) >= lineRelease && c.Check(semver.MustParse(lastPreRelease))
+}
+
+// lastPreRelease is the last engine of the 1.0.0 pre-release line.
+const lastPreRelease = "v1.0.0-next.88"
+
+// before reports whether v is older than the engine release floor.
+func before(v *semver.Version, floor string) bool {
+	return compareVersions(v, semver.MustParse(floor)) < 0
+}
+
+// pinFor returns the engine version to pin for the features of floor: a
+// pre-release floor is held by ReleaseLineMinVersion.
+func pinFor(floor string) string {
+	if releaseLine(semver.MustParse(floor)) == linePreRelease {
+		return ReleaseLineMinVersion
+	}
+	return floor
 }
 
 // AnnotationsMinVersion is the first engine release with bn-annotation-layer,
@@ -57,9 +144,9 @@ func CheckAnnotationSupport(engineVersion string) error {
 	if err != nil {
 		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 	}
-	if v.LessThan(semver.MustParse(AnnotationsMinVersion)) {
+	if before(v, AnnotationsMinVersion) {
 		return fmt.Errorf("annotations need template engine %s or newer, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", AnnotationsMinVersion, engineVersion, AnnotationsMinVersion)
+			"Pin a newer engine in bino.toml: engine-version = %q", AnnotationsMinVersion, engineVersion, pinFor(AnnotationsMinVersion))
 	}
 	return nil
 }
@@ -78,9 +165,9 @@ func CheckGridCellLayoutSupport(engineVersion string) error {
 	if err != nil {
 		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 	}
-	if v.LessThan(semver.MustParse(GridCellLayoutMinVersion)) {
+	if before(v, GridCellLayoutMinVersion) {
 		return fmt.Errorf("grid cell size, alignment and captions need template engine %s or newer, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", GridCellLayoutMinVersion, engineVersion, GridCellLayoutMinVersion)
+			"Pin a newer engine in bino.toml: engine-version = %q", GridCellLayoutMinVersion, engineVersion, pinFor(GridCellLayoutMinVersion))
 	}
 	return nil
 }
@@ -97,9 +184,9 @@ func CheckSmallMultipleCardSupport(engineVersion string) error {
 	if err != nil {
 		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 	}
-	if v.LessThan(semver.MustParse(SmallMultipleCardMinVersion)) {
+	if before(v, SmallMultipleCardMinVersion) {
 		return fmt.Errorf("SmallMultiple card needs template engine %s or newer, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", SmallMultipleCardMinVersion, engineVersion, SmallMultipleCardMinVersion)
+			"Pin a newer engine in bino.toml: engine-version = %q", SmallMultipleCardMinVersion, engineVersion, pinFor(SmallMultipleCardMinVersion))
 	}
 	return nil
 }
@@ -118,9 +205,9 @@ func CheckOperationSentimentSupport(engineVersion string) error {
 	if err != nil {
 		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 	}
-	if v.LessThan(semver.MustParse(OperationSentimentMinVersion)) {
+	if before(v, OperationSentimentMinVersion) {
 		return fmt.Errorf("the variance sentiments _op and _opinv need template engine %s or newer, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", OperationSentimentMinVersion, engineVersion, OperationSentimentMinVersion)
+			"Pin a newer engine in bino.toml: engine-version = %q", OperationSentimentMinVersion, engineVersion, pinFor(OperationSentimentMinVersion))
 	}
 	return nil
 }
@@ -139,9 +226,9 @@ func CheckTableOrderMeasureSupport(engineVersion string) error {
 	if err != nil {
 		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 	}
-	if v.LessThan(semver.MustParse(TableOrderMeasureMinVersion)) {
+	if before(v, TableOrderMeasureMinVersion) {
 		return fmt.Errorf("a Table order by a variance or an @ interval block needs template engine %s or newer, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", TableOrderMeasureMinVersion, engineVersion, TableOrderMeasureMinVersion)
+			"Pin a newer engine in bino.toml: engine-version = %q", TableOrderMeasureMinVersion, engineVersion, pinFor(TableOrderMeasureMinVersion))
 	}
 	return nil
 }
@@ -161,9 +248,9 @@ func CheckCategoryIntervalPositionSupport(engineVersion string) error {
 	if err != nil {
 		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 	}
-	if v.LessThan(semver.MustParse(CategoryIntervalPositionMinVersion)) {
+	if before(v, CategoryIntervalPositionMinVersion) {
 		return fmt.Errorf("a Table categoryIntervalPosition needs template engine %s or newer, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", CategoryIntervalPositionMinVersion, engineVersion, CategoryIntervalPositionMinVersion)
+			"Pin a newer engine in bino.toml: engine-version = %q", CategoryIntervalPositionMinVersion, engineVersion, pinFor(CategoryIntervalPositionMinVersion))
 	}
 	return nil
 }
@@ -184,9 +271,9 @@ func TableCalculationSchemeCheck(props []string) func(string) error {
 		if err != nil {
 			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 		}
-		if v.LessThan(semver.MustParse(TableCalculationSchemeMinVersion)) {
+		if before(v, TableCalculationSchemeMinVersion) {
 			return fmt.Errorf("a Table with %s needs template engine %s or newer, this project uses %s.\n"+
-				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(props, ", "), TableCalculationSchemeMinVersion, engineVersion, TableCalculationSchemeMinVersion)
+				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(props, ", "), TableCalculationSchemeMinVersion, engineVersion, pinFor(TableCalculationSchemeMinVersion))
 		}
 		return nil
 	}
@@ -209,9 +296,9 @@ func SmallMultipleSpanCheck(features []string) func(string) error {
 		if err != nil {
 			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 		}
-		if v.LessThan(semver.MustParse(SmallMultipleSpanMinVersion)) {
+		if before(v, SmallMultipleSpanMinVersion) {
 			return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
-				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), SmallMultipleSpanMinVersion, engineVersion, SmallMultipleSpanMinVersion)
+				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), SmallMultipleSpanMinVersion, engineVersion, pinFor(SmallMultipleSpanMinVersion))
 		}
 		return nil
 	}
@@ -234,9 +321,9 @@ func StackSeriesCheck(features []string) func(string) error {
 		if err != nil {
 			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 		}
-		if v.LessThan(semver.MustParse(StackSeriesMinVersion)) {
+		if before(v, StackSeriesMinVersion) {
 			return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
-				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), StackSeriesMinVersion, engineVersion, StackSeriesMinVersion)
+				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), StackSeriesMinVersion, engineVersion, pinFor(StackSeriesMinVersion))
 		}
 		return nil
 	}
@@ -296,11 +383,11 @@ func StructureSumsCheck(features []string) func(string) error {
 			if own, ok := structureFeatureFloors[feature]; ok {
 				need = own
 			}
-			if !v.LessThan(semver.MustParse(need)) {
+			if !before(v, need) {
 				continue
 			}
 			missing = append(missing, feature)
-			if floor == "" || semver.MustParse(need).GreaterThan(semver.MustParse(floor)) {
+			if floor == "" || CompareVersions(need, floor) > 0 {
 				floor = need
 			}
 		}
@@ -308,7 +395,7 @@ func StructureSumsCheck(features []string) func(string) error {
 			return nil
 		}
 		return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(missing, ", "), floor, engineVersion, floor)
+			"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(missing, ", "), floor, engineVersion, pinFor(floor))
 	}
 }
 
@@ -361,9 +448,9 @@ func (e *CompatibilityError) Error() string {
 	return fmt.Sprintf(
 		"template engine %s is not supported by this CLI (bino %s).\n"+
 			"Supported ranges: %s\n"+
-			"Pin a compatible engine in bino.toml: engine-version = \"v1.x.y\"\n"+
+			"Pin a compatible engine in bino.toml: engine-version = %q\n"+
 			"Or upgrade the CLI: https://bino.bi/docs/install",
-		eng, cli, strings.Join(e.Ranges, ", "),
+		eng, cli, strings.Join(e.Ranges, ", "), ReleaseLineMinVersion,
 	)
 }
 
@@ -454,11 +541,11 @@ func TimeTotalsCheck(features []string) func(string) error {
 			if floor, ok := timeFeatureFloors[feature]; ok {
 				need = floor
 			}
-			if !v.LessThan(semver.MustParse(need)) {
+			if !before(v, need) {
 				continue
 			}
 			missing = append(missing, feature)
-			if floor == "" || semver.MustParse(need).GreaterThan(semver.MustParse(floor)) {
+			if floor == "" || CompareVersions(need, floor) > 0 {
 				floor = need
 			}
 		}
@@ -466,6 +553,6 @@ func TimeTotalsCheck(features []string) func(string) error {
 			return nil
 		}
 		return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
-			"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(missing, ", "), floor, engineVersion, floor)
+			"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(missing, ", "), floor, engineVersion, pinFor(floor))
 	}
 }

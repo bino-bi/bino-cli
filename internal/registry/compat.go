@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/Masterminds/semver/v3"
+
+	"bino.bi/bino/internal/engine"
 )
 
 // CompatWarnings returns non-blocking messages when a package declares semver
@@ -14,16 +16,16 @@ import (
 // warn-only and the server already validated the syntax at publish.
 func CompatWarnings(pkg, version, compatEngine, compatCLI, cliVersion, engineVersion string) []string {
 	var warnings []string
-	if w := compatWarning(pkg, version, compatCLI, "compat-cli", "this CLI", cliVersion); w != "" {
+	if w := compatWarning(pkg, version, compatCLI, "compat-cli", "this CLI", cliVersion, (*semver.Constraints).Check); w != "" {
 		warnings = append(warnings, w)
 	}
-	if w := compatWarning(pkg, version, compatEngine, "compat-engine", "the project's engine", engineVersion); w != "" {
+	if w := compatWarning(pkg, version, compatEngine, "compat-engine", "the project's engine", engineVersion, engine.RangeAccepts); w != "" {
 		warnings = append(warnings, w)
 	}
 	return warnings
 }
 
-func compatWarning(pkg, version, constraintStr, label, subject, actual string) string {
+func compatWarning(pkg, version, constraintStr, label, subject, actual string, accepts func(*semver.Constraints, *semver.Version) bool) string {
 	if constraintStr == "" || actual == "" {
 		return ""
 	}
@@ -35,7 +37,7 @@ func compatWarning(pkg, version, constraintStr, label, subject, actual string) s
 	if err != nil {
 		return ""
 	}
-	if constraint.Check(v) {
+	if accepts(constraint, v) {
 		return ""
 	}
 	return fmt.Sprintf("%s@%s declares %s %q which does not include %s (%s)", pkg, version, label, constraintStr, subject, actual)

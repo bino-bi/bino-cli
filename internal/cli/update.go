@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/mod/semver"
 
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/updater"
@@ -80,7 +79,7 @@ func updateTemplateEngine(cmd *cobra.Command, sp *Spinner) error {
 	}
 
 	// Compare versions
-	if localVersion != "" && semver.Compare(remoteVersion, localVersion) <= 0 {
+	if localVersion != "" && engine.CompareVersions(remoteVersion, localVersion) <= 0 {
 		sp.Update("Template engine is already up to date")
 		sp.Stop()
 		return nil

@@ -361,3 +361,19 @@ func TestExtractZip_RejectsSiblingDirEscape(t *testing.T) {
 		t.Error("zip entry escaped the destination directory")
 	}
 }
+
+func TestLatestLocalVersion_ReleaseLine(t *testing.T) {
+	cacheDir := t.TempDir()
+	for _, v := range []string{"v0.41.11", "v1.0.0-next.88", "v0.50.0", "v1.0.0-alpha.19"} {
+		createMockVersion(t, cacheDir, v)
+	}
+	mgr := NewManagerWithClient(cacheDir, nil)
+
+	info, err := mgr.LatestLocalVersion()
+	if err != nil {
+		t.Fatalf("LatestLocalVersion() error = %v", err)
+	}
+	if info.Version != "v0.50.0" {
+		t.Errorf("LatestLocalVersion() = %q, want v0.50.0", info.Version)
+	}
+}

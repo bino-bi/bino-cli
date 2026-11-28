@@ -860,7 +860,7 @@ ${annotateScript()}
             if (msg.on === true && this.marksMissing.has(panel) && !this.marksNoticeShown) {
                 this.marksNoticeShown = true;
                 void vscode.window.showInformationMessage(
-                    `Bino: to open an annotation by clicking its mark, update engine-version in bino.toml to ${ANNOTATION_NAMES_MIN_ENGINE} or newer. Clicks on data points work as they are.`);
+                    `Bino: to open an annotation by clicking its mark, update engine-version in bino.toml to v0.50.0 or newer (or ${ANNOTATION_NAMES_MIN_ENGINE}). Clicks on data points work as they are.`);
             }
         } else if (msg.type === 'bino:revealAnnotation' && typeof msg.name === 'string') {
             this.revealAnnotationEmitter.fire(msg as unknown as RevealAnnotationMessage);
